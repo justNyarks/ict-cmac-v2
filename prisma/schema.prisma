@@ -1,0 +1,106 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SECRETARY
+  CMAC_COORDINATOR
+  ICT_DIRECTOR
+}
+
+enum School {
+  SNAHS
+  SBAHM
+  SITE
+  SASTE
+  MEDICINE // Map "School of Medicine" to MEDICINE for enum safety
+  BEU
+}
+
+enum ServiceType {
+  CMAC
+  PMAC
+}
+
+enum DocumentationType {
+  PHOTO
+  VIDEO
+  BOTH
+}
+
+enum RequestStatus {
+  PENDING
+  COORDINATOR_APPROVED
+  DIRECTOR_APPROVED
+  REJECTED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  password      String    // In a real app, use hashed passwords
+  role          Role      @default(SECRETARY)
+  school        School?
+  
+  // Requests submitted by this user (if Secretary)
+  submittedRequests ServiceRequest[] @relation("SubmittedBy")
+  
+  // Requests reviewed by this user (if Coordinator or Director)
+  coordinatorReviews ServiceRequest[] @relation("Coordinator")
+  directorReviews    ServiceRequest[] @relation("Director")
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model ServiceRequest {
+  id                String            @id @default(cuid())
+  eventTitle        String
+  eventDate         DateTime
+  endDate           DateTime?
+  startTime         String?
+  endTime           String?
+  eventVenue        String
+  school            School
+  serviceType       ServiceType
+  documentationType DocumentationType
+  letterUrl         String?           // Path or URL to the uploaded request letter
+  eventDetails      String?           @db.Text
+  letterContent     String?           @db.Text
+  
+  // Technical requirements
+  needsSoundSystem  Boolean           @default(false)
+  needsLEDWall      Boolean           @default(false)
+  needsICTPersonnel Boolean           @default(false)
+  hasOnlineSpeaker  Boolean           @default(false)
+  
+  status            RequestStatus     @default(PENDING)
+  
+  // Notes from approvers
+  coordinatorNote   String?
+  directorNote      String?
+  
+  // Relations
+  secretary         User              @relation("SubmittedBy", fields: [secretaryId], references: [id])
+  secretaryId       String
+  
+  coordinator       User?             @relation("Coordinator", fields: [coordinatorId], references: [id])
+  coordinatorId     String?
+  coordinatorApprovedAt DateTime?
+  
+  director          User?             @relation("Director", fields: [directorId], references: [id])
+  directorId        String?
+  directorApprovedAt DateTime?
+
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}

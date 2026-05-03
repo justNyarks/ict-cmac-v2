@@ -1,0 +1,210 @@
+ ⚠ Port 3000 is in use, trying 3001 instead.
+ ⨯ ./src/components/Providers.tsx:3:1
+Module not found: Can't resolve 'next-auth/react'
+[0m [90m 1 |[39m [32m'use client'[39m[0m
+[0m [90m 2 |[39m[0m
+[0m[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { [33mSessionProvider[39m } [36mfrom[39m [32m"next-auth/react"[39m[0m
+[0m [90m   |[39m [31m[1m^[22m[39m[0m
+[0m [90m 4 |[39m[0m
+[0m [90m 5 |[39m [36mexport[39m [36mfunction[39m [33mProviders[39m({ children }[33m:[39m { children[33m:[39m [33mReact[39m[33m.[39m[33mReactNode[39m }) {[0m
+[0m [90m 6 |[39m   [36mreturn[39m [33m<[39m[33mSessionProvider[39m[33m>[39m{children}[33m<[39m[33m/[39m[33mSessionProvider[39m[33m>[39m[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/components/Providers.tsx:3:1
+Module not found: Can't resolve 'next-auth/react'
+[0m [90m 1 |[39m [32m'use client'[39m[0m
+[0m [90m 2 |[39m[0m
+[0m[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { [33mSessionProvider[39m } [36mfrom[39m [32m"next-auth/react"[39m[0m
+[0m [90m   |[39m [31m[1m^[22m[39m[0m
+[0m [90m 4 |[39m[0m
+[0m [90m 5 |[39m [36mexport[39m [36mfunction[39m [33mProviders[39m({ children }[33m:[39m { children[33m:[39m [33mReact[39m[33m.[39m[33mReactNode[39m }) {[0m
+[0m [90m 6 |[39m   [36mreturn[39m [33m<[39m[33mSessionProvider[39m[33m>[39m{children}[33m<[39m[33m/[39m[33mSessionProvider[39m[33m>[39m[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/components/Providers.tsx:3:1
+Module not found: Can't resolve 'next-auth/react'
+[0m [90m 1 |[39m [32m'use client'[39m[0m
+[0m [90m 2 |[39m[0m
+[0m[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { [33mSessionProvider[39m } [36mfrom[39m [32m"next-auth/react"[39m[0m
+[0m [90m   |[39m [31m[1m^[22m[39m[0m
+[0m [90m 4 |[39m[0m
+[0m [90m 5 |[39m [36mexport[39m [36mfunction[39m [33mProviders[39m({ children }[33m:[39m { children[33m:[39m [33mReact[39m[33m.[39m[33mReactNode[39m }) {[0m
+[0m [90m 6 |[39m   [36mreturn[39m [33m<[39m[33mSessionProvider[39m[33m>[39m{children}[33m<[39m[33m/[39m[33mSessionProvider[39m[33m>[39m[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/app/new-request/page.tsx:14:1
+Module not found: Can't resolve 'next-auth/react'
+[0m [90m 12 |[39m[0m
+[0m [90m 13 |[39m [36mimport[39m { createServiceRequest } [36mfrom[39m [32m'./actions'[39m[0m
+[0m[31m[1m>[22m[39m[90m 14 |[39m [36mimport[39m { useSession } [36mfrom[39m [32m'next-auth/react'[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 15 |[39m[0m
+[0m [90m 16 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mNewRequestPage[39m() {[0m
+[0m [90m 17 |[39m   [36mconst[39m { data[33m:[39m session } [33m=[39m useSession()[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/app/new-request/page.tsx:14:1
+Module not found: Can't resolve 'next-auth/react'
+[0m [90m 12 |[39m[0m
+[0m [90m 13 |[39m [36mimport[39m { createServiceRequest } [36mfrom[39m [32m'./actions'[39m[0m
+[0m[31m[1m>[22m[39m[90m 14 |[39m [36mimport[39m { useSession } [36mfrom[39m [32m'next-auth/react'[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 15 |[39m[0m
+[0m [90m 16 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mNewRequestPage[39m() {[0m
+[0m [90m 17 |[39m   [36mconst[39m { data[33m:[39m session } [33m=[39m useSession()[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/app/new-request/page.tsx:14:1
+Module not found: Can't resolve 'next-auth/react'
+[0m [90m 12 |[39m[0m
+[0m [90m 13 |[39m [36mimport[39m { createServiceRequest } [36mfrom[39m [32m'./actions'[39m[0m
+[0m[31m[1m>[22m[39m[90m 14 |[39m [36mimport[39m { useSession } [36mfrom[39m [32m'next-auth/react'[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 15 |[39m[0m
+[0m [90m 16 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mNewRequestPage[39m() {[0m
+[0m [90m 17 |[39m   [36mconst[39m { data[33m:[39m session } [33m=[39m useSession()[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/app/new-request/page.tsx:14:1
+Module not found: Can't resolve 'next-auth/react'
+[0m [90m 12 |[39m[0m
+[0m [90m 13 |[39m [36mimport[39m { createServiceRequest } [36mfrom[39m [32m'./actions'[39m[0m
+[0m[31m[1m>[22m[39m[90m 14 |[39m [36mimport[39m { useSession } [36mfrom[39m [32m'next-auth/react'[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 15 |[39m[0m
+[0m [90m 16 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mNewRequestPage[39m() {[0m
+[0m [90m 17 |[39m   [36mconst[39m { data[33m:[39m session } [33m=[39m useSession()[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/app/new-request/page.tsx:14:1
+Module not found: Can't resolve 'next-auth/react'
+[0m [90m 12 |[39m[0m
+[0m [90m 13 |[39m [36mimport[39m { createServiceRequest } [36mfrom[39m [32m'./actions'[39m[0m
+[0m[31m[1m>[22m[39m[90m 14 |[39m [36mimport[39m { useSession } [36mfrom[39m [32m'next-auth/react'[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 15 |[39m[0m
+[0m [90m 16 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mNewRequestPage[39m() {[0m
+[0m [90m 17 |[39m   [36mconst[39m { data[33m:[39m session } [33m=[39m useSession()[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/app/new-request/page.tsx:14:1
+Module not found: Can't resolve 'next-auth/react'
+[0m [90m 12 |[39m[0m
+[0m [90m 13 |[39m [36mimport[39m { createServiceRequest } [36mfrom[39m [32m'./actions'[39m[0m
+[0m[31m[1m>[22m[39m[90m 14 |[39m [36mimport[39m { useSession } [36mfrom[39m [32m'next-auth/react'[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 15 |[39m[0m
+[0m [90m 16 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mNewRequestPage[39m() {[0m
+[0m [90m 17 |[39m   [36mconst[39m { data[33m:[39m session } [33m=[39m useSession()[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/app/new-request/page.tsx:14:1
+Module not found: Can't resolve 'next-auth/react'
+[0m [90m 12 |[39m[0m
+[0m [90m 13 |[39m [36mimport[39m { createServiceRequest } [36mfrom[39m [32m'./actions'[39m[0m
+[0m[31m[1m>[22m[39m[90m 14 |[39m [36mimport[39m { useSession } [36mfrom[39m [32m'next-auth/react'[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 15 |[39m[0m
+[0m [90m 16 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mNewRequestPage[39m() {[0m
+[0m [90m 17 |[39m   [36mconst[39m { data[33m:[39m session } [33m=[39m useSession()[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/app/new-request/page.tsx:14:1
+Module not found: Can't resolve 'next-auth/react'
+[0m [90m 12 |[39m[0m
+[0m [90m 13 |[39m [36mimport[39m { createServiceRequest } [36mfrom[39m [32m'./actions'[39m[0m
+[0m[31m[1m>[22m[39m[90m 14 |[39m [36mimport[39m { useSession } [36mfrom[39m [32m'next-auth/react'[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 15 |[39m[0m
+[0m [90m 16 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mNewRequestPage[39m() {[0m
+[0m [90m 17 |[39m   [36mconst[39m { data[33m:[39m session } [33m=[39m useSession()[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/app/new-request/page.tsx:14:1
+Module not found: Can't resolve 'next-auth/react'
+[0m [90m 12 |[39m[0m
+[0m [90m 13 |[39m [36mimport[39m { createServiceRequest } [36mfrom[39m [32m'./actions'[39m[0m
+[0m[31m[1m>[22m[39m[90m 14 |[39m [36mimport[39m { useSession } [36mfrom[39m [32m'next-auth/react'[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 15 |[39m[0m
+[0m [90m 16 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mNewRequestPage[39m() {[0m
+[0m [90m 17 |[39m   [36mconst[39m { data[33m:[39m session } [33m=[39m useSession()[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/app/new-request/page.tsx:14:1
+Module not found: Can't resolve 'next-auth/react'
+[0m [90m 12 |[39m[0m
+[0m [90m 13 |[39m [36mimport[39m { createServiceRequest } [36mfrom[39m [32m'./actions'[39m[0m
+[0m[31m[1m>[22m[39m[90m 14 |[39m [36mimport[39m { useSession } [36mfrom[39m [32m'next-auth/react'[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 15 |[39m[0m
+[0m [90m 16 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mNewRequestPage[39m() {[0m
+[0m [90m 17 |[39m   [36mconst[39m { data[33m:[39m session } [33m=[39m useSession()[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/app/new-request/page.tsx:14:1
+Module not found: Can't resolve 'next-auth/react'
+[0m [90m 12 |[39m[0m
+[0m [90m 13 |[39m [36mimport[39m { createServiceRequest } [36mfrom[39m [32m'./actions'[39m[0m
+[0m[31m[1m>[22m[39m[90m 14 |[39m [36mimport[39m { useSession } [36mfrom[39m [32m'next-auth/react'[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 15 |[39m[0m
+[0m [90m 16 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mNewRequestPage[39m() {[0m
+[0m [90m 17 |[39m   [36mconst[39m { data[33m:[39m session } [33m=[39m useSession()[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/app/new-request/page.tsx:14:1
+Module not found: Can't resolve 'next-auth/react'
+[0m [90m 12 |[39m[0m
+[0m [90m 13 |[39m [36mimport[39m { createServiceRequest } [36mfrom[39m [32m'./actions'[39m[0m
+[0m[31m[1m>[22m[39m[90m 14 |[39m [36mimport[39m { useSession } [36mfrom[39m [32m'next-auth/react'[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 15 |[39m[0m
+[0m [90m 16 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mNewRequestPage[39m() {[0m
+[0m [90m 17 |[39m   [36mconst[39m { data[33m:[39m session } [33m=[39m useSession()[0m
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./src/app/new-request/page.tsx:14:1
+Module not found: Can't resolve 'next-auth/react'
+[0m [90m 12 |[39m[0m
+[0m [90m 13 |[39m [36mimport[39m { createServiceRequest } [36mfrom[39m [32m'./actions'[39m[0m
+[0m[31m[1m>[22m[39m[90m 14 |[39m [36mimport[39m { useSession } [36mfrom[39m [32m'next-auth/react'[39m[0m
+[0m [90m    |[39m [31m[1m^[22m[39m[0m
+[0m [90m 15 |[39m[0m
+[0m [90m 16 |[39m [36mexport[39m [36mdefault[39m [36mfunction[39m [33mNewRequestPage[39m() {[0m
+[0m [90m 17 |[39m   [36mconst[39m { data[33m:[39m session } [33m=[39m useSession()[0m
+
+https://nextjs.org/docs/messages/module-not-found
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\server-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
+ ⨯ ./src/app/new-request/page.tsx
+Error: 
+  [31mx[0m Expression expected
+     ,-[[36;1;4mC:\Users\ricat\OneDrive\Desktop\ict-cmac\src\app\new-request\page.tsx[0m:295:1]
+ [2m295[0m |   )
+ [2m296[0m | }
+ [2m297[0m | iv>
+ [2m298[0m |   )
+     : [31;1m  ^[0m
+ [2m299[0m | }
+     `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/app/new-request/page.tsx
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: EPERM: operation not permitted, rename 'C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\client-development\0.pack.gz_' -> 'C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\client-development\0.pack.gz'
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\server-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\server-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\server-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
+<w> [webpack.cache.PackFileCacheStrategy] Restoring pack from C:\Users\ricat\OneDrive\Desktop\ict-cmac\.next\cache\webpack\client-development.pack.gz failed: TypeError: Cannot read properties of undefined (reading 'hasStartTime')
