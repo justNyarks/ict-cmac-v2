@@ -2,6 +2,7 @@
 import { signIn } from 'next-auth/react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Aperture, Sparkles, Camera } from 'lucide-react'
 
 export default function SignInPage() {
   const [email, setEmail] = useState('')
@@ -20,8 +21,7 @@ export default function SignInPage() {
     if (res?.error) {
       setError('Invalid email or password')
     } else {
-      router.push('/')
-      router.refresh()
+      window.location.href = '/'
     }
   }
 
@@ -49,8 +49,8 @@ export default function SignInPage() {
             </div>
             
             <div className="mt-auto flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/10">
-                <img src="/logo.png" className="w-8 h-8 object-contain opacity-80" alt="Small Logo" />
+              <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md border border-white/10 text-emerald-300">
+                <Aperture size={24} />
               </div>
               <div>
                 <p className="text-white font-bold text-sm">ICT CMAC Division</p>
@@ -59,14 +59,29 @@ export default function SignInPage() {
             </div>
           </div>
 
-          {/* Mascot Image */}
-          <div className="absolute bottom-0 right-0 w-[85%] h-[85%] pointer-events-none select-none">
-             <div className="absolute inset-0 bg-gradient-to-t from-[#022c22] via-transparent to-transparent z-10"></div>
-             <img 
-              src="/mascot.png" 
-              alt="CMAC Mascot" 
-              className="w-full h-full object-contain object-bottom drop-shadow-[0_20px_50px_rgba(16,185,129,0.3)] animate-float"
-            />
+          {/* Abstract Geometry Banner Replacement */}
+          <div className="absolute bottom-0 right-0 w-[90%] h-[85%] pointer-events-none select-none overflow-hidden">
+             <div className="absolute inset-0 bg-gradient-to-t from-[#022c22] via-transparent to-transparent z-20"></div>
+             
+             {/* Main Graphic */}
+             <div className="absolute -bottom-10 -right-10 w-[120%] h-[120%] z-10 flex items-center justify-center opacity-80">
+                <div className="relative w-full h-full animate-float">
+                  {/* Floating elements */}
+                  <div className="absolute top-[20%] left-[20%] w-32 h-32 bg-emerald-500/20 rounded-3xl backdrop-blur-3xl border border-white/10 rotate-12 flex items-center justify-center text-emerald-300/50">
+                    <Camera size={48} strokeWidth={1} />
+                  </div>
+                  <div className="absolute top-[40%] right-[15%] w-48 h-48 bg-teal-400/20 rounded-full backdrop-blur-xl border border-white/5 -rotate-12 flex items-center justify-center text-teal-300/30">
+                    <Aperture size={80} strokeWidth={0.5} />
+                  </div>
+                  <div className="absolute bottom-[25%] left-[30%] w-24 h-24 bg-white/5 rounded-2xl backdrop-blur-md border border-white/10 rotate-45 flex items-center justify-center text-white/30">
+                    <Sparkles size={32} />
+                  </div>
+                  
+                  {/* Glows */}
+                  <div className="absolute top-[30%] right-[30%] w-64 h-64 bg-emerald-400/30 blur-[80px] rounded-full mix-blend-screen"></div>
+                  <div className="absolute bottom-[30%] left-[40%] w-64 h-64 bg-teal-500/20 blur-[100px] rounded-full mix-blend-screen"></div>
+                </div>
+             </div>
           </div>
         </div>
 
@@ -74,8 +89,8 @@ export default function SignInPage() {
         <div className="flex-1 p-10 md:p-20 flex flex-col justify-center relative bg-white">
           <div className="max-w-md w-full mx-auto space-y-12">
             <div className="space-y-4">
-              <div className="lg:hidden mb-8">
-                <img src="/logo.png" alt="University Logo" className="w-20 h-20 object-contain" />
+              <div className="lg:hidden mb-8 text-emerald-600">
+                <Aperture size={64} strokeWidth={1.5} />
               </div>
               <h1 className="text-4xl font-display text-[var(--text-dark)] font-black tracking-tight">Login.</h1>
               <p className="text-slate-400 text-lg font-medium">Please enter your credentials to continue.</p>

@@ -10,6 +10,7 @@ import {
   Settings,
   Camera,
   User,
+  Aperture,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -43,8 +44,8 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="px-6 py-8 border-b border-white/5">
         <div className="flex flex-col items-center text-center gap-3">
-          <div className="w-16 h-16 rounded-2xl bg-white p-2 flex items-center justify-center shadow-xl border border-emerald-100/20">
-            <img src="/logo.png" alt="University Logo" className="w-full h-full object-contain" />
+          <div className="w-16 h-16 rounded-2xl bg-white p-2 flex items-center justify-center shadow-xl border border-emerald-100/20 text-emerald-800">
+            <Aperture size={32} />
           </div>
           <div>
             <p className="font-display text-white text-lg leading-tight font-bold tracking-tight">ICT CMAC</p>
