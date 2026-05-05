@@ -67,6 +67,23 @@ export async function rejectRequest(id: string, note: string) {
   revalidatePath('/requests')
 }
 
+export async function deleteRequest(id: string) {
+  const session = await getServerSession(authOptions)
+  if (!session || !session.user) throw new Error('Unauthorized')
+
+  const role = (session.user as any).role
+  if (role !== 'CMAC_COORDINATOR' && role !== 'ICT_DIRECTOR') {
+    throw new Error('Only Coordinators or Directors can delete requests')
+  }
+
+  await prisma.serviceRequest.delete({
+    where: { id }
+  })
+
+  revalidatePath('/')
+  revalidatePath('/requests')
+}
+
 export async function getRequests() {
   const session = await getServerSession(authOptions)
   if (!session || !session.user) return []

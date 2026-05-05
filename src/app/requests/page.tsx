@@ -2,13 +2,13 @@
 import { useState } from 'react'
 import { MOCK_REQUESTS, getStatusLabel, getStatusColor } from '@/lib/data'
 import { ServiceRequest } from '@/types'
-import { CheckCircle, XCircle, Eye, Filter, FileCheck2, Printer, X } from 'lucide-react'
+import { CheckCircle, XCircle, Eye, Filter, FileCheck2, Printer, X, Trash2 } from 'lucide-react'
 import clsx from 'clsx'
 import Portal from '@/components/Portal'
 
 const FILTERS = ['ALL', 'PENDING', 'COORDINATOR_APPROVED', 'DIRECTOR_APPROVED', 'REJECTED'] as const
 
-import { approveRequest, rejectRequest, getRequests, checkConflict } from './actions'
+import { approveRequest, rejectRequest, deleteRequest, getRequests, checkConflict } from './actions'
 import { useSession } from 'next-auth/react'
 import { useEffect } from 'react'
 
@@ -74,6 +74,18 @@ export default function RequestsPage() {
       setNote('')
     } catch (e) {
       alert('Failed to reject')
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Are you sure you want to permanently delete this request?')) return;
+    try {
+      await deleteRequest(id)
+      await fetchRequests()
+      setSelected(null)
+      setNote('')
+    } catch (e) {
+      alert('Failed to delete')
     }
   }
 
@@ -356,6 +368,18 @@ export default function RequestsPage() {
                         </button>
                       </div>
                       <p className="text-[10px] text-slate-400 text-center font-bold uppercase tracking-widest">For official documentation and hard copy filing</p>
+                    </div>
+                  )}
+
+                  {/* Admin Delete Action */}
+                  {['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes((session?.user as any)?.role) && (
+                    <div className="pt-6 border-t border-slate-100 space-y-3">
+                      <button
+                        onClick={() => handleDelete(selected.id)}
+                        className="w-full flex items-center justify-center gap-2 bg-red-50 hover:bg-red-500 hover:text-white text-red-600 border border-red-100 rounded-2xl py-3 text-sm font-black transition-all"
+                      >
+                        <Trash2 size={18} /> Delete Request
+                      </button>
                     </div>
                   )}
                 </div>
