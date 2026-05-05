@@ -58,6 +58,7 @@ export default function RequestsPage() {
     try {
       await approveRequest(id, note)
       await fetchRequests()
+
       setSelected(null)
       setNote('')
     } catch (e) {
@@ -166,7 +167,7 @@ export default function RequestsPage() {
         {/* Detail / Action Modal */}
         {selected && (
           <Portal>
-          <div className="fixed inset-0 bg-[#022c22]/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-6 animate-fade-in" onClick={() => setSelected(null)}>
+          <div className="fixed inset-0 bg-[#022c22]/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-6 animate-fade-in print:hidden" onClick={() => setSelected(null)}>
             <div 
               className="bg-white rounded-[2rem] shadow-2xl max-w-5xl w-full max-h-[85vh] flex overflow-hidden relative" 
               onClick={e => e.stopPropagation()}
@@ -197,6 +198,7 @@ export default function RequestsPage() {
                       ['School', selected.school],
                       ['Service', selected.serviceType],
                       ['Doc Type', selected.documentationType === 'BOTH' ? 'Photo + Video' : selected.documentationType],
+                      ['Location', (selected as any).campusType === 'IN_CAMPUS' ? 'In-Campus' : 'Off-Campus'],
                       ['Status', getStatusLabel(selected.status)],
                     ].map(([k, v]) => (
                       <div key={k}>
@@ -207,23 +209,12 @@ export default function RequestsPage() {
                   </div>
 
                   {/* Technical Requirements Checklist */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {selected.eventDetails && (
-                      <div className="space-y-3">
-                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Requisition Narrative</p>
-                        <div className="bg-emerald-50/30 rounded-2xl p-6 border border-emerald-100/50 h-full">
-                          <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed font-medium">
-                            {selected.eventDetails}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    
+                  <div className="grid grid-cols-1 gap-6">
                     <div className="space-y-3">
                       <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Technical Requirements</p>
                       <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-4">
                         {[
-                          { label: 'Sound System / Mic', value: selected.needsSoundSystem },
+                          { label: 'Same-Day Photo Delivery', value: selected.needsSoundSystem },
                           { label: 'LED Wall', value: selected.needsLEDWall },
                           { label: 'Standby ICT Personnel', value: selected.needsICTPersonnel },
                           { label: 'Online Speaker (Setup)', value: selected.hasOnlineSpeaker },
@@ -361,7 +352,7 @@ export default function RequestsPage() {
                           onClick={() => window.print()}
                           className="flex-1 flex items-center justify-center gap-2 bg-slate-900 hover:bg-black text-white rounded-2xl py-4 text-sm font-black transition-all shadow-xl shadow-slate-900/10"
                         >
-                          <Printer size={18} /> Print Letter
+                          <Printer size={18} /> Prints Letter
                         </button>
                       </div>
                       <p className="text-[10px] text-slate-400 text-center font-bold uppercase tracking-widest">For official documentation and hard copy filing</p>

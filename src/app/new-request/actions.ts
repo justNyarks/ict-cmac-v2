@@ -17,12 +17,12 @@ export async function createServiceRequest(formData: {
   serviceType: ServiceType
   documentationType: DocumentationType
   letterUrl?: string | null
-  eventDetails?: string | null
   letterContent?: string | null
   needsSoundSystem?: boolean
-  needsLEDWall?: boolean
+  needsSameDayEdit?: boolean
   needsICTPersonnel?: boolean
   hasOnlineSpeaker?: boolean
+  campusType?: 'IN_CAMPUS' | 'OFF_CAMPUS'
 }) {
   console.log("SERVER_ACTION: createServiceRequest called with", formData.eventTitle);
   
@@ -66,12 +66,12 @@ export async function createServiceRequest(formData: {
         serviceType: formData.serviceType,
         documentationType: formData.documentationType,
         letterUrl: formData.letterUrl,
-        eventDetails: formData.eventDetails,
         letterContent: formData.letterContent,
         needsSoundSystem: formData.needsSoundSystem || false,
-        needsLEDWall: formData.needsLEDWall || false,
+        needsSameDayEdit: formData.needsSameDayEdit || false,
         needsICTPersonnel: formData.needsICTPersonnel || false,
         hasOnlineSpeaker: formData.hasOnlineSpeaker || false,
+        campusType: formData.campusType || 'IN_CAMPUS',
         secretaryId: userId,
         status: 'PENDING'
       }

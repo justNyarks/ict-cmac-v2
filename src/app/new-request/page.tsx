@@ -18,7 +18,7 @@ const VENUES = [
   'SNAHS Highflex'
 ]
 
-type Step = 1 | 2 | 3 | 4 | 5
+type Step = 1 | 2 | 3 | 4
 
 import { createServiceRequest, checkConflict } from './actions'
 import { useSession } from 'next-auth/react'
@@ -35,16 +35,16 @@ export default function NewRequestPage() {
     startTime: '',
     endTime: '',
     eventVenue: '',
-    eventDetails: '',
     letterContent: '',
     serviceType: '' as ServiceType | '',
     documentationType: '' as DocumentationType | '',
     letterFile: null as File | null,
     requestedBy: session?.user?.name || '',
     needsSoundSystem: false,
-    needsLEDWall: false,
+    needsSameDayEdit: false,
     needsICTPersonnel: false,
     hasOnlineSpeaker: false,
+    campusType: '' as 'IN_CAMPUS' | 'OFF_CAMPUS' | '',
   })
   const [stepError, setStepError] = useState<string>('')
   const [submissionMethod, setSubmissionMethod] = useState<'upload' | 'generate'>('upload')
@@ -76,6 +76,7 @@ export default function NewRequestPage() {
   }
 
   function validateStep3(): string {
+    if (!form.campusType) return 'Please select whether the event is in-campus or off-campus.'
     if (!form.serviceType) return 'Please select a service type (CMAC or PMAC).'
     if (!form.documentationType) return 'Please select a documentation type.'
     return ''
@@ -129,9 +130,6 @@ I am writing to formally request documentation services for the upcoming event t
 
 We would like to request for ${form.serviceType || 'CMAC'} services, specifically ${form.documentationType === 'BOTH' ? 'Photo and Video' : (form.documentationType || 'documentation')} coverage.
 
-Detailed objectives:
-${form.eventDetails || 'See attached event details.'}
-
 Thank you for your continuous support.
 
 Sincerely,
@@ -144,9 +142,9 @@ Secretary, ${form.school || '[School/Department]'}`
 
   async function submit() {
     const e1 = validateStep1()
-    const e3 = validateStep3()
+    const e2 = validateStep3()
     if (e1) { setStep(1); setStepError(e1); return }
-    if (e3) { setStep(3); setStepError(e3); return }
+    if (e2) { setStep(2); setStepError(e2); return }
     setStepError('')
 
     if (loading) return
@@ -169,16 +167,16 @@ Secretary, ${form.school || '[School/Department]'}`
           startTime: form.startTime,
           endTime: form.endTime,
           eventVenue: form.eventVenue,
-          eventDetails: form.eventDetails || null,
           letterContent: submissionMethod === 'generate' ? form.letterContent : null,
           school: form.school as any,
           serviceType: form.serviceType as any,
           documentationType: form.documentationType as any,
           letterUrl: submissionMethod === 'upload' ? (form.letterFile?.name || null) : 'generated-letter.pdf',
           needsSoundSystem: form.needsSoundSystem,
-          needsLEDWall: form.needsLEDWall,
+          needsSameDayEdit: form.needsSameDayEdit,
           needsICTPersonnel: form.needsICTPersonnel,
-          hasOnlineSpeaker: form.hasOnlineSpeaker
+          hasOnlineSpeaker: form.hasOnlineSpeaker,
+          campusType: form.campusType as any
         }),
         timeout
       ]) as any
@@ -207,7 +205,7 @@ Secretary, ${form.school || '[School/Department]'}`
           <p className="text-slate-500 font-medium">Your requisition has been logged and sent for review.</p>
         </div>
         <button
-          onClick={() => { setSubmitted(false); setStep(1); setForm({ school:'', eventTitle:'', eventDate:'', endDate:'', startTime:'', endTime:'', eventVenue:'', eventDetails: '', letterContent: '', serviceType:'', documentationType:'', letterFile:null, requestedBy:'', needsSoundSystem: false, needsLEDWall: false, needsICTPersonnel: false, hasOnlineSpeaker: false }) }}
+          onClick={() => { setSubmitted(false); setStep(1); setForm({ school:'', eventTitle:'', eventDate:'', endDate:'', startTime:'', endTime:'', eventVenue:'', letterContent: '', serviceType:'', documentationType:'', letterFile:null, requestedBy:'', needsSoundSystem: false, needsSameDayEdit: false, needsICTPersonnel: false, hasOnlineSpeaker: false, campusType: '' }) }}
           className="mx-auto flex items-center gap-2 bg-[#064e3b] text-white px-8 py-3 rounded-2xl text-sm font-bold hover:bg-[#065f46] shadow-xl shadow-emerald-900/20 transition-all"
         >
           Create New Requisition
@@ -218,10 +216,9 @@ Secretary, ${form.school || '[School/Department]'}`
 
   const steps = [
     { n: 1, label: 'Basic' },
-    { n: 2, label: 'Narrative' },
-    { n: 3, label: 'Services' },
-    { n: 4, label: 'Requisition' },
-    { n: 5, label: 'Confirm' },
+    { n: 2, label: 'Services' },
+    { n: 3, label: 'Requisition' },
+    { n: 4, label: 'Confirm' },
   ]
 
   return (
@@ -372,107 +369,115 @@ Secretary, ${form.school || '[School/Department]'}`
           </div>
         )}
 
-        {/* STEP 2: Event Details Template */}
+        {/* STEP 2: Service Selection & Add-ons */}
         {step === 2 && (
-          <div className="space-y-5">
-            <div className="flex justify-between items-end">
-              <h2 className="font-display text-2xl text-slate-800 font-bold">Event Details</h2>
-              <button 
-                onClick={() => set('eventDetails', 'Event Description:\n\nObjectives:\n1.\n2.\n\nTarget Audience:\n\nSchedule / Highlights:\n')}
-                className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest hover:underline"
-              >
-                Use Template
-              </button>
-            </div>
-            <p className="text-sm text-slate-500">Provide a detailed breakdown of the event. This helps the CMAC team prepare the necessary equipment and coverage.</p>
-            
-            <div className="flex gap-8">
-              <div className="flex-1">
-                <textarea
-                  value={form.eventDetails}
-                  onChange={e => set('eventDetails', e.target.value)}
-                  placeholder="Describe the event, goals, and specific documentation needs..."
-                  rows={10}
-                  className="w-full border-2 border-slate-100 rounded-2xl px-5 py-4 text-sm font-medium focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50 leading-relaxed"
-                />
+          <div className="space-y-8">
+            <div className="space-y-6">
+              <h2 className="font-display text-2xl text-slate-800 font-bold">Service Selection</h2>
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">Event Location</label>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { id: 'IN_CAMPUS', label: 'In-Campus' },
+                    { id: 'OFF_CAMPUS', label: 'Off-Campus' },
+                  ].map(c => (
+                    <button key={c.id} onClick={() => set('campusType', c.id as any)}
+                      className={clsx(
+                        'py-6 rounded-2xl border-2 font-black text-xl transition-all shadow-sm',
+                        form.campusType === c.id
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                          : 'border-slate-100 text-slate-300 hover:border-emerald-200'
+                      )}>
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="w-64 space-y-4 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Technical Checklist</p>
-                {[
-                  { id: 'needsSoundSystem', label: 'Sound System / Mic' },
-                  { id: 'needsLEDWall', label: 'LED Wall' },
-                  { id: 'needsICTPersonnel', label: 'Standby ICT Personnel' },
-                ].map(item => (
-                  <label key={item.id} className="flex items-center gap-3 cursor-pointer group">
-                    <input 
-                      type="checkbox" 
-                      checked={(form as any)[item.id]} 
-                      onChange={e => set(item.id as any, e.target.checked)}
-                      className="w-5 h-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                    />
-                    <span className="text-xs font-bold text-slate-600 group-hover:text-emerald-700 transition-colors">{item.label}</span>
-                  </label>
-                ))}
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">Service Type</label>
+                <div className="grid grid-cols-2 gap-4">
+                  {SERVICES.map(s => (
+                    <button key={s} onClick={() => set('serviceType', s)}
+                      className={clsx(
+                        'py-6 rounded-2xl border-2 font-black text-xl transition-all shadow-sm',
+                        form.serviceType === s
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                          : 'border-slate-100 text-slate-300 hover:border-emerald-200'
+                      )}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">Documentation Requirement</label>
+                <div className="grid grid-cols-3 gap-3">
+                  {DOC_TYPES.map(d => (
+                    <button key={d} onClick={() => set('documentationType', d)}
+                      className={clsx(
+                        'py-4 rounded-xl border-2 font-bold text-sm transition-all',
+                        form.documentationType === d
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                          : 'border-slate-100 text-slate-400 hover:border-emerald-200'
+                      )}>
+                      {d === 'BOTH' ? 'Photo + Video' : d.charAt(0) + d.slice(1).toLowerCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
 
-                {(form.eventVenue.includes('Global') || form.eventVenue.includes('MM Hall') || form.eventVenue.includes('Highflex')) && (
-                  <div className="pt-4 border-t border-slate-200 mt-4 animate-fade-in">
-                    <label className="flex items-center gap-3 cursor-pointer group">
+            <div className="pt-8 border-t border-slate-100 space-y-6">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest mb-4">Additional Requirements</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {[
+                    { id: 'needsSoundSystem', label: 'Same-Day Photo Delivery', desc: 'High-quality photos delivered within the same day' },
+                    { id: 'needsSameDayEdit', label: 'Same Day Edit', desc: 'Quick video edit to be shown during the event' },
+                    { id: 'needsICTPersonnel', label: 'Standby ICT Personnel', desc: 'Technical support throughout the event' },
+                  ].map(item => (
+                    <label key={item.id} className={clsx(
+                      "flex items-start gap-4 p-5 rounded-2xl border-2 transition-all cursor-pointer group",
+                      (form as any)[item.id] ? "border-emerald-500 bg-emerald-50/50" : "border-slate-100 hover:border-emerald-200"
+                    )}>
+                      <input 
+                        type="checkbox" 
+                        checked={(form as any)[item.id]} 
+                        onChange={e => set(item.id as any, e.target.checked)}
+                        className="w-5 h-5 mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-slate-700 group-hover:text-emerald-700 transition-colors">{item.label}</p>
+                        <p className="text-[10px] text-slate-400 font-medium mt-1">{item.desc}</p>
+                      </div>
+                    </label>
+                  ))}
+
+                  {(form.eventVenue.includes('Global') || form.eventVenue.includes('MM Hall') || form.eventVenue.includes('Highflex')) && (
+                    <label className={clsx(
+                      "flex items-start gap-4 p-5 rounded-2xl border-2 transition-all cursor-pointer group animate-fade-in",
+                      form.hasOnlineSpeaker ? "border-emerald-500 bg-emerald-50/50" : "border-slate-100 hover:border-emerald-200"
+                    )}>
                       <input 
                         type="checkbox" 
                         checked={form.hasOnlineSpeaker} 
                         onChange={e => set('hasOnlineSpeaker', e.target.checked)}
-                        className="w-5 h-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                        className="w-5 h-5 mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                       />
-                      <span className="text-xs font-bold text-emerald-700">Online Speaker (Setup cameras)</span>
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-emerald-700">Online Speaker</p>
+                        <p className="text-[10px] text-slate-400 font-medium mt-1">Setup cameras and streaming for virtual participants</p>
+                      </div>
                     </label>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* STEP 3 */}
+        {/* STEP 3: Official Requisition */}
         {step === 3 && (
-          <div className="space-y-6">
-            <h2 className="font-display text-2xl text-slate-800 font-bold">Service Selection</h2>
-            <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">Service Type</label>
-              <div className="grid grid-cols-2 gap-4">
-                {SERVICES.map(s => (
-                  <button key={s} onClick={() => set('serviceType', s)}
-                    className={clsx(
-                      'py-6 rounded-2xl border-2 font-black text-xl transition-all shadow-sm',
-                      form.serviceType === s
-                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                        : 'border-slate-100 text-slate-300 hover:border-emerald-200'
-                    )}>
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">Documentation Requirement</label>
-              <div className="grid grid-cols-3 gap-3">
-                {DOC_TYPES.map(d => (
-                  <button key={d} onClick={() => set('documentationType', d)}
-                    className={clsx(
-                      'py-4 rounded-xl border-2 font-bold text-sm transition-all',
-                      form.documentationType === d
-                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                        : 'border-slate-100 text-slate-400 hover:border-emerald-200'
-                    )}>
-                    {d === 'BOTH' ? 'Photo + Video' : d.charAt(0) + d.slice(1).toLowerCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 4 */}
-        {step === 4 && (
           <div className="space-y-6 animate-fade-in">
             <div className="flex justify-between items-center mb-2">
               <h2 className="font-display text-2xl text-slate-800 font-bold">Official Requisition</h2>
@@ -529,8 +534,8 @@ Secretary, ${form.school || '[School/Department]'}`
           </div>
         )}
 
-        {/* STEP 5 */}
-        {step === 5 && (
+        {/* STEP 4: Confirmation */}
+        {step === 4 && (
           <div className="space-y-6">
             <h2 className="font-display text-2xl text-slate-800 font-bold">Review Request</h2>
             
@@ -564,6 +569,7 @@ Secretary, ${form.school || '[School/Department]'}`
                 ['End Date', form.endDate ? new Date(form.endDate).toLocaleDateString('en-PH', { weekday:'long', year:'numeric', month:'long', day:'numeric' }) : '—'],
                 ['Time', `${form.startTime} - ${form.endTime}`],
                 ['Venue', form.eventVenue],
+                ['Location', form.campusType === 'IN_CAMPUS' ? 'In-Campus' : 'Off-Campus'],
                 ['Service', form.serviceType],
                 ['Documentation', form.documentationType === 'BOTH' ? 'Photo + Video' : form.documentationType],
                 ['Document', submissionMethod === 'generate' ? 'In-App Generated Letter' : (form.letterFile?.name ?? 'Not uploaded')],
@@ -574,12 +580,7 @@ Secretary, ${form.school || '[School/Department]'}`
                 </div>
               ))}
             </div>
-            {form.eventDetails && (
-              <div className="p-6 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Requisition Details</p>
-                <p className="text-xs text-slate-600 whitespace-pre-wrap leading-relaxed">{form.eventDetails}</p>
-              </div>
-            )}
+
           </div>
         )}
         
@@ -600,7 +601,7 @@ Secretary, ${form.school || '[School/Department]'}`
           >
             ← Previous
           </button>
-          {step < 5
+          {step < 4
             ? <button
                 onClick={async () => {
                   const nextStep = (step + 1) as Step;
@@ -609,15 +610,15 @@ Secretary, ${form.school || '[School/Department]'}`
                     const err = validateStep1()
                     if (err) { setStepError(err); return }
                   }
-                  if (step === 3) {
+                  if (step === 2) {
                     const err = validateStep3()
                     if (err) { setStepError(err); return }
                   }
                   setStepError('')
-                  if (nextStep === 4 && submissionMethod === 'generate' && !form.letterContent) {
+                  if (nextStep === 3 && submissionMethod === 'generate' && !form.letterContent) {
                     generateLetterTemplate();
                   }
-                  if (nextStep === 5) {
+                  if (nextStep === 4) {
                     const res = await checkConflict(form.eventDate, form.startTime, form.endTime);
                     setConflicts(res.conflicts || []);
                   }

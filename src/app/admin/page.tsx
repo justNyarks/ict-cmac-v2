@@ -185,7 +185,7 @@ export default function AdminPage() {
       {/* Add User Modal */}
       {showAdd && (
         <Portal>
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setShowAdd(false)}>
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 print:hidden" onClick={() => setShowAdd(false)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-7 space-y-5" onClick={e => e.stopPropagation()}>
             <h3 className="font-display text-xl text-slate-800 font-bold">Add New User</h3>
             <div className="space-y-4">

@@ -30,6 +30,11 @@ enum ServiceType {
   PMAC
 }
 
+enum CampusType {
+  IN_CAMPUS
+  OFF_CAMPUS
+}
+
 enum DocumentationType {
   PHOTO
   VIDEO
@@ -73,6 +78,7 @@ model ServiceRequest {
   school            School
   serviceType       ServiceType
   documentationType DocumentationType
+  campusType        CampusType        @default(IN_CAMPUS)
   letterUrl         String?           // Path or URL to the uploaded request letter
   eventDetails      String?           @db.Text
   letterContent     String?           @db.Text

@@ -44,7 +44,7 @@ export default function SignInPage() {
                 Design the <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">Future</span> <br/> with CMAC.
               </h2>
               <p className="text-emerald-100/60 text-lg leading-relaxed max-w-sm">
-                The official documentation and illustration portal of St. Paul University Philippines.
+                Official documentation & coverage portal of <br/> St. Paul University Philippines.
               </p>
             </div>
             
@@ -54,7 +54,7 @@ export default function SignInPage() {
               </div>
               <div>
                 <p className="text-white font-bold text-sm">ICT CMAC Division</p>
-                <p className="text-emerald-500/80 text-[10px] font-bold uppercase tracking-widest">© 2026 SPUP Tuguegarao</p>
+                <p className="text-emerald-500/80 text-[10px] font-bold uppercase tracking-widest">© 2026 St. Paul University Philippines</p>
               </div>
             </div>
           </div>
@@ -68,10 +68,10 @@ export default function SignInPage() {
                 <div className="relative w-full h-full animate-float">
                   {/* Floating elements */}
                   <div className="absolute top-[20%] left-[20%] w-32 h-32 bg-emerald-500/20 rounded-3xl backdrop-blur-3xl border border-white/10 rotate-12 flex items-center justify-center text-emerald-300/50">
-                    <Camera size={48} strokeWidth={1} />
+                    <Camera size={50} strokeWidth={1} />
                   </div>
                   <div className="absolute top-[40%] right-[15%] w-48 h-48 bg-teal-400/20 rounded-full backdrop-blur-xl border border-white/5 -rotate-12 flex items-center justify-center text-teal-300/30">
-                    <Aperture size={80} strokeWidth={0.5} />
+                    <Aperture size={75} strokeWidth={0.5} />
                   </div>
                   <div className="absolute bottom-[25%] left-[30%] w-24 h-24 bg-white/5 rounded-2xl backdrop-blur-md border border-white/10 rotate-45 flex items-center justify-center text-white/30">
                     <Sparkles size={32} />
@@ -92,7 +92,9 @@ export default function SignInPage() {
               <div className="lg:hidden mb-8 text-emerald-600">
                 <Aperture size={64} strokeWidth={1.5} />
               </div>
-              <h1 className="text-4xl font-display text-[var(--text-dark)] font-black tracking-tight">Login.</h1>
+              <h1 className="text-5xl font-display font-black tracking-tighter text-slate-900 flex items-center gap-1">
+                Login<span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">.</span>
+              </h1>
               <p className="text-slate-400 text-lg font-medium">Please enter your credentials to continue.</p>
             </div>
             
