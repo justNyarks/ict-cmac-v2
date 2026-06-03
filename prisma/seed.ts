@@ -6,14 +6,16 @@ const prisma = new PrismaClient()
 async function main() {
   const password = await bcrypt.hash('password123', 10)
 
-  const schools = ['SNAHS', 'SBAHM', 'SITE', 'SASTE', 'MEDICINE', 'BEU']
+  // Must match the School enum in schema.prisma exactly
+  const schools = ['SNAHS', 'SBAHM', 'SITE', 'SASTE', 'MEDICINE', 'BEU', 'UNIVERSITY']
   
   // Create Secretary for each department
   for (const s of schools) {
     await prisma.user.upsert({
       where: { email: `secretary@${s.toLowerCase()}.edu` },
       update: {
-        password: password, // Reset password to default for ease of testing
+        role: 'SECRETARY',
+        school: s,
       },
       create: {
         email: `secretary@${s.toLowerCase()}.edu`,
@@ -28,7 +30,7 @@ async function main() {
   // Create Coordinator
   await prisma.user.upsert({
     where: { email: 'coordinator@ict.edu' },
-    update: { password: password },
+    update: { role: 'CMAC_COORDINATOR' },
     create: {
       email: 'coordinator@ict.edu',
       name: 'Liza Mendoza',
@@ -40,7 +42,7 @@ async function main() {
   // Create Director
   await prisma.user.upsert({
     where: { email: 'director@ict.edu' },
-    update: { password: password },
+    update: { role: 'ICT_DIRECTOR' },
     create: {
       email: 'director@ict.edu',
       name: 'Dir. Ramon Dela Cruz',
@@ -49,7 +51,7 @@ async function main() {
     },
   })
 
-  console.log('Seed completed. Accounts created for all departments.')
+  console.log('Seed completed. Accounts created for all departments (including UNIVERSITY).')
 }
 
 main()

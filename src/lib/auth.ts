@@ -52,24 +52,32 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user, trigger, session }) {
       if (user) {
-        token.id   = (user as any).id
+        token.id = (user as any).id
         token.role = (user as any).role
         token.school = (user as any).school
         token.name = user.name
       }
-      // When client calls update(), re-read the user's name from DB to sync
-      if (trigger === 'update' && token.sub) {
-        const fresh = await prisma.user.findUnique({ where: { id: token.sub }, select: { name: true } })
-        if (fresh) token.name = fresh.name
+      // Keep the JWT aligned with the current DB record after profile updates.
+      if (trigger === 'update' && (token.id || token.sub)) {
+        const fresh = await prisma.user.findUnique({
+          where: { id: (token.id || token.sub) as string },
+          select: { id: true, name: true, role: true, school: true }
+        })
+        if (fresh) {
+          token.id = fresh.id
+          token.name = fresh.name
+          token.role = fresh.role
+          token.school = fresh.school
+        }
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.name         = token.name as string
-        ;(session.user as any).role   = token.role
+        session.user.name = token.name as string
+        ;(session.user as any).role = token.role
         ;(session.user as any).school = token.school
-        ;(session.user as any).id     = token.sub
+        ;(session.user as any).id = token.id ?? token.sub
       }
       return session
     }
