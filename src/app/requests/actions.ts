@@ -3,9 +3,11 @@
 import { prisma } from "@/lib/prisma"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { revalidatePath } from "next/cache"
+import { revalidatePath, unstable_noStore as noStore } from "next/cache"
 
-export async function approveRequest(id: string, note: string) {
+import { ServiceType } from "@prisma/client"
+
+export async function approveRequest(id: string, note: string, serviceType?: ServiceType) {
   const session = await getServerSession(authOptions)
   if (!session || !session.user) throw new Error('Unauthorized')
 
@@ -14,6 +16,7 @@ export async function approveRequest(id: string, note: string) {
 
   const request = await prisma.serviceRequest.findUnique({ where: { id } })
   if (!request) throw new Error('Request not found')
+  if ((request as any).deletedAt) throw new Error('Request has already been deleted')
 
   if (role === 'CMAC_COORDINATOR' && request.status === 'PENDING') {
     await prisma.serviceRequest.update({
@@ -22,10 +25,15 @@ export async function approveRequest(id: string, note: string) {
         status: 'COORDINATOR_APPROVED',
         coordinatorNote: note,
         coordinatorId: userId,
-        coordinatorApprovedAt: new Date()
+        coordinatorApprovedAt: new Date(),
+        // serviceType is NOT set by the Coordinator — only the Director can assign it
       }
     })
   } else if (role === 'ICT_DIRECTOR' && (request.status === 'COORDINATOR_APPROVED' || request.status === 'PENDING')) {
+    if (!serviceType) {
+      throw new Error('Service type is required for director approval')
+    }
+
     await prisma.serviceRequest.update({
       where: { id },
       data: {
@@ -33,6 +41,7 @@ export async function approveRequest(id: string, note: string) {
         directorNote: note,
         directorId: userId,
         directorApprovedAt: new Date(),
+        serviceType,
         // If it was still PENDING, we record that it was approved directly
         coordinatorNote: request.status === 'PENDING' && !request.coordinatorNote ? 'Bypassed by Director' : undefined
       }
@@ -41,8 +50,21 @@ export async function approveRequest(id: string, note: string) {
     throw new Error('Invalid action for this role or request status')
   }
 
+  // Create Audit Log
+  await (prisma as any).auditLog.create({
+    data: {
+      requestId: id,
+      action: role === 'CMAC_COORDINATOR' ? 'COORDINATOR_APPROVED' : 'DIRECTOR_APPROVED',
+      actorName: session.user.name || 'Unknown',
+      actorRole: role,
+      details: note ? `Note: ${note}` : 'Approved without additional notes.'
+    }
+  });
+
   revalidatePath('/')
   revalidatePath('/requests')
+  revalidatePath('/calendar')
+  revalidatePath('/logs')
 }
 
 export async function rejectRequest(id: string, note: string) {
@@ -54,6 +76,10 @@ export async function rejectRequest(id: string, note: string) {
     throw new Error('Only Coordinators or Directors can reject requests')
   }
 
+  const request = await prisma.serviceRequest.findUnique({ where: { id } })
+  if (!request) throw new Error('Request not found')
+  if ((request as any).deletedAt) throw new Error('Request has already been deleted')
+
   await prisma.serviceRequest.update({
     where: { id },
     data: {
@@ -63,8 +89,21 @@ export async function rejectRequest(id: string, note: string) {
     }
   })
 
+  // Create Audit Log
+  await (prisma as any).auditLog.create({
+    data: {
+      requestId: id,
+      action: 'REJECTED',
+      actorName: session.user.name || 'Unknown',
+      actorRole: role,
+      details: `Rejected by ${role.replace('_', ' ')}. Note: ${note}`
+    }
+  });
+
   revalidatePath('/')
   revalidatePath('/requests')
+  revalidatePath('/calendar')
+  revalidatePath('/logs')
 }
 
 export async function deleteRequest(id: string) {
@@ -76,39 +115,73 @@ export async function deleteRequest(id: string) {
     throw new Error('Only Coordinators or Directors can delete requests')
   }
 
-  await prisma.serviceRequest.delete({
-    where: { id }
+  const request = await prisma.serviceRequest.findUnique({
+    where: { id },
+    select: { eventTitle: true, deletedAt: true }
+  })
+  if (!request) throw new Error('Request not found')
+  if ((request as any).deletedAt) throw new Error('Request has already been deleted')
+
+  // Soft-delete the request so its audit trail remains intact.
+  await (prisma as any).auditLog.create({
+    data: {
+      requestId: id,
+      action: 'DELETED',
+      actorName: session.user.name || 'Unknown',
+      actorRole: role,
+      details: `Request for "${request?.eventTitle || 'Unknown'}" was deleted from the system.`
+    }
+  });
+
+  await (prisma.serviceRequest as any).update({
+    where: { id },
+    data: {
+      deletedAt: new Date()
+    }
   })
 
   revalidatePath('/')
   revalidatePath('/requests')
+  revalidatePath('/calendar')
+  revalidatePath('/logs')
 }
 
 export async function getRequests() {
-  const session = await getServerSession(authOptions)
-  if (!session || !session.user) return []
+  noStore()
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session || !session.user) {
+      console.log("SERVER_ACTION_GET_REQUESTS: No session found");
+      return []
+    }
 
-  const role = (session.user as any).role
-  const school = (session.user as any).school
+    const role = (session.user as any).role
+    const school = (session.user as any).school
+    const userId = (session.user as any).id
 
-  // If Secretary, only show their own school or own requests?
-  // User request says: "SECRETARY: REQUEST LETTER, CHOOSE ONE SERVICE"
-  // Usually Secretary only sees their own requests.
-  
-  const where: any = {}
-  if (role === 'SECRETARY') {
-    where.secretaryId = (session.user as any).id
+    console.log("SERVER_ACTION_GET_REQUESTS: Logged in user:", { role, school, userId, name: session.user.name });
+    
+    const where: any = { deletedAt: null }
+    if (role === 'SECRETARY') {
+      where.secretaryId = userId
+    }
+
+    const data = await prisma.serviceRequest.findMany({
+      where,
+      include: {
+        secretary: { select: { name: true } },
+        coordinator: { select: { name: true } },
+        director: { select: { name: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+
+    console.log("SERVER_ACTION_GET_REQUESTS: Fetched requests count:", data.length);
+    return data
+  } catch (err: any) {
+    console.error("SERVER_ACTION_GET_REQUESTS_ERROR:", err);
+    return []
   }
-
-  return prisma.serviceRequest.findMany({
-    where,
-    include: {
-      secretary: { select: { name: true } },
-      coordinator: { select: { name: true } },
-      director: { select: { name: true } }
-    },
-    orderBy: { createdAt: 'desc' }
-  })
 }
 
 export async function getCalendarRequests() {
@@ -118,6 +191,7 @@ export async function getCalendarRequests() {
   // Shared calendar needs to fetch all requests.
   // Optimize by selecting ONLY necessary fields to prevent sending large text blocks (eventDetails, letterContent) over the network.
   return prisma.serviceRequest.findMany({
+    where: { deletedAt: null },
     select: {
       id: true,
       eventTitle: true,
@@ -144,6 +218,7 @@ export async function checkConflict(startDate: string, startTime?: string, endDa
     
     const overlappingBookings = await (prisma.serviceRequest as any).findMany({
       where: {
+        deletedAt: null,
         id: currentRequestId ? { not: currentRequestId } : undefined,
         OR: [
           { eventDate: { gte: reqStart, lte: reqEnd } },
@@ -191,4 +266,27 @@ export async function checkConflict(startDate: string, startTime?: string, endDa
   } catch (error) {
     return { hasConflict: false, conflicts: [], sameDayEvents: [] };
   }
+}
+
+export async function getAuditLogs() {
+  const session = await getServerSession(authOptions)
+  if (!session || !session.user) return []
+
+  const role = (session.user as any).role
+  if (role !== 'CMAC_COORDINATOR') {
+    return [] // Exclusive for Coordinator as requested
+  }
+
+  return prisma.auditLog.findMany({
+    include: {
+      request: {
+        select: {
+          eventTitle: true,
+          school: true
+        }
+      }
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 100 // Last 100 changes
+  })
 }

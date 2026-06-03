@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { School, ServiceType, DocumentationType } from "@prisma/client"
-import { revalidatePath } from "next/cache"
+import { revalidatePath, unstable_noStore as noStore } from "next/cache"
 
 export async function createServiceRequest(formData: {
   eventTitle: string
@@ -14,70 +14,71 @@ export async function createServiceRequest(formData: {
   endTime?: string
   eventVenue: string
   school: School
-  serviceType: ServiceType
+  serviceType?: ServiceType | null
   documentationType: DocumentationType
   letterUrl?: string | null
   letterContent?: string | null
-  needsSoundSystem?: boolean
   needsSameDayEdit?: boolean
-  needsICTPersonnel?: boolean
-  hasOnlineSpeaker?: boolean
+  needsSameDayPhoto?: boolean
   campusType?: 'IN_CAMPUS' | 'OFF_CAMPUS'
 }) {
-  console.log("SERVER_ACTION: createServiceRequest called with", formData.eventTitle);
-  
+  noStore()
   try {
     const session = await getServerSession(authOptions);
-    console.log("SERVER_ACTION: Session found", session?.user?.email);
-    
     if (!session || !session.user) {
-      console.error("SERVER_ACTION: No session");
       return { success: false, error: 'Authentication required. Please log in again.' };
     }
 
-    if ((session.user as any).role !== 'SECRETARY') {
-      console.error("SERVER_ACTION: Invalid role", (session.user as any).role);
-      return { success: false, error: 'Only Secretaries can submit requests.' };
+    const role = (session.user as any).role;
+    if (role !== 'SECRETARY' && role !== 'ICT_DIRECTOR') {
+      return { success: false, error: 'Only Secretaries and Directors can submit requests.' };
     }
 
     const userId = (session.user as any).id;
     if (!userId) {
-      console.error("SERVER_ACTION: No user ID");
       return { success: false, error: 'Session error: User ID missing.' };
     }
 
-    const schoolEnum = (formData.school as string) === 'School of Medicine' ? 'MEDICINE' : formData.school;
+    const isDirector = role === 'ICT_DIRECTOR';
+    if (isDirector && !formData.serviceType) {
+      return { success: false, error: 'Directly approved events must have a service type.' };
+    }
 
-    const reqStart = formData.startTime || '00:00';
-    const reqEnd = formData.endTime || '23:59';
-    
-    // Conflict check is now handled via UI warning, we allow submission so coordinator can decide.
-
-    console.log("SERVER_ACTION: Creating in Prisma...");
     const request = await (prisma.serviceRequest as any).create({
       data: {
         eventTitle: formData.eventTitle,
         eventDate: new Date(formData.eventDate),
-        endDate: formData.endDate ? new Date(formData.endDate) : null,
+        endDate: (formData.endDate && formData.endDate.trim()) ? new Date(formData.endDate) : null,
         startTime: formData.startTime,
         endTime: formData.endTime,
         eventVenue: formData.eventVenue,
-        school: schoolEnum as School,
-        serviceType: formData.serviceType,
+        school: formData.school,
+        serviceType: formData.serviceType || null,
         documentationType: formData.documentationType,
         letterUrl: formData.letterUrl,
         letterContent: formData.letterContent,
-        needsSoundSystem: formData.needsSoundSystem || false,
         needsSameDayEdit: formData.needsSameDayEdit || false,
-        needsICTPersonnel: formData.needsICTPersonnel || false,
-        hasOnlineSpeaker: formData.hasOnlineSpeaker || false,
+        needsSameDayPhoto: formData.needsSameDayPhoto || false,
         campusType: formData.campusType || 'IN_CAMPUS',
-        secretaryId: userId,
-        status: 'PENDING'
+        secretaryId: userId, // Director acts as the "requester"
+        status: isDirector ? 'DIRECTOR_APPROVED' : 'PENDING',
+        directorId: isDirector ? userId : null,
+        directorApprovedAt: isDirector ? new Date() : null,
       }
     });
 
-    console.log("SERVER_ACTION: Successfully created", request.id);
+    // Create Audit Log
+    await (prisma as any).auditLog.create({
+      data: {
+        requestId: request.id,
+        action: isDirector ? 'DIRECT_BYPASS' : 'SUBMITTED',
+        actorName: session.user.name || 'Unknown',
+        actorRole: role,
+        details: isDirector 
+          ? `Event directly added to calendar by Director (Bypass Mode).`
+          : `New service request submitted by ${session.user.name}.`
+      }
+    });
     
     revalidatePath('/')
     revalidatePath('/requests')
@@ -90,14 +91,16 @@ export async function createServiceRequest(formData: {
 }
 
 export async function checkConflict(startDate: string, startTime?: string, endDate?: string, endTime?: string, eventVenue?: string) {
+  noStore()
   if (!startDate) return { hasConflict: false, conflicts: [], sameDayEvents: [] };
   try {
     const reqStart = new Date(startDate);
-    const reqEnd = endDate ? new Date(endDate) : new Date(startDate);
+    const reqEnd = (endDate && endDate.trim()) ? new Date(endDate) : new Date(startDate);
     
     // Find all bookings that overlap with the requested date range
     const overlappingBookings = await (prisma.serviceRequest as any).findMany({
       where: {
+        deletedAt: null,
         OR: [
           {
             // Event starts within our range
@@ -131,15 +134,10 @@ export async function checkConflict(startDate: string, startTime?: string, endDa
       // If they share at least one full day in the middle, it's a conflict
       // If they share only the boundary days, check times
       
-      const startsSameDay = bStart.toISOString().split('T')[0] === reqEnd.toISOString().split('T')[0];
-      const endsSameDay = bEnd.toISOString().split('T')[0] === reqStart.toISOString().split('T')[0];
-      
-      // Simple logic: if they share any date, and it's the same venue, it's a conflict for now
-      // (Unless we want to get super granular with times on the boundary days)
-      const bStartTime = b.startTime || '00:00';
-      const bEndTime = b.endTime || '23:59';
-      const rStartTime = startTime || '00:00';
-      const rEndTime = endTime || '23:59';
+      const bStartTime = b.startTime || '00:00'
+      const bEndTime = b.endTime || '23:59'
+      const rStartTime = startTime || '00:00'
+      const rEndTime = endTime || '23:59'
 
       // If it's the same day, check times
       if (bStart.getTime() === reqStart.getTime() && bEnd.getTime() === reqEnd.getTime()) {

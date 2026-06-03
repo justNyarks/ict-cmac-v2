@@ -7,6 +7,17 @@ import { getUsers, addUser, removeUser } from './actions'
 import { useSession } from 'next-auth/react'
 import Portal from '@/components/Portal'
 
+const SCHOOLS = ['SNAHS', 'SBAHM', 'SITE', 'SASTE', 'MEDICINE', 'BEU', 'UNIVERSITY'] as const
+const SCHOOL_LABELS: Record<(typeof SCHOOLS)[number], string> = {
+  SNAHS: 'SNAHS',
+  SBAHM: 'SBAHM',
+  SITE: 'SITE',
+  SASTE: 'SASTE',
+  MEDICINE: 'SOM',
+  BEU: 'BEU',
+  UNIVERSITY: 'UNIVERSITY',
+}
+
 const ROLE_META: Record<Role, { label: string; color: string; icon: React.ElementType; desc: string }> = {
   SECRETARY: {
     label: 'Secretary',
@@ -240,8 +251,8 @@ export default function AdminPage() {
                     className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
                   >
                     <option value="">Select school…</option>
-                    {['SNAHS', 'SBAHM', 'SITE', 'SASTE', 'School of Medicine', 'BEU'].map(s => (
-                      <option key={s} value={s}>{s}</option>
+                    {SCHOOLS.map(s => (
+                      <option key={s} value={s}>{SCHOOL_LABELS[s]}</option>
                     ))}
                   </select>
                 </div>

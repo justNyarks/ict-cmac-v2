@@ -5,6 +5,7 @@ import {
   TrendingUp, Camera, Video, Layers, ChevronRight
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { getDashboardStats } from './dashboardActions'
 import { useSession } from 'next-auth/react'
 import clsx from 'clsx'
@@ -30,6 +31,7 @@ function StatCard({
 
 export default function DashboardPage() {
   const { data: session } = useSession()
+  const router = useRouter()
   const [stats, setStats] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [dismissedNotifs, setDismissedNotifs] = useState<string[]>([])
@@ -46,7 +48,7 @@ export default function DashboardPage() {
     const updated = [...dismissedNotifs, id]
     setDismissedNotifs(updated)
     localStorage.setItem('dismissedNotifs', JSON.stringify(updated))
-    window.location.href = '/requests'
+    router.push('/requests')
   }
 
   if (loading || !stats) {
@@ -84,12 +86,32 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {stats.dbUnavailable && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-900">
+          <p className="text-sm font-bold">Dashboard data is temporarily unavailable.</p>
+          <p className="text-xs font-medium text-amber-700 mt-1">The app could not reach the database, so the widgets below are showing safe fallback values.</p>
+        </div>
+      )}
+
       {/* Notifications for Secretary */}
       {(session?.user as any)?.role === 'SECRETARY' && stats.newlyApproved?.filter((req: any) => !dismissedNotifs.includes(req.id)).length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Notifications</h3>
-            <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
+            <div className="flex items-center gap-3">
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Notifications</h3>
+              <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-ping"></span>
+            </div>
+            <button 
+              onClick={() => {
+                const idsToDismiss = stats.newlyApproved.map((n: any) => n.id);
+                const updated = Array.from(new Set([...dismissedNotifs, ...idsToDismiss]));
+                setDismissedNotifs(updated);
+                localStorage.setItem('dismissedNotifs', JSON.stringify(updated));
+              }}
+              className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-emerald-600 transition-colors"
+            >
+              Clear All
+            </button>
           </div>
           {stats.newlyApproved.filter((req: any) => !dismissedNotifs.includes(req.id)).map((req: any) => (
             <div key={req.id} className={clsx(
@@ -121,7 +143,9 @@ export default function DashboardPage() {
                       ? 'Please check the coordinator\'s notes for feedback.' 
                       : req.status === 'COORDINATOR_APPROVED'
                         ? 'Awaiting final approval from the ICT Director.'
-                        : 'You can now view and print the official requisition letter from the requests page.'}
+                        : req.secretaryId === (session?.user as any)?.id
+                          ? 'You can now print the request receipt from the requests page.'
+                          : 'This event has been successfully scheduled and added to the shared calendar.'}
                   </p>
                 </div>
               </div>
@@ -169,7 +193,7 @@ export default function DashboardPage() {
             <div key={req.id} className="px-6 py-4 flex items-center justify-between hover:bg-slate-50/60 transition-colors">
               <div>
                 <p className="font-medium text-slate-800 text-sm">{req.eventTitle}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{req.school} · {req.secretary?.name || req.requestedBy} · {new Date(req.eventDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{req.school} · {req.secretary?.name || 'Unknown requester'} · {new Date(req.eventDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
               </div>
               <span className={`status-badge ${getStatusColor(req.status)}`}>
                 {getStatusLabel(req.status)}

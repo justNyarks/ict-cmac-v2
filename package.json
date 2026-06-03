@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@prisma/client": "^5.12.1",
@@ -15,7 +15,7 @@
     "date-fns": "^3.6.0",
     "lucide-react": "^0.383.0",
     "next": "^16.2.7",
-    "next-auth": "^3.29.10",
+    "next-auth": "^4.24.14",
     "react": "^18",
     "react-dom": "^18",
     "tailwind-merge": "^2.3.0"
@@ -26,7 +26,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.19",
-    "eslint": "^8",
+    "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.7",
     "postcss": "^8",
     "prisma": "^5.12.1",

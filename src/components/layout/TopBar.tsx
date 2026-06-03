@@ -128,13 +128,13 @@ export default function TopBar() {
                         <p className="text-[10px] text-slate-400 mt-0.5">
                           {(session?.user as any)?.role === 'SECRETARY'
                             ? n.secretaryId === (session?.user as any)?.id
-                              ? n.status === 'DIRECTOR_APPROVED' ? '✓ Fully approved — ready to print'
+                              ? n.status === 'DIRECTOR_APPROVED' ? '✓ Fully approved — ready to print receipt'
                                 : n.status === 'COORDINATOR_APPROVED' ? '⏳ Coordinator approved, awaiting director'
                                 : n.status === 'REJECTED' ? '✗ Request was rejected'
                                 : 'New booking on shared calendar'
-                              : 'New booking added to shared calendar'
+                              : n.status === 'DIRECTOR_APPROVED' ? '★ New event directly added by Director' : 'New booking added to shared calendar'
                             : (session?.user as any)?.role === 'CMAC_COORDINATOR'
-                              ? 'New request — needs your review'
+                              ? n.status === 'DIRECTOR_APPROVED' ? '★ Event directly approved by Director' : 'New request — needs your review'
                               : 'Coordinator approved — awaiting your sign-off'}
                         </p>
                       </div>

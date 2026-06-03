@@ -1,9 +1,10 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
-import { MOCK_REQUESTS, getStatusColor, getStatusLabel } from '@/lib/data'
-import { ServiceRequest } from '@/types'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { getStatusColor, getStatusLabel } from '@/lib/data'
+import Link from 'next/link'
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import clsx from 'clsx'
 
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
@@ -25,7 +26,9 @@ export default function CalendarPage() {
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
   const { data: session } = useSession()
+  const router = useRouter()
   const [selected, setSelected] = useState<any | null>(null)
+  const selectedServiceLabel = selected?.serviceType || 'Unassigned'
   
   // Filters
   const [filterType, setFilterType] = useState<string>('ALL')
@@ -58,7 +61,11 @@ export default function CalendarPage() {
   // Apply filters and Map event dates to requests (spanning multi-day events)
   const eventsByDay = useMemo(() => {
     const filtered = requests.filter(req => {
-      if (filterType !== 'ALL' && req.serviceType !== filterType) return false
+      if (filterType === 'UNASSIGNED') {
+        if (req.serviceType) return false
+      } else if (filterType !== 'ALL' && req.serviceType !== filterType) {
+        return false
+      }
       if (filterUser === 'MINE' && req.secretaryId !== (session?.user as any)?.id) return false
       return true
     })
@@ -100,8 +107,6 @@ export default function CalendarPage() {
   // Pad to full rows
   while (cells.length % 7 !== 0) cells.push(null)
 
-  const serviceColor = (req: ServiceRequest) =>
-    req.serviceType === 'CMAC' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
 
   // Deterministic color palette per event (based on ID hash)
   const EVENT_PALETTE = [
@@ -139,7 +144,7 @@ export default function CalendarPage() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-4 mb-2">
         <div className="flex bg-slate-100 p-1 rounded-xl">
-          {['ALL', 'CMAC', 'PMAC'].map(type => (
+          {['ALL', 'CMAC', 'PMAC', 'UNASSIGNED'].map(type => (
             <button key={type} onClick={() => setFilterType(type)}
               className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterType === type ? 'bg-white text-[#064e3b] shadow-sm' : 'text-slate-400 hover:text-slate-600')}
             >
@@ -159,6 +164,15 @@ export default function CalendarPage() {
             My Bookings
           </button>
         </div>
+
+        {(session?.user as any)?.role === 'ICT_DIRECTOR' && (
+          <button 
+            onClick={() => router.push('/new-request')}
+            className="ml-auto flex items-center gap-2 bg-[#064e3b] text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#065f46] shadow-lg shadow-emerald-900/10 transition-all cursor-pointer z-30"
+          >
+            <Plus size={14} /> Add Event
+          </button>
+        )}
       </div>
 
       {/* Calendar grid */}
@@ -286,7 +300,7 @@ export default function CalendarPage() {
           <div className="bg-white rounded-[2rem] shadow-2xl max-w-md w-full overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className={clsx('p-8 text-white', selected.status === 'DIRECTOR_APPROVED' ? 'bg-emerald-600' : 'bg-amber-500')}>
               <div className="flex items-center justify-between mb-4">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white/20 px-3 py-1 rounded-full">{selected.serviceType} Request</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white/20 px-3 py-1 rounded-full">{selectedServiceLabel} Request</span>
                 {selected.status === 'DIRECTOR_APPROVED' && <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-emerald-800 px-3 py-1 rounded-full">TAKEN</span>}
               </div>
               <h3 className="font-display text-2xl font-bold leading-tight">{selected.eventTitle}</h3>

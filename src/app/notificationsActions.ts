@@ -15,6 +15,7 @@ export async function getNotifications() {
     // Secretary: see their own requests with any status change + global approved (shared calendar)
     return await prisma.serviceRequest.findMany({
       where: {
+        deletedAt: null,
         OR: [
           // Own requests that have been acted on (not just sitting pending)
           {
@@ -34,9 +35,12 @@ export async function getNotifications() {
   }
 
   if (role === 'CMAC_COORDINATOR') {
-    // Coordinator: new PENDING requests needing their review
+    // Coordinator: new PENDING requests needing their review + DIRECTLY APPROVED by Director
     return await prisma.serviceRequest.findMany({
-      where: { status: 'PENDING' },
+      where: { 
+        deletedAt: null,
+        status: { in: ['PENDING', 'DIRECTOR_APPROVED'] } 
+      },
       select: {
         id: true, eventTitle: true, status: true, secretaryId: true, createdAt: true,
         secretary: { select: { name: true } }
@@ -49,7 +53,7 @@ export async function getNotifications() {
   if (role === 'ICT_DIRECTOR') {
     // Director: COORDINATOR_APPROVED requests ready for final sign-off
     return await prisma.serviceRequest.findMany({
-      where: { status: 'COORDINATOR_APPROVED' },
+      where: { deletedAt: null, status: 'COORDINATOR_APPROVED' },
       select: {
         id: true, eventTitle: true, status: true, secretaryId: true, updatedAt: true,
         secretary: { select: { name: true } }

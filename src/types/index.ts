@@ -5,8 +5,9 @@ export type School =
   | 'SBAHM'
   | 'SITE'
   | 'SASTE'
-  | 'School of Medicine'
+  | 'MEDICINE'
   | 'BEU'
+  | 'UNIVERSITY'
 
 export type ServiceType = 'CMAC' | 'PMAC'
 export type DocumentationType = 'PHOTO' | 'VIDEO' | 'BOTH'
@@ -20,19 +21,32 @@ export type RequestStatus =
 export interface ServiceRequest {
   id: string
   createdAt: string
-  eventDate: string
+  updatedAt: string
   eventTitle: string
+  eventDate: string
+  endDate?: string
+  startTime?: string
+  endTime?: string
   eventVenue: string
   school: School
-  requestedBy: string // name of the secretary
-  serviceType: ServiceType
+  serviceType?: ServiceType | null  // Assigned by Director only
   documentationType: DocumentationType
-  letterUrl?: string  // uploaded request letter file name/url
+  campusType: 'IN_CAMPUS' | 'OFF_CAMPUS'
+  letterUrl?: string
+  letterContent?: string
+  eventDetails?: string
+  needsSameDayEdit: boolean
+  needsSameDayPhoto: boolean
   status: RequestStatus
   coordinatorNote?: string
   directorNote?: string
   coordinatorApprovedAt?: string
   directorApprovedAt?: string
+  deletedAt?: string | null
+  // Relations
+  secretaryId: string
+  coordinatorId?: string
+  directorId?: string
 }
 
 export interface User {
