@@ -45,6 +45,7 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id
+        token.email = user.email
         token.role = user.role
         token.school = user.school
         token.name = user.name
@@ -53,10 +54,11 @@ export const authOptions: NextAuthOptions = {
       if (trigger === 'update' && (token.id || token.sub)) {
         const fresh = await prisma.user.findUnique({
           where: { id: (token.id || token.sub) as string },
-          select: { id: true, name: true, role: true, school: true }
+          select: { id: true, email: true, name: true, role: true, school: true }
         })
         if (fresh) {
           token.id = fresh.id
+          token.email = fresh.email
           token.name = fresh.name
           token.role = fresh.role
           token.school = fresh.school
@@ -66,6 +68,7 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user && token.id && token.role) {
+        session.user.email = token.email
         session.user.name = token.name as string
         session.user.role = token.role
         session.user.school = token.school ?? null

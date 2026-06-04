@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { School, ServiceType, DocumentationType } from "@prisma/client"
+import type { School, ServiceType, DocumentationType } from "@/types"
 import { revalidatePath, unstable_noStore as noStore } from "next/cache"
 
 export async function createServiceRequest(formData: {

@@ -47,6 +47,7 @@ export default function RequestsPage() {
     MEDICINE: 'SOM',
     BEU: 'BEU',
     UNIVERSITY: 'UNIVERSITY',
+    HR: 'HR',
   }
 
   function getRequesterName(request: any) {
@@ -565,9 +566,218 @@ export default function RequestsPage() {
       {selected && (
         <div className="hidden print:block fixed top-0 left-0 bg-white z-[9999] text-black p-0 m-0 overflow-hidden"
           style={{ width: '8.5in', minHeight: '13in' }}>
-          
-          {/* 1. OFFICIAL LETTER LAYOUT (DIRECTOR) */}
+
+          {/* 1. DIRECTOR FILING COPY LAYOUT */}
           {printMode === 'LETTER' && (
+            <div className="relative w-full h-[13in] max-h-[13in] flex flex-col font-sans bg-white px-7 py-6 overflow-hidden">
+              <div className="absolute inset-4 border border-slate-200 pointer-events-none" />
+              <div className="hidden" />
+              <div className="relative border-b border-slate-200 pb-4">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-slate-400">ICT-CMAC Approved Request</p>
+                <h1 className="mt-2 text-[1.8rem] font-black leading-none tracking-[-0.03em] text-slate-950">Official Request Copy</h1>
+                <p className="mt-2 text-[11px] font-semibold text-slate-700">St. Paul University Philippines</p>
+                <p className="mt-0.5 text-[10px] text-slate-500">ICT - Center for Media and Communications</p>
+              </div>
+
+              <div className="relative flex items-end justify-between pt-4 pb-2">
+                <div>
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-400">Issued Document</p>
+                  <h2 className="mt-1 text-[1.25rem] font-black tracking-[-0.02em] text-slate-900">Director Filing Copy</h2>
+                </div>
+                <div className="text-right">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-400">Reference Number</p>
+                  <p className="mt-1 text-[13px] font-mono font-black text-slate-900">REQ-{selected.id.slice(-6).toUpperCase()}</p>
+                </div>
+              </div>
+
+              <div className="relative grid grid-cols-[1.3fr_0.7fr] gap-4 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+                <div>
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Status</p>
+                  <p className="mt-1 text-[1.1rem] font-black text-emerald-900">Approved for Director Filing</p>
+                  <p className="mt-1 text-[10px] leading-snug text-emerald-900/70">This request is ready for formal ICT-CMAC filing and record-keeping.</p>
+                </div>
+                <div className="border-l border-emerald-200 pl-4 text-right">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Approval Date</p>
+                  <p className="mt-1.5 text-[13px] font-bold text-slate-800">{selected.directorApprovedAt ? new Date(selected.directorApprovedAt).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' }) : 'N/A'}</p>
+                </div>
+              </div>
+
+              <div className="relative mt-4 grid grid-cols-[1.35fr_0.65fr] gap-5">
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Event Overview</p>
+                    <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3">
+                      <div className="col-span-2">
+                        <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-[0.18em] mb-1">Event Title</p>
+                        <p className="text-[1.15rem] leading-tight font-black text-slate-900">{selected.eventTitle}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-[0.18em] mb-1">Requesting School</p>
+                        <p className="text-[13px] font-semibold text-slate-800">{selected.school}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-[0.18em] mb-1">Requested By</p>
+                        <p className="text-[13px] font-semibold text-slate-800">{getRequesterName(selected)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-[0.18em] mb-1">Schedule</p>
+                        <p className="text-[13px] font-semibold text-slate-800">
+                          {new Date(selected.eventDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          {selected.endDate && selected.endDate !== selected.eventDate && ` - ${new Date(selected.endDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                        </p>
+                        <p className="mt-0.5 text-[10px] text-slate-500">{selected.startTime} - {selected.endTime}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-[0.18em] mb-1">Venue</p>
+                        <p className="text-[13px] font-semibold text-slate-800">{selected.eventVenue}</p>
+                        <p className="mt-0.5 text-[10px] text-slate-500">{selected.campusType === 'IN_CAMPUS' ? 'In-Campus' : 'Off-Campus'}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+                    <h3 className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.2em]">Service Details</h3>
+                    <div className="mt-3 space-y-3">
+                      <div className="space-y-3">
+                        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                          <div>
+                            <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-[0.18em]">Service Type</p>
+                            <p className="mt-1 text-[13px] font-black text-slate-800">{selectedServiceLabel}</p>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                          <div>
+                            <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-[0.18em]">Documentation</p>
+                            <p className="mt-1 text-[13px] font-black text-slate-800">{selected.documentationType === 'BOTH' ? 'Photo & Video' : selected.documentationType}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-[0.18em]">Technical Needs</p>
+                        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-medium leading-tight text-slate-700">Same Day Video Edit</span>
+                            <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] ${selected.needsSameDayEdit ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-400'}`}>{selected.needsSameDayEdit ? 'Required' : 'Not Needed'}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-medium leading-tight text-slate-700">Same-Day Photo Delivery</span>
+                            <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] ${(selected as any).needsSameDayPhoto ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-400'}`}>{(selected as any).needsSameDayPhoto ? 'Required' : 'Not Needed'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="col-span-2 rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.2em]">Approved Request Letter</p>
+                    <p className="text-[9px] font-medium text-slate-400 uppercase tracking-[0.18em]">Official Copy</p>
+                  </div>
+                  <div className={clsx(
+                    'mt-3 h-[4.45in] overflow-hidden rounded-2xl border border-slate-200 bg-white px-4 py-4 whitespace-pre-wrap text-slate-700',
+                    receiptLetterTextClass
+                  )}>
+                    {receiptLetterPreview}
+                  </div>
+                </div>
+              </div>
+
+              <div className="hidden">
+                <div
+                  className="pointer-events-none relative flex items-center justify-center rounded-full"
+                  style={{
+                    width: '1.9in',
+                    height: '1.9in',
+                    opacity: 0.08,
+                    border: '3px solid transparent',
+                    boxShadow: 'inset 2px 2px 5px rgba(0,0,0,0.25), inset -2px -2px 5px rgba(255,255,255,0.95), 1px 1px 4px rgba(0,0,0,0.12)'
+                  }}
+                >
+                  <div className="absolute inset-2 rounded-full border border-black/10 shadow-[inset_1px_1px_3px_rgba(0,0,0,0.2)]"></div>
+                  <div className="absolute w-full h-full flex items-center justify-center">
+                    <svg viewBox="0 0 100 100" className="w-[90%] h-[90%]">
+                      <path id="curve-receipt-inline-director" d="M 50,50 m -40,0 a 40,40 0 1,1 80,0 a 40,40 0 1,1 -80,0" fill="transparent" />
+                      <text className="text-[10px] font-black uppercase tracking-[0.08em]" style={{ fill: 'none', stroke: 'rgba(15,23,42,0.55)', strokeWidth: '0.35px' }}>
+                        <textPath href="#curve-receipt-inline-director" startOffset="50%" textAnchor="middle">
+                          * St. Paul University Philippines *
+                        </textPath>
+                      </text>
+                    </svg>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[1.02rem] font-black uppercase tracking-[0.12em] text-slate-700/70">
+                      Official
+                    </p>
+                    <p className="border-y border-slate-500/20 py-1 text-[0.88rem] font-black uppercase tracking-[0.18em] text-slate-700/55">
+                      Seal
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="relative mt-auto grid grid-cols-2 gap-10 pt-2">
+                <div className="space-y-2">
+                  <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-[0.18em]">Prepared For Director</p>
+                  <div className="border-b border-slate-300" />
+                  <p className="pt-1 text-[13px] font-black uppercase text-slate-900">{selected.director?.name || 'Dir. Ramon Dela Cruz'}</p>
+                  <p className="text-[9px] font-semibold text-slate-500 uppercase tracking-[0.16em]">ICT Director</p>
+                </div>
+                <div className="space-y-2 text-right">
+                  <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-[0.18em]">Verified By</p>
+                  <div className="border-b border-slate-300" />
+                  <p className="pt-1 text-[13px] font-black uppercase text-slate-900">SPUP ICT-CMAC Portal</p>
+                  <p className="text-[9px] font-semibold text-slate-500 uppercase tracking-[0.16em]">Automated Approval System</p>
+                </div>
+              </div>
+
+              <div className="relative mt-3 flex items-center justify-between border-t border-slate-200 pt-3 text-[8px] uppercase tracking-[0.18em] text-slate-500">
+                <p>This copy confirms the approved booking.</p>
+                <div className="flex gap-6">
+                  <p>Printed: {new Date().toLocaleString('en-PH')}</p>
+                  <p>Doc ID: REQ-{selected.id.slice(-6).toUpperCase()}</p>
+                </div>
+              </div>
+
+              <div 
+                className="absolute pointer-events-none flex items-center justify-center rounded-full"
+                style={{
+                  bottom: '0.18in',
+                  left: '0.28in',
+                  width: '1.9in',
+                  height: '1.9in',
+                  opacity: 0.09,
+                  border: '3px solid transparent',
+                  boxShadow: 'inset 2px 2px 5px rgba(0,0,0,0.24), inset -2px -2px 5px rgba(255,255,255,0.95), 1px 1px 4px rgba(0,0,0,0.12)'
+                }}
+              >
+                <div className="absolute inset-2 rounded-full border border-black/10 shadow-[inset_1px_1px_3px_rgba(0,0,0,0.2)]"></div>
+                <div className="absolute w-full h-full flex items-center justify-center">
+                  <svg viewBox="0 0 100 100" className="w-[90%] h-[90%]">
+                    <path id="curve-receipt-director" d="M 50,50 m -40,0 a 40,40 0 1,1 80,0 a 40,40 0 1,1 -80,0" fill="transparent" />
+                    <text className="text-[10px] font-black uppercase tracking-[0.08em]" style={{ fill: 'none', stroke: 'rgba(15,23,42,0.55)', strokeWidth: '0.35px' }}>
+                      <textPath href="#curve-receipt-director" startOffset="50%" textAnchor="middle">
+                        * St. Paul University Philippines *
+                      </textPath>
+                    </text>
+                  </svg>
+                </div>
+                <div className="text-center">
+                  <p className="text-[1.02rem] font-black uppercase tracking-[0.12em] text-slate-700/70">
+                    Official
+                  </p>
+                  <p className="border-y border-slate-500/20 py-1 text-[0.88rem] font-black uppercase tracking-[0.18em] text-slate-700/55">
+                    Seal
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 1. OFFICIAL LETTER LAYOUT (LEGACY, DISABLED) */}
+          {false && printMode === 'LETTER' && (
             <div className="relative w-full min-h-[13in] flex flex-col font-serif px-8 py-6 overflow-hidden">
               {/* Header */}
               <div className="text-center space-y-2 border-b-4 border-double border-black pb-6">

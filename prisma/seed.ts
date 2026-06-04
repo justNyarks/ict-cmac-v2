@@ -7,7 +7,7 @@ async function main() {
   const password = await bcrypt.hash('password123', 10)
 
   // Must match the School enum in schema.prisma exactly
-  const schools = ['SNAHS', 'SBAHM', 'SITE', 'SASTE', 'MEDICINE', 'BEU', 'UNIVERSITY']
+  const schools = ['SNAHS', 'SBAHM', 'SITE', 'SASTE', 'MEDICINE', 'BEU', 'UNIVERSITY', 'HR']
   
   // Create Secretary for each department
   for (const s of schools) {
@@ -25,7 +25,7 @@ async function main() {
         school: s,
       },
     })
-  }
+  }   
 
   // Create Coordinator
   await prisma.user.upsert({
@@ -51,7 +51,7 @@ async function main() {
     },
   })
 
-  console.log('Seed completed. Accounts created for all departments (including UNIVERSITY).')
+  console.log('Seed completed. Accounts created for all departments (including UNIVERSITY and HR).')
 }
 
 main()

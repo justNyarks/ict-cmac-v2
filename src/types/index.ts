@@ -8,6 +8,7 @@ export type School =
   | 'MEDICINE'
   | 'BEU'
   | 'UNIVERSITY'
+  | 'HR'
 
 export type ServiceType = 'CMAC' | 'PMAC'
 export type DocumentationType = 'PHOTO' | 'VIDEO' | 'BOTH'

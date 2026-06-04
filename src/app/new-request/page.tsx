@@ -1,10 +1,10 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { School, ServiceType, DocumentationType } from '@prisma/client'
+import type { School, ServiceType, DocumentationType } from '@/types'
 import { CheckCircle2, Upload, ChevronRight } from 'lucide-react'
 import clsx from 'clsx'
 
-const SCHOOLS: School[] = ['SNAHS','SBAHM','SITE','SASTE','MEDICINE','BEU','UNIVERSITY']
+const SCHOOLS: School[] = ['SNAHS','SBAHM','SITE','SASTE','MEDICINE','BEU','UNIVERSITY','HR']
 const SCHOOL_LABELS: Record<School, string> = {
   SNAHS: 'SNAHS',
   SBAHM: 'SBAHM',
@@ -13,6 +13,7 @@ const SCHOOL_LABELS: Record<School, string> = {
   MEDICINE: 'SOM',
   BEU: 'BEU',
   UNIVERSITY: 'UNIVERSITY',
+  HR: 'HR',
 }
 const SERVICES: ServiceType[] = ['CMAC','PMAC']
 const DOC_TYPES: DocumentationType[] = ['PHOTO','VIDEO','BOTH']
@@ -710,7 +711,13 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
                     generateLetterTemplate();
                   }
                   if (nextStep === 4) {
-                    const res = await checkConflict(form.eventDate, form.startTime, form.endTime);
+                    const res = await checkConflict(
+                      form.eventDate,
+                      form.startTime,
+                      form.endDate || undefined,
+                      form.endTime,
+                      form.eventVenue || undefined
+                    );
                     setConflicts(res.conflicts || []);
                   }
                   setStep(nextStep);

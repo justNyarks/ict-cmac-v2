@@ -24,6 +24,7 @@ enum School {
   MEDICINE // Map "School of Medicine" to MEDICINE for enum safety
   BEU
   UNIVERSITY
+  HR
 }
 
 enum ServiceType {

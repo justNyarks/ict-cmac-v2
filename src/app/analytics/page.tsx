@@ -1,7 +1,7 @@
 'use client'
 import { School } from '@/types'
 
-const SCHOOLS: School[] = ['SNAHS', 'SBAHM', 'SITE', 'SASTE', 'MEDICINE', 'BEU', 'UNIVERSITY']
+const SCHOOLS: School[] = ['SNAHS', 'SBAHM', 'SITE', 'SASTE', 'MEDICINE', 'BEU', 'UNIVERSITY', 'HR']
 const SCHOOL_LABELS: Record<School, string> = {
   SNAHS: 'SNAHS',
   SBAHM: 'SBAHM',
@@ -10,6 +10,7 @@ const SCHOOL_LABELS: Record<School, string> = {
   MEDICINE: 'SOM',
   BEU: 'BEU',
   UNIVERSITY: 'UNIVERSITY',
+  HR: 'HR',
 }
 
 function BarChart({ data, max, colorClass }: { data: { label: string; value: number }[]; max: number; colorClass: string }) {
