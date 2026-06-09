@@ -61,6 +61,7 @@ export default function NewRequestPage() {
     needsSameDayEdit: false,
     needsSameDayPhoto: false,
     campusType: '' as 'IN_CAMPUS' | 'OFF_CAMPUS' | '',
+    directorBypassReason: '',
   })
   const [step, setStep] = useState<Step>(1)
   const [loading, setLoading] = useState(false)
@@ -103,6 +104,14 @@ export default function NewRequestPage() {
     }
 
     if (!form.documentationType) return 'Please select a documentation type.'
+    return ''
+  }
+
+  function validateDirectorBypassReason(): string {
+    if ((session?.user as any)?.role === 'ICT_DIRECTOR' && !form.directorBypassReason.trim()) {
+      return 'Please record a bypass reason before adding this event directly to the calendar.'
+    }
+
     return ''
   }
   const [submitted, setSubmitted] = useState(false)
@@ -207,8 +216,10 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
   async function submit() {
     const e1 = validateStep1()
     const e2 = validateStep3()
+    const e3 = validateDirectorBypassReason()
     if (e1) { setStep(1); setStepError(e1); return }
     if (e2) { setStep(2); setStepError(e2); return }
+    if (e3) { setStep(4); setStepError(e3); return }
     setStepError('')
 
     if (loading) return
@@ -236,7 +247,8 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
           letterUrl: submissionMethod === 'upload' ? (form.letterFile?.name || null) : 'generated-letter.pdf',
           needsSameDayEdit: form.needsSameDayEdit,
           needsSameDayPhoto: form.needsSameDayPhoto,
-          campusType: form.campusType as any
+          campusType: form.campusType as any,
+          directorBypassReason: form.directorBypassReason,
         }),
         timeout
       ]) as any
@@ -630,6 +642,24 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
         {step === 4 && (
           <div className="space-y-6">
             <h2 className="font-display text-2xl text-slate-800 font-bold">Review Request</h2>
+
+            {(session?.user as any)?.role === 'ICT_DIRECTOR' && (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5 space-y-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Director Bypass Reason</p>
+                  <p className="text-xs text-emerald-800 mt-1 font-medium">
+                    This event will skip coordinator review and go straight to the shared calendar. Record why the bypass is necessary.
+                  </p>
+                </div>
+                <textarea
+                  rows={3}
+                  value={form.directorBypassReason}
+                  onChange={e => set('directorBypassReason', e.target.value)}
+                  placeholder="Example: Urgent executive event added same day after office confirmation."
+                  className="w-full border-2 border-emerald-100 rounded-2xl px-4 py-3 text-sm font-medium focus:outline-none focus:border-emerald-500 bg-white"
+                />
+              </div>
+            )}
             
             {conflicts.length > 0 && (
               <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl animate-fade-in shadow-sm shadow-amber-900/5">
@@ -665,6 +695,7 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
                 ...(form.serviceType ? [['Service', form.serviceType]] : []),
                 ['Documentation', form.documentationType === 'BOTH' ? 'Photo + Video' : form.documentationType],
                 ['Document', submissionMethod === 'generate' ? 'In-App Generated Letter' : (form.letterFile?.name ?? 'Not uploaded')],
+                ...((session?.user as any)?.role === 'ICT_DIRECTOR' ? [['Bypass Reason', form.directorBypassReason]] : []),
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between px-6 py-4 text-sm">
                   <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">{k}</span>
