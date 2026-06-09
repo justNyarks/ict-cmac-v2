@@ -11,6 +11,7 @@ import {
   Camera,
   User,
   Aperture,
+  History,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { href: '/new-request',label: 'New Request', icon: FilePlus2      },
   { href: '/calendar',   label: 'Calendar',   icon: CalendarDays    },
   { href: '/analytics',  label: 'Analytics',  icon: BarChart3       },
+  { href: '/logs',       label: 'System Logs', icon: History      },
   { href: '/admin',      label: 'Admin',      icon: Settings        },
   { href: '/profile',    label: 'My Profile', icon: User            },
 ]
@@ -30,12 +32,14 @@ import { LogOut } from 'lucide-react'
 export default function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
-  const user = session?.user as any
+  const user = session?.user
+  const role = user?.role
 
   const navItems = NAV_ITEMS.filter(item => {
-    if (item.href === '/new-request') return user?.role === 'SECRETARY'
-    if (item.href === '/admin') return user?.role === 'ICT_DIRECTOR'
-    if (item.href === '/analytics') return ['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes(user?.role)
+    if (item.href === '/new-request') return role === 'SECRETARY' || role === 'ICT_DIRECTOR'
+    if (item.href === '/admin') return role === 'ICT_DIRECTOR'
+    if (item.href === '/analytics') return role === 'CMAC_COORDINATOR' || role === 'ICT_DIRECTOR'
+    if (item.href === '/logs') return role === 'CMAC_COORDINATOR'
     return true
   })
 

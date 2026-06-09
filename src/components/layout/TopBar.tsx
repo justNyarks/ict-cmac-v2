@@ -1,67 +1,102 @@
 'use client'
+
+import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Bell } from 'lucide-react'
+import { useSession } from 'next-auth/react'
+import { useEffect, useRef, useState } from 'react'
+import type { MouseEvent as ReactMouseEvent } from 'react'
+import { Bell, CheckCircle2, Clock, Info, X, XCircle } from 'lucide-react'
+import clsx from 'clsx'
+
+import { getNotifications } from '@/app/notificationsActions'
+import type { AppNotification } from '@/types/notifications'
 
 const PAGE_TITLES: Record<string, string> = {
-  '/':             'Dashboard',
-  '/requests':     'Service Requests',
-  '/new-request':  'New Request',
-  '/calendar':     'Event Calendar',
-  '/analytics':    'Analytics',
-  '/admin':        'Admin',
+  '/': 'Dashboard',
+  '/requests': 'Service Requests',
+  '/new-request': 'New Request',
+  '/calendar': 'Event Calendar',
+  '/analytics': 'Analytics',
+  '/admin': 'Admin',
 }
 
-import { useSession } from 'next-auth/react'
-import { useEffect, useState, useRef } from 'react'
-import { getNotifications } from '@/app/notificationsActions'
-import Link from 'next/link'
-import { CheckCircle2, Clock, X } from 'lucide-react'
-import clsx from 'clsx'
+const DISMISSED_NOTIFICATIONS_KEY = 'dismissedNotifications.v2'
+
+function getNotificationIcon(notification: AppNotification) {
+  if (notification.tone === 'danger') {
+    return <XCircle size={16} />
+  }
+
+  if (notification.tone === 'info') {
+    return <Info size={16} />
+  }
+
+  if (notification.tone === 'success') {
+    return <CheckCircle2 size={16} />
+  }
+
+  return <Clock size={16} />
+}
 
 export default function TopBar() {
   const pathname = usePathname()
   const router = useRouter()
   const { data: session } = useSession()
-  const [notifications, setNotifications] = useState<any[]>([])
+  const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [dismissedNotifs, setDismissedNotifs] = useState<string[]>([])
   const [showNotifs, setShowNotifs] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const dismissed = JSON.parse(localStorage.getItem('dismissedNotifs') || '[]')
+    const dismissed = JSON.parse(localStorage.getItem(DISMISSED_NOTIFICATIONS_KEY) || '[]') as string[]
     setDismissedNotifs(dismissed)
 
     const fetchNotifs = () => getNotifications().then(setNotifications)
     fetchNotifs()
-    // Poll every 15s so approvals appear without manual refresh
-    const interval = setInterval(fetchNotifs, 15000)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchNotifs()
+      }
+    }
+    const handleWindowFocus = () => fetchNotifs()
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchNotifs()
+      }
+    }, 60000)
 
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowNotifs(false)
       }
     }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleWindowFocus)
     document.addEventListener('mousedown', handleClickOutside)
+
     return () => {
       clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleWindowFocus)
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [])
 
-  const visibleNotifs = notifications.filter(n => !dismissedNotifs.includes(n.id))
+  const visibleNotifs = notifications.filter((notification) => !dismissedNotifs.includes(notification.id))
 
-  const handleDismiss = (e: React.MouseEvent, id: string) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const updated = [...dismissedNotifs, id]
+  const handleDismiss = (event: ReactMouseEvent, id: string) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const updated = Array.from(new Set([...dismissedNotifs, id]))
     setDismissedNotifs(updated)
-    localStorage.setItem('dismissedNotifs', JSON.stringify(updated))
+    localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(updated))
   }
 
   const handleNotifClick = (id: string) => {
-    const updated = [...dismissedNotifs, id]
+    const updated = Array.from(new Set([...dismissedNotifs, id]))
     setDismissedNotifs(updated)
-    localStorage.setItem('dismissedNotifs', JSON.stringify(updated))
+    localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(updated))
     setShowNotifs(false)
     router.push('/requests')
   }
@@ -71,14 +106,14 @@ export default function TopBar() {
       <h1 className="font-display text-xl text-[var(--text-dark)] font-extrabold uppercase tracking-tight">
         {pathname === '/' ? 'Dashboard Overview' : (PAGE_TITLES[pathname] ?? 'ICT CMAC')}
       </h1>
-      
+
       <div className="flex items-center gap-8">
         <div className="relative" ref={dropdownRef}>
-          <button 
+          <button
             onClick={() => setShowNotifs(!showNotifs)}
             className={clsx(
-              "relative p-2.5 rounded-2xl transition-all duration-300",
-              showNotifs ? "bg-emerald-50 text-emerald-600" : "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+              'relative p-2.5 rounded-2xl transition-all duration-300',
+              showNotifs ? 'bg-emerald-50 text-emerald-600' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
             )}
           >
             <Bell size={22} />
@@ -94,9 +129,9 @@ export default function TopBar() {
                 {visibleNotifs.length > 0 && (
                   <button
                     onClick={() => {
-                      const updated = [...dismissedNotifs, ...visibleNotifs.map(n => n.id)]
+                      const updated = Array.from(new Set([...dismissedNotifs, ...visibleNotifs.map((notification) => notification.id)]))
                       setDismissedNotifs(updated)
-                      localStorage.setItem('dismissedNotifs', JSON.stringify(updated))
+                      localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(updated))
                     }}
                     className="text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
                   >
@@ -106,40 +141,27 @@ export default function TopBar() {
               </div>
               <div className="max-h-96 overflow-y-auto custom-scrollbar">
                 {visibleNotifs.length > 0 ? (
-                  visibleNotifs.map(n => (
+                  visibleNotifs.map((notification) => (
                     <div
-                      key={n.id}
-                      onClick={() => handleNotifClick(n.id)}
+                      key={notification.id}
+                      onClick={() => handleNotifClick(notification.id)}
                       className="flex items-start gap-3 p-4 hover:bg-emerald-50/50 transition-colors border-b border-emerald-50/50 group cursor-pointer"
                     >
                       <div className={clsx(
-                        "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5",
-                        n.status === 'DIRECTOR_APPROVED' ? "bg-emerald-100 text-emerald-600"
-                        : n.status === 'COORDINATOR_APPROVED' ? "bg-blue-100 text-blue-600"
-                        : n.status === 'REJECTED' ? "bg-red-100 text-red-600"
-                        : "bg-amber-100 text-amber-600"
+                        'w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5',
+                        notification.tone === 'success' ? 'bg-emerald-100 text-emerald-600'
+                        : notification.tone === 'info' ? 'bg-sky-100 text-sky-600'
+                        : notification.tone === 'danger' ? 'bg-red-100 text-red-600'
+                        : 'bg-amber-100 text-amber-600'
                       )}>
-                        {n.status === 'DIRECTOR_APPROVED' ? <CheckCircle2 size={16} />
-                        : n.status === 'REJECTED' ? <span className="text-xs font-black">✕</span>
-                        : <Clock size={16} />}
+                        {getNotificationIcon(notification)}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-slate-800 line-clamp-1 group-hover:text-emerald-700 transition-colors">{n.eventTitle}</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">
-                          {(session?.user as any)?.role === 'SECRETARY'
-                            ? n.secretaryId === (session?.user as any)?.id
-                              ? n.status === 'DIRECTOR_APPROVED' ? '✓ Fully approved — ready to print'
-                                : n.status === 'COORDINATOR_APPROVED' ? '⏳ Coordinator approved, awaiting director'
-                                : n.status === 'REJECTED' ? '✗ Request was rejected'
-                                : 'New booking on shared calendar'
-                              : 'New booking added to shared calendar'
-                            : (session?.user as any)?.role === 'CMAC_COORDINATOR'
-                              ? 'New request — needs your review'
-                              : 'Coordinator approved — awaiting your sign-off'}
-                        </p>
+                        <p className="text-xs font-bold text-slate-800 line-clamp-1 group-hover:text-emerald-700 transition-colors">{notification.title}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">{notification.description}</p>
                       </div>
                       <button
-                        onClick={(e) => handleDismiss(e, n.id)}
+                        onClick={(event) => handleDismiss(event, notification.id)}
                         className="p-1 rounded-lg text-slate-300 hover:text-slate-500 hover:bg-slate-100 transition-all opacity-0 group-hover:opacity-100 shrink-0"
                       >
                         <X size={12} />
@@ -152,8 +174,8 @@ export default function TopBar() {
                   </div>
                 )}
               </div>
-              <Link 
-                href="/requests" 
+              <Link
+                href="/requests"
                 onClick={() => setShowNotifs(false)}
                 className="block p-4 text-center text-[10px] font-black text-emerald-600 uppercase tracking-widest hover:bg-emerald-50 transition-colors"
               >

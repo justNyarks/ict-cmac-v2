@@ -1,10 +1,20 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { School, ServiceType, DocumentationType } from '@/types'
+import type { School, ServiceType, DocumentationType } from '@/types'
 import { CheckCircle2, Upload, ChevronRight } from 'lucide-react'
 import clsx from 'clsx'
 
-const SCHOOLS: School[] = ['SNAHS','SBAHM','SITE','SASTE','School of Medicine','BEU']
+const SCHOOLS: School[] = ['SNAHS','SBAHM','SITE','SASTE','MEDICINE','BEU','UNIVERSITY','HR']
+const SCHOOL_LABELS: Record<School, string> = {
+  SNAHS: 'SNAHS',
+  SBAHM: 'SBAHM',
+  SITE: 'SITE',
+  SASTE: 'SASTE',
+  MEDICINE: 'SOM',
+  BEU: 'BEU',
+  UNIVERSITY: 'UNIVERSITY',
+  HR: 'HR',
+}
 const SERVICES: ServiceType[] = ['CMAC','PMAC']
 const DOC_TYPES: DocumentationType[] = ['PHOTO','VIDEO','BOTH']
 const VENUES = [
@@ -24,33 +34,43 @@ import { createServiceRequest, checkConflict } from './actions'
 import { useSession } from 'next-auth/react'
 
 export default function NewRequestPage() {
+  const minDate = new Date();
+  minDate.setHours(0, 0, 0, 0); // Start of today
+  minDate.setDate(minDate.getDate() + 3);
+  
+  // Format as YYYY-MM-DD in local time
+  const y = minDate.getFullYear();
+  const m = String(minDate.getMonth() + 1).padStart(2, '0');
+  const d = String(minDate.getDate()).padStart(2, '0');
+  const minDateStr = `${y}-${m}-${d}`;
+
   const { data: session } = useSession()
-  const [step, setStep] = useState<Step>(1)
-  const [loading, setLoading] = useState(false)
-  const [form, setForm] = useState({
-    school: (session?.user as any)?.school || '' as School | '',
+  const buildInitialForm = () => ({
+    school: ((session?.user as any)?.role === 'ICT_DIRECTOR' ? '' : ((session?.user as any)?.school || '')) as School | '',
     eventTitle: '',
     eventDate: '',
     endDate: '',
-    startTime: '',
-    endTime: '',
+    startTime: '08:00',
+    endTime: '17:00',
     eventVenue: '',
     letterContent: '',
-    serviceType: '' as ServiceType | '',
+    serviceType: null as ServiceType | null,
     documentationType: '' as DocumentationType | '',
     letterFile: null as File | null,
     requestedBy: session?.user?.name || '',
-    needsSoundSystem: false,
     needsSameDayEdit: false,
-    needsICTPersonnel: false,
-    hasOnlineSpeaker: false,
+    needsSameDayPhoto: false,
     campusType: '' as 'IN_CAMPUS' | 'OFF_CAMPUS' | '',
   })
+  const [step, setStep] = useState<Step>(1)
+  const [loading, setLoading] = useState(false)
+  const [form, setForm] = useState(buildInitialForm)
   const [stepError, setStepError] = useState<string>('')
-  const [submissionMethod, setSubmissionMethod] = useState<'upload' | 'generate'>('upload')
+  const [submissionMethod, setSubmissionMethod] = useState<'upload' | 'generate'>('generate')
 
   function validateStep1(): string {
     if (!form.school) return 'Department/School is required.'
+    if (!form.campusType) return 'Please select whether the event is In-Campus or Off-Campus.'
     if (!form.eventTitle.trim()) return 'Event title is required.'
     if (!form.eventDate) return 'Start date is required.'
     if (!form.endDate) return 'End date is required (select same day if one-day event).'
@@ -69,15 +89,19 @@ export default function NewRequestPage() {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
     if (diffDays < 0) return 'Event date cannot be in the past.'
-    if (diffDays < 3) return 'Service requests must be submitted at least 3 days in advance.'
+    if (diffDays < 3 && (session?.user as any)?.role !== 'ICT_DIRECTOR') {
+      return 'Service requests must be submitted at least 3 days in advance.'
+    }
     
     if (!form.eventVenue) return 'Venue is required.'
     return ''
   }
 
   function validateStep3(): string {
-    if (!form.campusType) return 'Please select whether the event is in-campus or off-campus.'
-    if (!form.serviceType) return 'Please select a service type (CMAC or PMAC).'
+    if ((session?.user as any)?.role === 'ICT_DIRECTOR' && !form.serviceType) {
+      return 'Please assign a service type before directly approving the event.'
+    }
+
     if (!form.documentationType) return 'Please select a documentation type.'
     return ''
   }
@@ -119,23 +143,63 @@ export default function NewRequestPage() {
 
   const generateLetterTemplate = () => {
     const date = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+    const locationStr = form.campusType === 'IN_CAMPUS' ? 'within the campus' : (form.campusType === 'OFF_CAMPUS' ? 'at an off-campus venue' : '[Location]');
+    
+    // Format Date Range
+    let dateRangeStr = '[Date]';
+    if (form.eventDate) {
+      const start = new Date(form.eventDate);
+      const startDay = start.getDate();
+      const startMonth = start.toLocaleDateString('en-PH', { month: 'long' });
+      const startYear = start.getFullYear();
+
+      if (form.endDate && form.endDate !== form.eventDate) {
+        const end = new Date(form.endDate);
+        const endDay = end.getDate();
+        const endMonth = end.toLocaleDateString('en-PH', { month: 'long' });
+        const endYear = end.getFullYear();
+
+        if (startMonth === endMonth && startYear === endYear) {
+          dateRangeStr = `${startMonth} ${startDay} - ${endDay}, ${startYear}`;
+        } else if (startYear === endYear) {
+          dateRangeStr = `${startMonth} ${startDay} - ${endMonth} ${endDay}, ${startYear}`;
+        } else {
+          dateRangeStr = `${startMonth} ${startDay}, ${startYear} - ${endMonth} ${endDay}, ${endYear}`;
+        }
+      } else {
+        dateRangeStr = `${startMonth} ${startDay}, ${startYear}`;
+      }
+    }
+
+    let servicesList = form.documentationType === 'BOTH' ? 'Photo and Video' : (form.documentationType || 'documentation');
+    
+    const extras = [];
+    if (form.needsSameDayEdit) extras.push("Same-Day Video Editing (SDE)");
+    if (form.needsSameDayPhoto) extras.push("Same-Day Photo Delivery");
+    
+    const extraStr = extras.length > 0 
+      ? `\n\nAdditionally, we would like to request for ${extras.join(' and ')} to be provided during the event.`
+      : '';
+
+    const serviceMention = form.serviceType ? ` We would like to request for ${form.serviceType} services, specifically ${servicesList} coverage.` : ` We would like to request for ${servicesList} coverage.`;
+    
     const template = `Date: ${date}
 
-TO: THE CMAC COORDINATOR
+TO: THE ICT DIRECTOR
 ICT Division, SPUP
 
 Dear Sir/Ma'am,
 
-I am writing to formally request documentation services for the upcoming event titled "${form.eventTitle || '[Event Title]'}" scheduled on ${form.eventDate || '[Date]'} at ${form.eventVenue || '[Venue]'}.
+I am writing to formally request documentation services for the upcoming event titled "${form.eventTitle || '[Event Title]'}" scheduled on ${dateRangeStr} at ${form.eventVenue || '[Venue]'} (${locationStr}).
 
-We would like to request for ${form.serviceType || 'CMAC'} services, specifically ${form.documentationType === 'BOTH' ? 'Photo and Video' : (form.documentationType || 'documentation')} coverage.
+${serviceMention}${extraStr}
 
 Thank you for your continuous support.
 
 Sincerely,
 
 ${form.requestedBy || (session?.user?.name || '[Your Name]')}
-Secretary, ${form.school || '[School/Department]'}`
+${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, ${form.school || '[School/Department]'}`
     
     set('letterContent', template)
   }
@@ -151,8 +215,6 @@ Secretary, ${form.school || '[School/Department]'}`
     setLoading(true)
     
     try {
-      console.log('Attempting submission...', form)
-      
       // Create a timeout promise
       const timeout = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Submission timed out. The server might be busy.')), 15000)
@@ -172,10 +234,8 @@ Secretary, ${form.school || '[School/Department]'}`
           serviceType: form.serviceType as any,
           documentationType: form.documentationType as any,
           letterUrl: submissionMethod === 'upload' ? (form.letterFile?.name || null) : 'generated-letter.pdf',
-          needsSoundSystem: form.needsSoundSystem,
           needsSameDayEdit: form.needsSameDayEdit,
-          needsICTPersonnel: form.needsICTPersonnel,
-          hasOnlineSpeaker: form.hasOnlineSpeaker,
+          needsSameDayPhoto: form.needsSameDayPhoto,
           campusType: form.campusType as any
         }),
         timeout
@@ -205,7 +265,7 @@ Secretary, ${form.school || '[School/Department]'}`
           <p className="text-slate-500 font-medium">Your requisition has been logged and sent for review.</p>
         </div>
         <button
-          onClick={() => { setSubmitted(false); setStep(1); setForm({ school:'', eventTitle:'', eventDate:'', endDate:'', startTime:'', endTime:'', eventVenue:'', letterContent: '', serviceType:'', documentationType:'', letterFile:null, requestedBy:'', needsSoundSystem: false, needsSameDayEdit: false, needsICTPersonnel: false, hasOnlineSpeaker: false, campusType: '' }) }}
+          onClick={() => { setSubmitted(false); setStep(1); setForm(buildInitialForm()) }}
           className="mx-auto flex items-center gap-2 bg-[#064e3b] text-white px-8 py-3 rounded-2xl text-sm font-bold hover:bg-[#065f46] shadow-xl shadow-emerald-900/20 transition-all"
         >
           Create New Requisition
@@ -223,10 +283,12 @@ Secretary, ${form.school || '[School/Department]'}`
 
   return (
     <div className="max-w-2xl mx-auto animate-fade-in pb-20">
+
+
       {/* Progress */}
-      <div className="flex items-center gap-0 mb-12">
+      <div className="flex items-center justify-center gap-0 mb-12">
         {steps.map((s, i) => (
-          <div key={s.n} className="flex items-center flex-1">
+          <div key={s.n} className={clsx("flex items-center", i < steps.length - 1 ? "flex-1" : "flex-none")}>
             <div className="flex flex-col items-center gap-2">
               <div className={clsx(
                 'w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-black border-2 transition-all duration-500',
@@ -248,13 +310,60 @@ Secretary, ${form.school || '[School/Department]'}`
       <div className="card p-10 space-y-8">
         {/* STEP 1 */}
         {step === 1 && (
-          <div className="space-y-5">
+          <div className="space-y-5 animate-fade-in">
+            {/* Notice */}
+            <div className="mb-6 flex items-center gap-4 bg-[#fff7ed] border border-[#ffedd5] rounded-3xl px-6 py-4 shadow-sm shadow-orange-900/5 animate-slide-down">
+              <div className="w-10 h-10 rounded-2xl bg-orange-500 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-orange-500/20">
+                !
+              </div>
+              <div>
+                <p className="text-sm font-black text-orange-900 tracking-tight">Booking Policy</p>
+                <p className="text-[11px] font-bold text-orange-700/80 uppercase tracking-widest mt-0.5">
+                  {(session?.user as any)?.role === 'ICT_DIRECTOR' ? (
+                    <span className="text-emerald-600 font-black">DIRECTOR BYPASS MODE: Your event will be automatically approved and added to the calendar.</span>
+                  ) : (
+                    <>Requests must be submitted at least <span className="text-orange-600 underline decoration-2 underline-offset-4">3 days prior</span> to the event.</>
+                  )}
+                </p>
+              </div>
+            </div>
+
             <h2 className="font-display text-2xl text-slate-800 font-bold">General Information</h2>
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">School / Department</label>
-              <div className="w-full border-2 border-slate-100 bg-slate-50 rounded-2xl px-5 py-3.5 text-sm font-bold text-slate-500 cursor-not-allowed">
-                {form.school || 'Loading Department...'}
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">Event Location</label>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { id: 'IN_CAMPUS', label: 'In-Campus' },
+                  { id: 'OFF_CAMPUS', label: 'Off-Campus' },
+                ].map(c => (
+                  <button key={c.id} onClick={() => set('campusType', c.id as any)}
+                    className={clsx(
+                      'py-5 rounded-2xl border-2 font-black text-lg transition-all shadow-sm',
+                      form.campusType === c.id
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                        : 'border-slate-100 text-slate-300 hover:border-emerald-200'
+                    )}>
+                    {c.label}
+                  </button>
+                ))}
               </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">School / Department</label>
+              {(session?.user as any)?.role === 'ICT_DIRECTOR' ? (
+                <select 
+                  value={form.school} 
+                  onChange={e => set('school', e.target.value as any)}
+                  className="w-full border-2 border-slate-100 rounded-2xl px-5 py-3.5 text-sm font-bold text-slate-700 focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="">Select Department...</option>
+                  {SCHOOLS.map(s => <option key={s} value={s}>{SCHOOL_LABELS[s]}</option>)}
+                </select>
+              ) : (
+                <div className="w-full border-2 border-slate-100 bg-slate-50 rounded-2xl px-5 py-3.5 text-sm font-bold text-slate-500 cursor-not-allowed">
+                  {form.school || 'Loading Department...'}
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Event Title</label>
@@ -267,6 +376,7 @@ Secretary, ${form.school || '[School/Department]'}`
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Start Date</label>
                 <input type="date" value={form.eventDate} 
+                  min={minDateStr}
                   onChange={e => {
                     const newDate = e.target.value;
                     setForm(prev => ({
@@ -282,6 +392,7 @@ Secretary, ${form.school || '[School/Department]'}`
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">End Date</label>
                 <input type="date" value={form.endDate} onChange={e => set('endDate', e.target.value)}
+                  min={form.eventDate || minDateStr}
                   className="w-full border-2 border-slate-100 rounded-2xl px-5 py-3.5 text-sm font-medium focus:outline-none focus:border-emerald-500"
                 />
               </div>
@@ -301,15 +412,29 @@ Secretary, ${form.school || '[School/Department]'}`
               </div>
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Venue</label>
-              <select 
-                value={form.eventVenue} 
-                onChange={e => set('eventVenue', e.target.value)}
-                className="w-full border-2 border-slate-100 rounded-2xl px-5 py-3.5 text-sm font-medium focus:outline-none focus:border-emerald-500 bg-white"
-              >
-                <option value="">Select Venue...</option>
-                {VENUES.map(v => <option key={v} value={v}>{v}</option>)}
-              </select>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Venue / Location</label>
+              {form.campusType === 'OFF_CAMPUS' ? (
+                <input 
+                  type="text" 
+                  value={form.eventVenue} 
+                  onChange={e => set('eventVenue', e.target.value)}
+                  placeholder="Enter off-campus location name..."
+                  className="w-full border-2 border-slate-100 rounded-2xl px-5 py-3.5 text-sm font-medium focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
+                />
+              ) : (
+                <select 
+                  value={form.eventVenue} 
+                  onChange={e => set('eventVenue', e.target.value)}
+                  disabled={!form.campusType}
+                  className={clsx(
+                    "w-full border-2 border-slate-100 rounded-2xl px-5 py-3.5 text-sm font-medium focus:outline-none focus:border-emerald-500 bg-white",
+                    !form.campusType && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  <option value="">{form.campusType ? "Select Venue..." : "Select Location Type First..."}</option>
+                  {VENUES.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+              )}
             </div>
 
             {/* Inline conflict warning */}
@@ -374,41 +499,26 @@ Secretary, ${form.school || '[School/Department]'}`
           <div className="space-y-8">
             <div className="space-y-6">
               <h2 className="font-display text-2xl text-slate-800 font-bold">Service Selection</h2>
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">Event Location</label>
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { id: 'IN_CAMPUS', label: 'In-Campus' },
-                    { id: 'OFF_CAMPUS', label: 'Off-Campus' },
-                  ].map(c => (
-                    <button key={c.id} onClick={() => set('campusType', c.id as any)}
-                      className={clsx(
-                        'py-6 rounded-2xl border-2 font-black text-xl transition-all shadow-sm',
-                        form.campusType === c.id
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                          : 'border-slate-100 text-slate-300 hover:border-emerald-200'
-                      )}>
-                      {c.label}
-                    </button>
-                  ))}
+
+              {(session?.user as any)?.role === 'ICT_DIRECTOR' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">Service Type</label>
+                  <div className="grid grid-cols-2 gap-4">
+                    {SERVICES.map(s => (
+                      <button key={s} onClick={() => set('serviceType', s)}
+                        className={clsx(
+                          'py-6 rounded-2xl border-2 font-black text-xl transition-all shadow-sm',
+                          form.serviceType === s
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                            : 'border-slate-100 text-slate-300 hover:border-emerald-200'
+                        )}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">Service Type</label>
-                <div className="grid grid-cols-2 gap-4">
-                  {SERVICES.map(s => (
-                    <button key={s} onClick={() => set('serviceType', s)}
-                      className={clsx(
-                        'py-6 rounded-2xl border-2 font-black text-xl transition-all shadow-sm',
-                        form.serviceType === s
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                          : 'border-slate-100 text-slate-300 hover:border-emerald-200'
-                      )}>
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">Documentation Requirement</label>
                 <div className="grid grid-cols-3 gap-3">
@@ -430,11 +540,10 @@ Secretary, ${form.school || '[School/Department]'}`
             <div className="pt-8 border-t border-slate-100 space-y-6">
               <div>
                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest mb-4">Additional Requirements</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   {[
-                    { id: 'needsSoundSystem', label: 'Same-Day Photo Delivery', desc: 'High-quality photos delivered within the same day' },
-                    { id: 'needsSameDayEdit', label: 'Same Day Edit', desc: 'Quick video edit to be shown during the event' },
-                    { id: 'needsICTPersonnel', label: 'Standby ICT Personnel', desc: 'Technical support throughout the event' },
+                    { id: 'needsSameDayEdit', label: 'Same Day Edit (Video)', desc: 'Quick video edit to be shown during the event' },
+                    { id: 'needsSameDayPhoto', label: 'Same-Day Photo Delivery', desc: 'Photos delivered within the same day' },
                   ].map(item => (
                     <label key={item.id} className={clsx(
                       "flex items-start gap-4 p-5 rounded-2xl border-2 transition-all cursor-pointer group",
@@ -453,23 +562,6 @@ Secretary, ${form.school || '[School/Department]'}`
                     </label>
                   ))}
 
-                  {(form.eventVenue.includes('Global') || form.eventVenue.includes('MM Hall') || form.eventVenue.includes('Highflex')) && (
-                    <label className={clsx(
-                      "flex items-start gap-4 p-5 rounded-2xl border-2 transition-all cursor-pointer group animate-fade-in",
-                      form.hasOnlineSpeaker ? "border-emerald-500 bg-emerald-50/50" : "border-slate-100 hover:border-emerald-200"
-                    )}>
-                      <input 
-                        type="checkbox" 
-                        checked={form.hasOnlineSpeaker} 
-                        onChange={e => set('hasOnlineSpeaker', e.target.checked)}
-                        className="w-5 h-5 mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm font-bold text-emerald-700">Online Speaker</p>
-                        <p className="text-[10px] text-slate-400 font-medium mt-1">Setup cameras and streaming for virtual participants</p>
-                      </div>
-                    </label>
-                  )}
                 </div>
               </div>
             </div>
@@ -570,7 +662,7 @@ Secretary, ${form.school || '[School/Department]'}`
                 ['Time', `${form.startTime} - ${form.endTime}`],
                 ['Venue', form.eventVenue],
                 ['Location', form.campusType === 'IN_CAMPUS' ? 'In-Campus' : 'Off-Campus'],
-                ['Service', form.serviceType],
+                ...(form.serviceType ? [['Service', form.serviceType]] : []),
                 ['Documentation', form.documentationType === 'BOTH' ? 'Photo + Video' : form.documentationType],
                 ['Document', submissionMethod === 'generate' ? 'In-App Generated Letter' : (form.letterFile?.name ?? 'Not uploaded')],
               ].map(([k, v]) => (
@@ -619,7 +711,13 @@ Secretary, ${form.school || '[School/Department]'}`
                     generateLetterTemplate();
                   }
                   if (nextStep === 4) {
-                    const res = await checkConflict(form.eventDate, form.startTime, form.endTime);
+                    const res = await checkConflict(
+                      form.eventDate,
+                      form.startTime,
+                      form.endDate || undefined,
+                      form.endTime,
+                      form.eventVenue || undefined
+                    );
                     setConflicts(res.conflicts || []);
                   }
                   setStep(nextStep);
@@ -639,9 +737,9 @@ Secretary, ${form.school || '[School/Department]'}`
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <span>Processing Requisition...</span>
+                    <span>{(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Adding to Calendar...' : 'Processing Requisition...'}</span>
                   </>
-                ) : 'Confirm Submission'}
+                ) : (session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Confirm & Add to Calendar' : 'Confirm Submission'}
               </button>
           }
         </div>

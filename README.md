@@ -1,116 +1,92 @@
-# ICT CMAC — Documentation Service Request System
+# ICT CMAC - Documentation Service Request System
 
-A Next.js 14 web application for managing documentation service requests (CMAC/PMAC) across school units.
+A Next.js App Router application for managing CMAC and PMAC documentation requests across school units.
 
----
+## Highlights
 
-## 🏫 Schools Covered
-- SNAHS
-- SBAHM
-- SITE
-- SASTE
-- School of Medicine
-- BEU
+- Role-based access for `SECRETARY`, `CMAC_COORDINATOR`, and `ICT_DIRECTOR`
+- Multi-step request submission flow
+- Coordinator and director approval workflow
+- Shared event calendar with conflict detection
+- Dashboard and notifications for request activity
+- Prisma + PostgreSQL persistence
+- NextAuth credential-based authentication
 
-## 👥 Roles
-| Role | Description |
-|------|-------------|
-| **Secretary** | Submits service requests with a request letter |
-| **CMAC Coordinator** | First-level approver |
-| **ICT Director** | Final approver |
+## Tech Stack
 
-## 📋 Services
-- **CMAC** — Photo / Video / Both documentation
-- **PMAC** — Photo / Video / Both documentation
+- Next.js 16
+- React 18
+- TypeScript
+- Tailwind CSS
+- Prisma
+- PostgreSQL
+- NextAuth
 
-## 🔄 Approval Flow
-```
-Secretary → submits request + letter
-     ↓
-CMAC Coordinator → reviews & approves/rejects
-     ↓
-ICT Director → final approval/rejection
-```
-
----
-
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
-- Node.js 18+
-- npm or yarn
 
-### Installation
+- Node.js 18+
+- npm
+- PostgreSQL database
+
+### Install
 
 ```bash
-# Clone the repository
-git clone https://github.com/justNyarks/ict-cmac.git
-cd ict-cmac
-
-# Install dependencies
 npm install
+```
 
-# Run development server
+### Environment
+
+Create a `.env` file with at least:
+
+```bash
+DATABASE_URL="postgresql://..."
+NEXTAUTH_SECRET="replace-me"
+```
+
+### Database
+
+```bash
+npx prisma generate
+npx prisma db push
+```
+
+Optional seed:
+
+```bash
+npx prisma db seed
+```
+
+### Run
+
+```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open `http://localhost:3000`.
 
-### Build for production
-```bash
-npm run build
-npm start
-```
+## Available Scripts
 
----
+- `npm run dev` - start the dev server
+- `npm run build` - create a production build
+- `npm run start` - run the production build
+- `npm run lint` - run ESLint
 
-## 📁 Project Structure
+## Main Routes
 
-```
-src/
-├── app/
-│   ├── page.tsx            # Dashboard
-│   ├── requests/           # Request list with approval actions
-│   ├── new-request/        # Multi-step request form (Secretary)
-│   ├── calendar/           # Event calendar view
-│   ├── analytics/          # Analytics & charts
-│   └── admin/              # User management
-├── components/
-│   └── layout/
-│       ├── Sidebar.tsx
-│       └── TopBar.tsx
-├── lib/
-│   └── data.ts             # Mock data & helpers
-└── types/
-    └── index.ts            # TypeScript types
-```
+- `/` - dashboard
+- `/requests` - request list and approval actions
+- `/new-request` - request submission flow
+- `/calendar` - event calendar
+- `/analytics` - coordinator/director analytics
+- `/logs` - coordinator audit log view
+- `/admin` - director user management
+- `/profile` - profile and password updates
 
----
+## Notes
 
-## 🗺️ Pages
-
-| Route | Description |
-|-------|-------------|
-| `/` | Dashboard with KPIs and recent requests |
-| `/requests` | Full request list with filter & approval modal |
-| `/new-request` | 4-step form to submit a new request |
-| `/calendar` | Monthly calendar of scheduled events |
-| `/analytics` | Charts: by school, service, status, month |
-| `/admin` | User management: add/remove users by role |
-
----
-
-## 🛠️ Tech Stack
-- **Next.js 14** (App Router)
-- **TypeScript**
-- **Tailwind CSS**
-- **Lucide React** (icons)
-
----
-
-## 📌 Next Steps (TODO)
-- [ ] Connect to a real database (PostgreSQL / Supabase)
-- [ ] Implement NextAuth.js for role-based authentication
-- [ ] File upload integration (Cloudinary or S3) for request letters
-- [ ] Email notifications on approval/rejection
-- [ ] Push notifications for pending requests
+- Secretaries can submit requests and follow their own request progress.
+- Coordinators handle first-level review.
+- Directors can finalize approvals and create direct calendar entries.
+- Calendar conflict checks run both in the UI and on the server before creation.

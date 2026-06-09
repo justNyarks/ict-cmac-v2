@@ -1,13 +1,18 @@
 'use client'
+
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useState, useEffect, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
-import { MOCK_REQUESTS, getStatusColor, getStatusLabel } from '@/lib/data'
-import { ServiceRequest } from '@/types'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+
+import { getStatusColor, getStatusLabel } from '@/lib/data'
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import clsx from 'clsx'
 
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December']
+const FILTER_TYPES = ['ALL', 'CMAC', 'PMAC', 'UNASSIGNED'] as const
+const FILTER_USERS = ['ALL', 'MINE'] as const
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate()
@@ -18,18 +23,33 @@ function getFirstDayOfMonth(year: number, month: number) {
 
 import { getCalendarRequests } from '../requests/actions'
 
+type CalendarRequest = Awaited<ReturnType<typeof getCalendarRequests>>[number]
+type CalendarFilterType = (typeof FILTER_TYPES)[number]
+type CalendarFilterUser = (typeof FILTER_USERS)[number]
+type CalendarEvent = CalendarRequest & {
+  _isMultiDay: boolean
+  _isStart: boolean
+  _isEnd: boolean
+  _isMid: boolean
+  _span: number
+}
+
 export default function CalendarPage() {
-  const [requests, setRequests] = useState<any[]>([])
+  const [requests, setRequests] = useState<CalendarRequest[]>([])
   const [loading, setLoading] = useState(true)
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
   const { data: session } = useSession()
-  const [selected, setSelected] = useState<any | null>(null)
+  const router = useRouter()
+  const [selected, setSelected] = useState<CalendarEvent | null>(null)
+  const selectedServiceLabel = selected?.serviceType || 'Unassigned'
+  const currentUserId = session?.user?.id
+  const isDirector = session?.user?.role === 'ICT_DIRECTOR'
   
   // Filters
-  const [filterType, setFilterType] = useState<string>('ALL')
-  const [filterUser, setFilterUser] = useState<string>('ALL')
+  const [filterType, setFilterType] = useState<CalendarFilterType>('ALL')
+  const [filterUser, setFilterUser] = useState<CalendarFilterUser>('ALL')
 
   useEffect(() => {
     function fetchReqs() {
@@ -38,9 +58,23 @@ export default function CalendarPage() {
         setLoading(false)
       })
     }
+
     fetchReqs()
-    const interval = setInterval(fetchReqs, 10000) // optimized polling to 10s
-    return () => clearInterval(interval)
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchReqs()
+      }
+    }
+    const handleWindowFocus = () => fetchReqs()
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleWindowFocus)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleWindowFocus)
+    }
   }, [])
 
   const daysInMonth = getDaysInMonth(viewYear, viewMonth)
@@ -58,12 +92,16 @@ export default function CalendarPage() {
   // Apply filters and Map event dates to requests (spanning multi-day events)
   const eventsByDay = useMemo(() => {
     const filtered = requests.filter(req => {
-      if (filterType !== 'ALL' && req.serviceType !== filterType) return false
-      if (filterUser === 'MINE' && req.secretaryId !== (session?.user as any)?.id) return false
+      if (filterType === 'UNASSIGNED') {
+        if (req.serviceType) return false
+      } else if (filterType !== 'ALL' && req.serviceType !== filterType) {
+        return false
+      }
+      if (filterUser === 'MINE' && req.secretaryId !== currentUserId) return false
       return true
     })
 
-    const map: Record<number, any[]> = {}
+    const map: Record<number, CalendarEvent[]> = {}
 
     filtered.forEach(req => {
       const startDate = new Date(req.eventDate)
@@ -91,7 +129,7 @@ export default function CalendarPage() {
     })
 
     return map
-  }, [requests, filterType, filterUser, session, viewYear, viewMonth])
+  }, [requests, filterType, filterUser, currentUserId, viewYear, viewMonth])
 
   const cells: (number | null)[] = [
     ...Array(firstDay).fill(null),
@@ -100,8 +138,6 @@ export default function CalendarPage() {
   // Pad to full rows
   while (cells.length % 7 !== 0) cells.push(null)
 
-  const serviceColor = (req: ServiceRequest) =>
-    req.serviceType === 'CMAC' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
 
   // Deterministic color palette per event (based on ID hash)
   const EVENT_PALETTE = [
@@ -118,6 +154,10 @@ export default function CalendarPage() {
     let hash = 0
     for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0
     return EVENT_PALETTE[hash % EVENT_PALETTE.length]
+  }
+
+  if (loading) {
+    return <div className="p-10 text-center text-slate-400">Loading calendar...</div>
   }
 
   return (
@@ -139,7 +179,7 @@ export default function CalendarPage() {
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-4 mb-2">
         <div className="flex bg-slate-100 p-1 rounded-xl">
-          {['ALL', 'CMAC', 'PMAC'].map(type => (
+          {FILTER_TYPES.map(type => (
             <button key={type} onClick={() => setFilterType(type)}
               className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterType === type ? 'bg-white text-[#064e3b] shadow-sm' : 'text-slate-400 hover:text-slate-600')}
             >
@@ -159,6 +199,15 @@ export default function CalendarPage() {
             My Bookings
           </button>
         </div>
+
+        {isDirector && (
+          <button 
+            onClick={() => router.push('/new-request')}
+            className="ml-auto flex items-center gap-2 bg-[#064e3b] text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#065f46] shadow-lg shadow-emerald-900/10 transition-all cursor-pointer z-30"
+          >
+            <Plus size={14} /> Add Event
+          </button>
+        )}
       </div>
 
       {/* Calendar grid */}
@@ -190,12 +239,11 @@ export default function CalendarPage() {
               }
             })
             const isFullyBooked = totalMinutes >= 6 * 60; // 6 hours or more is fully booked
-            const statusLabel = events.length === 0 ? 'Available' : isFullyBooked ? 'Fully Booked' : 'Partially Booked';
             const statusColor = events.length === 0 ? 'bg-green-500' : isFullyBooked ? 'bg-red-500' : 'bg-amber-400';
             const bgColor = !day ? 'bg-slate-50/50' : events.length === 0 ? 'bg-green-50/20 hover:bg-green-50/40' : isFullyBooked ? 'bg-red-50/20 hover:bg-red-50/40' : 'bg-amber-50/20 hover:bg-amber-50/40';
 
             const tooltipText = day && events.length > 0 
-              ? `${events.length} booking(s):\n${events.map(e => `- ${e.eventTitle}`).join('\n')}`
+              ? `${events.length} booking(s):\n${events.map(event => `- ${event.eventTitle}`).join('\n')}`
               : day ? 'Available' : '';
 
             return (
@@ -286,7 +334,7 @@ export default function CalendarPage() {
           <div className="bg-white rounded-[2rem] shadow-2xl max-w-md w-full overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className={clsx('p-8 text-white', selected.status === 'DIRECTOR_APPROVED' ? 'bg-emerald-600' : 'bg-amber-500')}>
               <div className="flex items-center justify-between mb-4">
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white/20 px-3 py-1 rounded-full">{selected.serviceType} Request</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-white/20 px-3 py-1 rounded-full">{selectedServiceLabel} Request</span>
                 {selected.status === 'DIRECTOR_APPROVED' && <span className="text-[10px] font-black uppercase tracking-[0.2em] bg-emerald-800 px-3 py-1 rounded-full">TAKEN</span>}
               </div>
               <h3 className="font-display text-2xl font-bold leading-tight">{selected.eventTitle}</h3>

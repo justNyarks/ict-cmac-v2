@@ -12,11 +12,15 @@ export default withAuth(
     }
 
     // Role-based access control
-    if (path.startsWith("/new-request") && token?.role !== "SECRETARY") {
+    if (path.startsWith("/new-request") && token?.role !== "SECRETARY" && token?.role !== "ICT_DIRECTOR") {
       return NextResponse.redirect(new URL("/", req.url));
     }
 
     if (path.startsWith("/admin") && token?.role !== "ICT_DIRECTOR") {
+      return NextResponse.redirect(new URL("/", req.url));
+    }
+
+    if (path.startsWith("/logs") && token?.role !== "CMAC_COORDINATOR") {
       return NextResponse.redirect(new URL("/", req.url));
     }
 

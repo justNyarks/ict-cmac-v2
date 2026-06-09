@@ -78,18 +78,22 @@ body {
 /* Print styles */
 @media print {
   @page {
-    size: 8.5in 11in;
-    margin: 1in;
+    size: 8.5in 13in;
+    margin: 0;
   }
   body {
     width: 8.5in;
-    height: 11in;
+    min-height: 13in;
     background: white !important;
     padding: 0 !important;
     margin: 0 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-    overflow: hidden;
+    overflow: visible;
+  }
+  html,
+  body {
+    background: white !important;
   }
   .no-print {
     display: none !important;

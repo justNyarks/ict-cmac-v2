@@ -23,6 +23,8 @@ enum School {
   SASTE
   MEDICINE // Map "School of Medicine" to MEDICINE for enum safety
   BEU
+  UNIVERSITY
+  HR
 }
 
 enum ServiceType {
@@ -76,7 +78,7 @@ model ServiceRequest {
   endTime           String?
   eventVenue        String
   school            School
-  serviceType       ServiceType
+  serviceType       ServiceType?
   documentationType DocumentationType
   campusType        CampusType        @default(IN_CAMPUS)
   letterUrl         String?           // Path or URL to the uploaded request letter
@@ -84,10 +86,8 @@ model ServiceRequest {
   letterContent     String?           @db.Text
   
   // Technical requirements
-  needsSoundSystem  Boolean           @default(false)
-  needsLEDWall      Boolean           @default(false)
-  needsICTPersonnel Boolean           @default(false)
-  hasOnlineSpeaker  Boolean           @default(false)
+  needsSameDayEdit  Boolean           @default(false)
+  needsSameDayPhoto Boolean           @default(false)
   
   status            RequestStatus     @default(PENDING)
   
@@ -106,7 +106,20 @@ model ServiceRequest {
   director          User?             @relation("Director", fields: [directorId], references: [id])
   directorId        String?
   directorApprovedAt DateTime?
+  deletedAt         DateTime?
 
+  logs              AuditLog[]
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
+}
+
+model AuditLog {
+  id              String         @id @default(cuid())
+  requestId       String
+  request         ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  action          String         // e.g., "SUBMITTED", "COORDINATOR_APPROVED", "DIRECTOR_APPROVED", "REJECTED", "DIRECT_BYPASS"
+  actorName       String
+  actorRole       Role
+  details         String?        @db.Text
+  createdAt       DateTime       @default(now())
 }

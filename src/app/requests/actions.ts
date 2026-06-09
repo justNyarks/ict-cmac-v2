@@ -1,123 +1,201 @@
 'use server'
 
-import { prisma } from "@/lib/prisma"
+import { ServiceType } from "@prisma/client"
+import { unstable_noStore as noStore } from "next/cache"
 import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { revalidatePath } from "next/cache"
 
-export async function approveRequest(id: string, note: string) {
+import { authOptions } from "@/lib/auth"
+import { findRequestConflicts } from "@/lib/conflicts"
+import { prisma } from "@/lib/prisma"
+import { getCalendarWhere, getRequestListWhere, revalidateRequestViews } from "@/lib/requestWorkflow"
+
+export async function approveRequest(id: string, note: string, serviceType?: ServiceType) {
   const session = await getServerSession(authOptions)
   if (!session || !session.user) throw new Error('Unauthorized')
 
-  const role = (session.user as any).role
-  const userId = (session.user as any).id
+  const { user } = session
 
-  const request = await prisma.serviceRequest.findUnique({ where: { id } })
-  if (!request) throw new Error('Request not found')
+  await prisma.$transaction(async (tx) => {
+    const request = await tx.serviceRequest.findUnique({ where: { id } })
+    if (!request) throw new Error('Request not found')
+    if (request.deletedAt) throw new Error('Request has already been deleted')
 
-  if (role === 'CMAC_COORDINATOR' && request.status === 'PENDING') {
-    await prisma.serviceRequest.update({
-      where: { id },
-      data: {
-        status: 'COORDINATOR_APPROVED',
-        coordinatorNote: note,
-        coordinatorId: userId,
-        coordinatorApprovedAt: new Date()
+    if (user.role === 'CMAC_COORDINATOR' && request.status === 'PENDING') {
+      await tx.serviceRequest.update({
+        where: { id },
+        data: {
+          status: 'COORDINATOR_APPROVED',
+          coordinatorNote: note,
+          coordinatorId: user.id,
+          coordinatorApprovedAt: new Date(),
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          requestId: id,
+          action: 'COORDINATOR_APPROVED',
+          actorName: user.name || 'Unknown',
+          actorRole: user.role,
+          details: note ? `Note: ${note}` : 'Approved without additional notes.',
+        },
+      })
+
+      return
+    }
+
+    if (user.role === 'ICT_DIRECTOR' && (request.status === 'COORDINATOR_APPROVED' || request.status === 'PENDING')) {
+      if (!serviceType) {
+        throw new Error('Service type is required for director approval')
       }
-    })
-  } else if (role === 'ICT_DIRECTOR' && (request.status === 'COORDINATOR_APPROVED' || request.status === 'PENDING')) {
-    await prisma.serviceRequest.update({
-      where: { id },
-      data: {
-        status: 'DIRECTOR_APPROVED',
-        directorNote: note,
-        directorId: userId,
-        directorApprovedAt: new Date(),
-        // If it was still PENDING, we record that it was approved directly
-        coordinatorNote: request.status === 'PENDING' && !request.coordinatorNote ? 'Bypassed by Director' : undefined
-      }
-    })
-  } else {
+
+      const isDirectBypass = request.status === 'PENDING'
+
+      await tx.serviceRequest.update({
+        where: { id },
+        data: {
+          status: 'DIRECTOR_APPROVED',
+          directorNote: note,
+          directorId: user.id,
+          directorApprovedAt: new Date(),
+          serviceType,
+          coordinatorNote: isDirectBypass && !request.coordinatorNote ? 'Bypassed by Director' : undefined,
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          requestId: id,
+          action: isDirectBypass ? 'DIRECT_BYPASS' : 'DIRECTOR_APPROVED',
+          actorName: user.name || 'Unknown',
+          actorRole: user.role,
+          details: note
+            ? `Note: ${note}`
+            : isDirectBypass
+              ? 'Approved directly by the ICT Director.'
+              : 'Approved without additional notes.',
+        },
+      })
+
+      return
+    }
+
     throw new Error('Invalid action for this role or request status')
-  }
+  })
 
-  revalidatePath('/')
-  revalidatePath('/requests')
+  revalidateRequestViews(true)
 }
 
 export async function rejectRequest(id: string, note: string) {
   const session = await getServerSession(authOptions)
   if (!session || !session.user) throw new Error('Unauthorized')
 
-  const role = (session.user as any).role
-  if (role !== 'CMAC_COORDINATOR' && role !== 'ICT_DIRECTOR') {
+  const { user } = session
+  if (user.role !== 'CMAC_COORDINATOR' && user.role !== 'ICT_DIRECTOR') {
     throw new Error('Only Coordinators or Directors can reject requests')
   }
 
-  await prisma.serviceRequest.update({
-    where: { id },
-    data: {
-      status: 'REJECTED',
-      coordinatorNote: role === 'CMAC_COORDINATOR' ? note : undefined,
-      directorNote: role === 'ICT_DIRECTOR' ? note : undefined,
-    }
+  await prisma.$transaction(async (tx) => {
+    const request = await tx.serviceRequest.findUnique({ where: { id } })
+    if (!request) throw new Error('Request not found')
+    if (request.deletedAt) throw new Error('Request has already been deleted')
+
+    await tx.serviceRequest.update({
+      where: { id },
+      data: {
+        status: 'REJECTED',
+        coordinatorNote: user.role === 'CMAC_COORDINATOR' ? note : undefined,
+        directorNote: user.role === 'ICT_DIRECTOR' ? note : undefined,
+      },
+    })
+
+    await tx.auditLog.create({
+      data: {
+        requestId: id,
+        action: 'REJECTED',
+        actorName: user.name || 'Unknown',
+        actorRole: user.role,
+        details: `Rejected by ${user.role.replace('_', ' ')}. Note: ${note}`,
+      },
+    })
   })
 
-  revalidatePath('/')
-  revalidatePath('/requests')
+  revalidateRequestViews(true)
 }
 
 export async function deleteRequest(id: string) {
   const session = await getServerSession(authOptions)
   if (!session || !session.user) throw new Error('Unauthorized')
 
-  const role = (session.user as any).role
-  if (role !== 'CMAC_COORDINATOR' && role !== 'ICT_DIRECTOR') {
+  const { user } = session
+  if (user.role !== 'CMAC_COORDINATOR' && user.role !== 'ICT_DIRECTOR') {
     throw new Error('Only Coordinators or Directors can delete requests')
   }
 
-  await prisma.serviceRequest.delete({
-    where: { id }
+  await prisma.$transaction(async (tx) => {
+    const request = await tx.serviceRequest.findUnique({
+      where: { id },
+      select: { eventTitle: true, deletedAt: true },
+    })
+    if (!request) throw new Error('Request not found')
+    if (request.deletedAt) throw new Error('Request has already been deleted')
+
+    await tx.serviceRequest.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+      },
+    })
+
+    await tx.auditLog.create({
+      data: {
+        requestId: id,
+        action: 'DELETED',
+        actorName: user.name || 'Unknown',
+        actorRole: user.role,
+        details: `Request for "${request.eventTitle || 'Unknown'}" was deleted from the system.`,
+      },
+    })
   })
 
-  revalidatePath('/')
-  revalidatePath('/requests')
+  revalidateRequestViews(true)
 }
 
 export async function getRequests() {
-  const session = await getServerSession(authOptions)
-  if (!session || !session.user) return []
+  noStore()
 
-  const role = (session.user as any).role
-  const school = (session.user as any).school
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session || !session.user) {
+      return []
+    }
 
-  // If Secretary, only show their own school or own requests?
-  // User request says: "SECRETARY: REQUEST LETTER, CHOOSE ONE SERVICE"
-  // Usually Secretary only sees their own requests.
-  
-  const where: any = {}
-  if (role === 'SECRETARY') {
-    where.secretaryId = (session.user as any).id
+    const { user } = session
+    const where = getRequestListWhere(user)
+
+    const data = await prisma.serviceRequest.findMany({
+      where,
+      include: {
+        secretary: { select: { name: true } },
+        coordinator: { select: { name: true } },
+        director: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    return data
+  } catch (error) {
+    console.error('SERVER_ACTION_GET_REQUESTS_ERROR:', error)
+    return []
   }
-
-  return prisma.serviceRequest.findMany({
-    where,
-    include: {
-      secretary: { select: { name: true } },
-      coordinator: { select: { name: true } },
-      director: { select: { name: true } }
-    },
-    orderBy: { createdAt: 'desc' }
-  })
 }
 
 export async function getCalendarRequests() {
   const session = await getServerSession(authOptions)
   if (!session || !session.user) return []
 
-  // Shared calendar needs to fetch all requests.
-  // Optimize by selecting ONLY necessary fields to prevent sending large text blocks (eventDetails, letterContent) over the network.
   return prisma.serviceRequest.findMany({
+    where: getCalendarWhere(session.user),
     select: {
       id: true,
       eventTitle: true,
@@ -130,65 +208,41 @@ export async function getCalendarRequests() {
       status: true,
       school: true,
       secretaryId: true,
-      secretary: { select: { name: true } }
+      secretary: { select: { name: true } },
     },
-    orderBy: { eventDate: 'asc' }
+    orderBy: { eventDate: 'asc' },
   })
 }
 
 export async function checkConflict(startDate: string, startTime?: string, endDate?: string, endTime?: string, eventVenue?: string, currentRequestId?: string) {
-  if (!startDate) return { hasConflict: false, conflicts: [], sameDayEvents: [] };
-  try {
-    const reqStart = new Date(startDate);
-    const reqEnd = endDate ? new Date(endDate) : new Date(startDate);
-    
-    const overlappingBookings = await (prisma.serviceRequest as any).findMany({
-      where: {
-        id: currentRequestId ? { not: currentRequestId } : undefined,
-        OR: [
-          { eventDate: { gte: reqStart, lte: reqEnd } },
-          { endDate: { gte: reqStart, lte: reqEnd } },
-          { AND: [{ eventDate: { lte: reqStart } }, { endDate: { gte: reqEnd } }] }
-        ],
-        status: { in: ['DIRECTOR_APPROVED', 'COORDINATOR_APPROVED', 'PENDING'] }
-      },
-      select: { eventTitle: true, eventDate: true, endDate: true, startTime: true, endTime: true, status: true, eventVenue: true }
-    });
+  return findRequestConflicts({
+    startDate,
+    startTime,
+    endDate,
+    endTime,
+    eventVenue,
+    currentRequestId,
+  })
+}
 
-    const conflicts = overlappingBookings.filter((b: any) => {
-      if (eventVenue && b.eventVenue !== eventVenue) return false;
-      const bStart = b.eventDate;
-      const bEnd = b.endDate || b.eventDate;
-      const bStartTime = b.startTime || '00:00';
-      const bEndTime = b.endTime || '23:59';
-      const rStartTime = startTime || '00:00';
-      const rEndTime = endTime || '23:59';
-      if (bStart.getTime() === reqStart.getTime() && bEnd.getTime() === reqEnd.getTime()) {
-        return (rStartTime < bEndTime && rEndTime > bStartTime);
-      }
-      return true;
-    });
+export async function getAuditLogs() {
+  const session = await getServerSession(authOptions)
+  if (!session || !session.user) return []
 
-    return { 
-      hasConflict: conflicts.length > 0, 
-      conflicts: conflicts.map((c: any) => ({ 
-        title: c.eventTitle, 
-        startTime: c.startTime, 
-        endTime: c.endTime, 
-        status: c.status, 
-        venue: c.eventVenue,
-        date: c.eventDate.toLocaleDateString()
-      })),
-      sameDayEvents: overlappingBookings.map((c: any) => ({ 
-        title: c.eventTitle, 
-        startTime: c.startTime, 
-        endTime: c.endTime, 
-        status: c.status, 
-        venue: c.eventVenue,
-        date: c.eventDate.toLocaleDateString()
-      }))
-    };
-  } catch (error) {
-    return { hasConflict: false, conflicts: [], sameDayEvents: [] };
+  if (session.user.role !== 'CMAC_COORDINATOR') {
+    return []
   }
+
+  return prisma.auditLog.findMany({
+    include: {
+      request: {
+        select: {
+          eventTitle: true,
+          school: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+  })
 }

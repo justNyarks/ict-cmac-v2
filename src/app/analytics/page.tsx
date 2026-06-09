@@ -1,8 +1,21 @@
 'use client'
-import { MOCK_REQUESTS } from '@/lib/data'
-import { School, ServiceRequest } from '@/types'
 
-const SCHOOLS: School[] = ['SNAHS','SBAHM','SITE','SASTE','School of Medicine','BEU']
+import { useEffect, useState } from 'react'
+import { useSession } from 'next-auth/react'
+
+import { School } from '@/types'
+
+const SCHOOLS: School[] = ['SNAHS', 'SBAHM', 'SITE', 'SASTE', 'MEDICINE', 'BEU', 'UNIVERSITY', 'HR']
+const SCHOOL_LABELS: Record<School, string> = {
+  SNAHS: 'SNAHS',
+  SBAHM: 'SBAHM',
+  SITE: 'SITE',
+  SASTE: 'SASTE',
+  MEDICINE: 'SOM',
+  BEU: 'BEU',
+  UNIVERSITY: 'UNIVERSITY',
+  HR: 'HR',
+}
 
 function BarChart({ data, max, colorClass }: { data: { label: string; value: number }[]; max: number; colorClass: string }) {
   return (
@@ -71,13 +84,13 @@ function DonutRing({ segments }: { segments: { label: string; value: number; col
 }
 
 import { getRequests } from '../requests/actions'
-import { useEffect, useState } from 'react'
-import { useSession } from 'next-auth/react'
+
+type AnalyticsRequest = Awaited<ReturnType<typeof getRequests>>[number]
 
 export default function AnalyticsPage() {
   const { data: session } = useSession()
-  const user = session?.user as any
-  const [requests, setRequests] = useState<any[]>([])
+  const user = session?.user
+  const [requests, setRequests] = useState<AnalyticsRequest[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -101,7 +114,7 @@ export default function AnalyticsPage() {
 
   // By school
   const bySchool = SCHOOLS.map(s => ({
-    label: s,
+    label: SCHOOL_LABELS[s],
     value: requests.filter(r => r.school === s).length
   }))
   const maxSchool = Math.max(...bySchool.map(x => x.value), 1)
@@ -109,6 +122,7 @@ export default function AnalyticsPage() {
   // By service
   const cmac = requests.filter(r => r.serviceType === 'CMAC').length
   const pmac = requests.filter(r => r.serviceType === 'PMAC').length
+  const unassigned = requests.filter(r => !r.serviceType).length
 
   // By doc type
   const photo = requests.filter(r => r.documentationType === 'PHOTO').length
@@ -173,8 +187,8 @@ export default function AnalyticsPage() {
         <div className="card p-6 space-y-4">
           <h3 className="font-semibold text-slate-800">Service Type</h3>
           <BarChart
-            data={[{ label: 'CMAC', value: cmac }, { label: 'PMAC', value: pmac }]}
-            max={Math.max(cmac, pmac, 1)}
+            data={[{ label: 'CMAC', value: cmac }, { label: 'PMAC', value: pmac }, { label: 'Unassigned', value: unassigned }]}
+            max={Math.max(cmac, pmac, unassigned, 1)}
             colorClass="bg-indigo-500"
           />
           <hr className="border-slate-100" />
