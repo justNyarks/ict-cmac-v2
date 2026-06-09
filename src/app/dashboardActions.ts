@@ -1,9 +1,10 @@
-'use server'
+  'use server'
 
 import { unstable_noStore as noStore } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { getNotificationFeed } from "@/lib/notifications"
 
 export async function getDashboardStats() {
   noStore()
@@ -20,16 +21,15 @@ export async function getDashboardStats() {
     videoCount: 0,
     bothCount: 0,
     recent: [],
-    newlyApproved: [],
+    notifications: [],
     user: session.user,
     dbUnavailable: false,
   }
 
   try {
-    const role = (session.user as any).role
-    const userId = (session.user as any).id
-    const whereClause = role === 'SECRETARY'
-      ? { secretaryId: userId, deletedAt: null }
+    const { user } = session
+    const whereClause = user.role === 'SECRETARY'
+      ? { secretaryId: user.id, deletedAt: null }
       : { deletedAt: null }
 
     // Use a single query to prevent Prisma connection pool timeouts
@@ -54,24 +54,13 @@ export async function getDashboardStats() {
       select: { id: true, eventTitle: true, school: true, eventDate: true, status: true, secretaryId: true, secretary: { select: { name: true } } }
     })
     
-    const newlyApproved = await prisma.serviceRequest.findMany({
-      where: role === 'SECRETARY'
-        ? {
-            deletedAt: null,
-            OR: [
-              { secretaryId: userId, status: { in: ['DIRECTOR_APPROVED', 'COORDINATOR_APPROVED', 'REJECTED'] } },
-              { status: 'DIRECTOR_APPROVED' }
-            ]
-          }
-        : { ...whereClause, status: 'DIRECTOR_APPROVED' },
-      orderBy: { updatedAt: 'desc' },
-      take: 3,
-      select: { id: true, eventTitle: true, status: true, secretaryId: true, secretary: { select: { name: true } } }
-    })
+    const notifications = user.role === 'SECRETARY'
+      ? await getNotificationFeed(user, 3)
+      : []
 
     return {
       total, pending, approved, rejected, coordApproved, photoCount, videoCount, bothCount,
-      recent, newlyApproved, user: session.user, dbUnavailable: false
+      recent, notifications, user, dbUnavailable: false
     }
   } catch (error) {
     console.error('DASHBOARD_STATS_ERROR:', error)

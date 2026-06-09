@@ -41,6 +41,7 @@ const ROLE_META: Record<Role, { label: string; color: string; icon: React.Elemen
 }
 
 type DBUser = { id: string; name: string | null; email: string; role: string; school: string | null }
+type NewUserState = { name: string; email: string; password: string; role: Role; school: '' | (typeof SCHOOLS)[number] }
 
 export default function AdminPage() {
   const { data: session, update } = useSession()
@@ -50,7 +51,7 @@ export default function AdminPage() {
   const [editingUser, setEditingUser] = useState<DBUser | null>(null)
   const [editingEmail, setEditingEmail] = useState('')
   const [savingEmail, setSavingEmail] = useState(false)
-  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'SECRETARY' as Role, school: '' })
+  const [newUser, setNewUser] = useState<NewUserState>({ name: '', email: '', password: '', role: 'SECRETARY', school: '' })
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
 
   const showToast = (type: 'success' | 'error', msg: string) => {
@@ -113,7 +114,7 @@ export default function AdminPage() {
     try {
       const res = await updateUserEmail(editingUser.id, editingEmail)
       if (res.success) {
-        if (editingUser.id === (session?.user as any)?.id) {
+        if (editingUser.id === session?.user?.id) {
           await update()
         }
         showToast('success', 'User email updated.')
@@ -180,7 +181,7 @@ export default function AdminPage() {
       <div className="card overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <h3 className="font-semibold text-slate-800">System Users</h3>
-          {(session?.user as any)?.role === 'ICT_DIRECTOR' && (
+          {session?.user?.role === 'ICT_DIRECTOR' && (
             <button
               onClick={() => setShowAdd(true)}
               className="flex items-center gap-2 bg-[#064e3b] text-white px-4 py-2 rounded-xl text-xs font-semibold hover:bg-[#065f46] transition-colors"
@@ -213,7 +214,7 @@ export default function AdminPage() {
                       </p>
                     </div>
                   </div>
-                  {(session?.user as any)?.role === 'ICT_DIRECTOR' && (
+                  {session?.user?.role === 'ICT_DIRECTOR' && (
                     <div className="flex items-center gap-4">
                       <button
                         onClick={() => openEditEmail(user)}
@@ -222,7 +223,7 @@ export default function AdminPage() {
                         <PencilLine size={12} />
                         Edit Gmail
                       </button>
-                      {user.id !== (session?.user as any)?.id && (
+                      {user.id !== session?.user?.id && (
                         <button
                           onClick={() => handleRemoveUser(user.id, user.name)}
                           className="text-xs text-red-400 hover:text-red-600 transition-colors font-medium"
@@ -293,7 +294,7 @@ export default function AdminPage() {
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">School</label>
                   <select
                     value={newUser.school}
-                    onChange={e => setNewUser(p => ({ ...p, school: e.target.value }))}
+                    onChange={e => setNewUser(p => ({ ...p, school: e.target.value as NewUserState['school'] }))}
                     className="w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
                   >
                     <option value="">Select school…</option>

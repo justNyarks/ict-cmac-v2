@@ -1,4 +1,8 @@
 'use client'
+
+import { useEffect, useState } from 'react'
+import { useSession } from 'next-auth/react'
+
 import { School } from '@/types'
 
 const SCHOOLS: School[] = ['SNAHS', 'SBAHM', 'SITE', 'SASTE', 'MEDICINE', 'BEU', 'UNIVERSITY', 'HR']
@@ -80,13 +84,13 @@ function DonutRing({ segments }: { segments: { label: string; value: number; col
 }
 
 import { getRequests } from '../requests/actions'
-import { useEffect, useState } from 'react'
-import { useSession } from 'next-auth/react'
+
+type AnalyticsRequest = Awaited<ReturnType<typeof getRequests>>[number]
 
 export default function AnalyticsPage() {
   const { data: session } = useSession()
-  const user = session?.user as any
-  const [requests, setRequests] = useState<any[]>([])
+  const user = session?.user
+  const [requests, setRequests] = useState<AnalyticsRequest[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {

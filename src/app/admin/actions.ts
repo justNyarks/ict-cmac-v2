@@ -1,5 +1,6 @@
 'use server'
 
+import type { Role, School } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
@@ -10,7 +11,7 @@ export async function getUsers() {
   const session = await getServerSession(authOptions)
   if (!session?.user) return []
   
-  const role = (session.user as any).role
+  const role = session.user.role
   if (role !== 'ICT_DIRECTOR' && role !== 'CMAC_COORDINATOR') return []
 
   return prisma.user.findMany({
@@ -28,11 +29,11 @@ export async function getUsers() {
   })
 }
 
-export async function addUser(data: { name: string; email: string; password: string; role: string; school?: string }) {
+export async function addUser(data: { name: string; email: string; password: string; role: Role; school?: School | '' }) {
   const session = await getServerSession(authOptions)
   if (!session?.user) return { success: false, error: 'Not authenticated' }
   
-  const myRole = (session.user as any).role
+  const myRole = session.user.role
   if (myRole !== 'ICT_DIRECTOR') return { success: false, error: 'Only the ICT Director can add users.' }
 
   if (!data.name.trim() || !data.email.trim() || !data.password.trim()) {
@@ -50,8 +51,8 @@ export async function addUser(data: { name: string; email: string; password: str
       name: data.name.trim(),
       email: data.email.trim().toLowerCase(),
       password: hashedPassword,
-      role: data.role as any,
-      school: (data.role === 'SECRETARY' ? data.school || null : null) as any,
+      role: data.role,
+      school: data.role === 'SECRETARY' ? data.school || null : null,
     }
   })
 
@@ -63,8 +64,8 @@ export async function removeUser(id: string) {
   const session = await getServerSession(authOptions)
   if (!session?.user) return { success: false, error: 'Not authenticated' }
   
-  const myRole = (session.user as any).role
-  const myId = (session.user as any).id
+  const myRole = session.user.role
+  const myId = session.user.id
   if (myRole !== 'ICT_DIRECTOR') return { success: false, error: 'Only the ICT Director can remove users.' }
   if (id === myId) return { success: false, error: 'You cannot remove yourself.' }
 
@@ -78,7 +79,7 @@ export async function updateUserEmail(id: string, email: string) {
   const session = await getServerSession(authOptions)
   if (!session?.user) return { success: false, error: 'Not authenticated' }
 
-  const myRole = (session.user as any).role
+  const myRole = session.user.role
   if (myRole !== 'ICT_DIRECTOR') {
     return { success: false, error: 'Only the ICT Director can edit user emails.' }
   }

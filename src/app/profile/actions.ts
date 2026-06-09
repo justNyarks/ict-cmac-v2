@@ -1,5 +1,6 @@
 'use server'
 
+import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
@@ -9,11 +10,11 @@ export async function updateProfile(data: { name: string; currentPassword?: stri
   const session = await getServerSession(authOptions)
   if (!session?.user) return { success: false, error: 'Not authenticated' }
 
-  const userId = (session.user as any).id
+  const userId = session.user.id
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) return { success: false, error: 'User not found' }
 
-  const updateData: any = {}
+  const updateData: Prisma.UserUpdateInput = {}
 
   if (data.name.trim()) {
     updateData.name = data.name.trim()

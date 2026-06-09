@@ -32,13 +32,14 @@ import { LogOut } from 'lucide-react'
 export default function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
-  const user = session?.user as any
+  const user = session?.user
+  const role = user?.role
 
   const navItems = NAV_ITEMS.filter(item => {
-    if (item.href === '/new-request') return ['SECRETARY', 'ICT_DIRECTOR'].includes(user?.role)
-    if (item.href === '/admin') return user?.role === 'ICT_DIRECTOR'
-    if (item.href === '/analytics') return ['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes(user?.role)
-    if (item.href === '/logs') return user?.role === 'CMAC_COORDINATOR'
+    if (item.href === '/new-request') return role === 'SECRETARY' || role === 'ICT_DIRECTOR'
+    if (item.href === '/admin') return role === 'ICT_DIRECTOR'
+    if (item.href === '/analytics') return role === 'CMAC_COORDINATOR' || role === 'ICT_DIRECTOR'
+    if (item.href === '/logs') return role === 'CMAC_COORDINATOR'
     return true
   })
 
