@@ -25,6 +25,7 @@ export async function createServiceRequest(formData: {
   needsSameDayEdit?: boolean
   needsSameDayPhoto?: boolean
   campusType?: 'IN_CAMPUS' | 'OFF_CAMPUS'
+  directorBypassReason?: string | null
 }) {
   noStore()
 
@@ -46,6 +47,11 @@ export async function createServiceRequest(formData: {
     const isDirector = user.role === 'ICT_DIRECTOR'
     if (isDirector && !formData.serviceType) {
       return { success: false, error: 'Directly approved events must have a service type.' }
+    }
+
+    const bypassReason = formData.directorBypassReason?.trim() || ''
+    if (isDirector && !bypassReason) {
+      return { success: false, error: 'A bypass reason is required when the director adds an event directly to the calendar.' }
     }
 
     const normalized = validateAndNormalizeRequestInput(formData, user)
@@ -84,6 +90,7 @@ export async function createServiceRequest(formData: {
           campusType: normalized.campusType,
           secretaryId: user.id,
           status: isDirector ? 'DIRECTOR_APPROVED' : 'PENDING',
+          directorNote: isDirector ? bypassReason : null,
           directorId: isDirector ? user.id : null,
           directorApprovedAt: isDirector ? new Date() : null,
         },
@@ -96,7 +103,7 @@ export async function createServiceRequest(formData: {
           actorName: user.name || 'Unknown',
           actorRole: user.role,
           details: isDirector
-            ? 'Event directly added to calendar by Director.'
+            ? `Event directly added to calendar by Director. Reason: ${bypassReason}`
             : `New service request submitted by ${user.name || 'Unknown user'}.`,
         },
       })

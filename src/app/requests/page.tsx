@@ -27,6 +27,7 @@ export default function RequestsPage() {
   const [printMode, setPrintMode] = useState<'LETTER' | 'RECEIPT'>('LETTER')
   const [selectedServiceType, setSelectedServiceType] = useState<any>(null)
   const selectedServiceLabel = selected?.serviceType || 'Unassigned'
+  const isDirectorBypassApproval = selected?.status === 'PENDING' && (session?.user as any)?.role === 'ICT_DIRECTOR'
   const receiptLetterSource =
     selected?.letterContent ||
     `Formal request for ${selectedServiceLabel} coverage for "${selected?.eventTitle || 'the event'}".`
@@ -100,6 +101,11 @@ export default function RequestsPage() {
   const filtered = filter === 'ALL' ? requests : requests.filter(r => r.status === filter)
 
   async function handleApprove(id: string) {
+    if (isDirectorBypassApproval && !note.trim()) {
+      alert('A bypass reason is required when the director skips coordinator review.')
+      return
+    }
+
     try {
       await approveRequest(id, note, selectedServiceType)
       await fetchRequests()
@@ -414,16 +420,25 @@ export default function RequestsPage() {
                         <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Review Action</p>
                         <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">As {(session?.user as any)?.role.replace('_', ' ')}</span>
                       </div>
+                      {isDirectorBypassApproval && (
+                        <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-amber-800">Coordinator Review Will Be Skipped</p>
+                          <p className="text-xs text-amber-700 mt-1 font-medium">
+                            A recorded bypass reason is required before this request can be approved directly by the ICT Director.
+                          </p>
+                        </div>
+                      )}
                       <textarea
                         rows={3}
                         value={note}
                         onChange={e => setNote(e.target.value)}
-                        placeholder="Review comments or feedback…"
+                        placeholder={isDirectorBypassApproval ? 'Enter the bypass reason for this direct approval…' : 'Review comments or feedback…'}
                         className="w-full text-sm border-2 border-emerald-50 rounded-2xl p-4 focus:outline-none focus:border-emerald-500 transition-all bg-emerald-50/20 font-medium"
                       />
                       <div className="flex gap-4">
                         <button
                           onClick={() => handleApprove(selected.id)}
+                          disabled={isDirectorBypassApproval && !note.trim()}
                           className="flex-1 flex items-center justify-center gap-2 bg-[#064e3b] hover:bg-[#065f46] text-white rounded-2xl py-4 text-sm font-black shadow-lg shadow-emerald-900/20 transition-all"
                         >
                           <CheckCircle size={18} /> Approve Request

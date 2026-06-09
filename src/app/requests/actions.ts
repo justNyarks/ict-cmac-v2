@@ -14,6 +14,7 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
   if (!session || !session.user) throw new Error('Unauthorized')
 
   const { user } = session
+  const trimmedNote = note.trim()
 
   await prisma.$transaction(async (tx) => {
     const request = await tx.serviceRequest.findUnique({ where: { id } })
@@ -25,7 +26,7 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
         where: { id },
         data: {
           status: 'COORDINATOR_APPROVED',
-          coordinatorNote: note,
+          coordinatorNote: trimmedNote,
           coordinatorId: user.id,
           coordinatorApprovedAt: new Date(),
         },
@@ -37,7 +38,7 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
           action: 'COORDINATOR_APPROVED',
           actorName: user.name || 'Unknown',
           actorRole: user.role,
-          details: note ? `Note: ${note}` : 'Approved without additional notes.',
+          details: trimmedNote ? `Note: ${trimmedNote}` : 'Approved without additional notes.',
         },
       })
 
@@ -50,12 +51,15 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
       }
 
       const isDirectBypass = request.status === 'PENDING'
+      if (isDirectBypass && !trimmedNote) {
+        throw new Error('A bypass reason is required when the director skips coordinator review')
+      }
 
       await tx.serviceRequest.update({
         where: { id },
         data: {
           status: 'DIRECTOR_APPROVED',
-          directorNote: note,
+          directorNote: trimmedNote,
           directorId: user.id,
           directorApprovedAt: new Date(),
           serviceType,
@@ -69,8 +73,8 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
           action: isDirectBypass ? 'DIRECT_BYPASS' : 'DIRECTOR_APPROVED',
           actorName: user.name || 'Unknown',
           actorRole: user.role,
-          details: note
-            ? `Note: ${note}`
+          details: trimmedNote
+            ? `Note: ${trimmedNote}`
             : isDirectBypass
               ? 'Approved directly by the ICT Director.'
               : 'Approved without additional notes.',
