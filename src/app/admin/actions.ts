@@ -2,17 +2,12 @@
 
 import type { Role, School } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { assertActionAccess } from "@/lib/security"
 import bcrypt from "bcryptjs"
 import { revalidatePath } from "next/cache"
 
 export async function getUsers() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user) return []
-  
-  const role = session.user.role
-  if (role !== 'ICT_DIRECTOR' && role !== 'CMAC_COORDINATOR') return []
+  await assertActionAccess(['ICT_DIRECTOR'], { zeroTrust: true })
 
   return prisma.user.findMany({
     select: {
@@ -30,11 +25,11 @@ export async function getUsers() {
 }
 
 export async function addUser(data: { name: string; email: string; password: string; role: Role; school?: School | '' }) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user) return { success: false, error: 'Not authenticated' }
-  
-  const myRole = session.user.role
-  if (myRole !== 'ICT_DIRECTOR') return { success: false, error: 'Only the ICT Director can add users.' }
+  try {
+    await assertActionAccess(['ICT_DIRECTOR'], { zeroTrust: true })
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' }
+  }
 
   if (!data.name.trim() || !data.email.trim() || !data.password.trim()) {
     return { success: false, error: 'Name, email, and password are required.' }
@@ -61,12 +56,14 @@ export async function addUser(data: { name: string; email: string; password: str
 }
 
 export async function removeUser(id: string) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user) return { success: false, error: 'Not authenticated' }
-  
-  const myRole = session.user.role
+  let session
+  try {
+    session = await assertActionAccess(['ICT_DIRECTOR'], { zeroTrust: true })
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' }
+  }
+
   const myId = session.user.id
-  if (myRole !== 'ICT_DIRECTOR') return { success: false, error: 'Only the ICT Director can remove users.' }
   if (id === myId) return { success: false, error: 'You cannot remove yourself.' }
 
   await prisma.user.delete({ where: { id } })
@@ -76,12 +73,10 @@ export async function removeUser(id: string) {
 }
 
 export async function updateUserEmail(id: string, email: string) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user) return { success: false, error: 'Not authenticated' }
-
-  const myRole = session.user.role
-  if (myRole !== 'ICT_DIRECTOR') {
-    return { success: false, error: 'Only the ICT Director can edit user emails.' }
+  try {
+    await assertActionAccess(['ICT_DIRECTOR'], { zeroTrust: true })
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' }
   }
 
   const normalizedEmail = email.trim().toLowerCase()

@@ -12,6 +12,7 @@ import {
   User,
   Aperture,
   History,
+  ShieldCheck,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { href: '/analytics',  label: 'Analytics',  icon: BarChart3       },
   { href: '/logs',       label: 'System Logs', icon: History      },
   { href: '/admin',      label: 'Admin',      icon: Settings        },
+  { href: '/zero-trust', label: 'Zero Trust', icon: ShieldCheck     },
   { href: '/profile',    label: 'My Profile', icon: User            },
 ]
 
@@ -40,6 +42,7 @@ export default function Sidebar() {
     if (item.href === '/admin') return role === 'ICT_DIRECTOR'
     if (item.href === '/analytics') return role === 'CMAC_COORDINATOR' || role === 'ICT_DIRECTOR'
     if (item.href === '/logs') return role === 'CMAC_COORDINATOR'
+    if (item.href === '/zero-trust') return role === 'CMAC_COORDINATOR' || role === 'ICT_DIRECTOR'
     return true
   })
 

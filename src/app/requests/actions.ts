@@ -8,10 +8,11 @@ import { authOptions } from "@/lib/auth"
 import { findRequestConflicts } from "@/lib/conflicts"
 import { prisma } from "@/lib/prisma"
 import { getCalendarWhere, getRequestListWhere, revalidateRequestViews } from "@/lib/requestWorkflow"
+import { assertActionAccess } from "@/lib/security"
+import { isPrivilegedRole } from "@/lib/zeroTrust"
 
 export async function approveRequest(id: string, note: string, serviceType?: ServiceType) {
-  const session = await getServerSession(authOptions)
-  if (!session || !session.user) throw new Error('Unauthorized')
+  const session = await assertActionAccess(['CMAC_COORDINATOR', 'ICT_DIRECTOR'], { zeroTrust: true })
 
   const { user } = session
   const trimmedNote = note.trim()
@@ -91,13 +92,9 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
 }
 
 export async function rejectRequest(id: string, note: string) {
-  const session = await getServerSession(authOptions)
-  if (!session || !session.user) throw new Error('Unauthorized')
+  const session = await assertActionAccess(['CMAC_COORDINATOR', 'ICT_DIRECTOR'], { zeroTrust: true })
 
   const { user } = session
-  if (user.role !== 'CMAC_COORDINATOR' && user.role !== 'ICT_DIRECTOR') {
-    throw new Error('Only Coordinators or Directors can reject requests')
-  }
 
   await prisma.$transaction(async (tx) => {
     const request = await tx.serviceRequest.findUnique({ where: { id } })
@@ -128,13 +125,9 @@ export async function rejectRequest(id: string, note: string) {
 }
 
 export async function deleteRequest(id: string) {
-  const session = await getServerSession(authOptions)
-  if (!session || !session.user) throw new Error('Unauthorized')
+  const session = await assertActionAccess(['CMAC_COORDINATOR', 'ICT_DIRECTOR'], { zeroTrust: true })
 
   const { user } = session
-  if (user.role !== 'CMAC_COORDINATOR' && user.role !== 'ICT_DIRECTOR') {
-    throw new Error('Only Coordinators or Directors can delete requests')
-  }
 
   await prisma.$transaction(async (tx) => {
     const request = await tx.serviceRequest.findUnique({
@@ -175,6 +168,9 @@ export async function getRequests() {
     }
 
     const { user } = session
+    if (isPrivilegedRole(user.role)) {
+      await assertActionAccess(['CMAC_COORDINATOR', 'ICT_DIRECTOR'], { zeroTrust: true })
+    }
     const where = getRequestListWhere(user)
 
     const data = await prisma.serviceRequest.findMany({
@@ -190,6 +186,11 @@ export async function getRequests() {
     return data
   } catch (error) {
     console.error('SERVER_ACTION_GET_REQUESTS_ERROR:', error)
+
+    if (error instanceof Error && error.message === 'Zero trust verification required') {
+      throw error
+    }
+
     return []
   }
 }
@@ -230,12 +231,7 @@ export async function checkConflict(startDate: string, startTime?: string, endDa
 }
 
 export async function getAuditLogs() {
-  const session = await getServerSession(authOptions)
-  if (!session || !session.user) return []
-
-  if (session.user.role !== 'CMAC_COORDINATOR') {
-    return []
-  }
+  await assertActionAccess(['CMAC_COORDINATOR'], { zeroTrust: true })
 
   return prisma.auditLog.findMany({
     include: {

@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { getStatusLabel, getStatusColor } from '@/lib/data'
 import { ServiceRequest } from '@/types'
-import { CheckCircle, Eye, Filter, FileCheck2, Printer, X, Trash2 } from 'lucide-react'
+import { CheckCircle, Download, Eye, Filter, FileCheck2, Printer, X, Trash2 } from 'lucide-react'
 import clsx from 'clsx'
 import Portal from '@/components/Portal'
 import ConfirmModal from '@/components/ConfirmModal'
@@ -26,7 +26,9 @@ export default function RequestsPage() {
   const [idToDelete, setIdToDelete] = useState<string | null>(null)
   const [printMode, setPrintMode] = useState<'LETTER' | 'RECEIPT'>('LETTER')
   const [selectedServiceType, setSelectedServiceType] = useState<any>(null)
+  const [isDownloadingPastEvents, setIsDownloadingPastEvents] = useState(false)
   const selectedServiceLabel = selected?.serviceType || 'Unassigned'
+  const isPrivilegedUser = ['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes((session?.user as any)?.role)
   const isDirectorBypassApproval = selected?.status === 'PENDING' && (session?.user as any)?.role === 'ICT_DIRECTOR'
   const receiptLetterSource =
     selected?.letterContent ||
@@ -70,9 +72,14 @@ export default function RequestsPage() {
 
   const fetchRequests = async () => {
     setLoading(true)
-    const data = await getRequests()
-    setRequests(data)
-    setLoading(false)
+    try {
+      const data = await getRequests()
+      setRequests(data)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to load requests.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -113,7 +120,7 @@ export default function RequestsPage() {
       setSelected(null)
       setNote('')
     } catch (e) {
-      alert('Failed to approve')
+      alert(e instanceof Error ? e.message : 'Failed to approve')
     }
   }
 
@@ -124,7 +131,7 @@ export default function RequestsPage() {
       setSelected(null)
       setNote('')
     } catch (e) {
-      alert('Failed to reject')
+      alert(e instanceof Error ? e.message : 'Failed to reject')
     }
   }
 
@@ -136,7 +143,46 @@ export default function RequestsPage() {
       setIdToDelete(null)
       setNote('')
     } catch (e) {
-      alert('Failed to delete')
+      alert(e instanceof Error ? e.message : 'Failed to delete')
+    }
+  }
+
+  async function handleDownloadPastEvents() {
+    setIsDownloadingPastEvents(true)
+
+    try {
+      const response = await fetch('/api/exports/past-events', {
+        method: 'GET',
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        const message =
+          payload?.error ||
+          (response.status === 428
+            ? 'Zero trust verification required before downloading the monthly activity compilation.'
+            : 'Failed to download the monthly activity compilation.')
+        throw new Error(message)
+      }
+
+      const blob = await response.blob()
+      const contentDisposition = response.headers.get('content-disposition')
+      const filenameMatch = contentDisposition?.match(/filename="([^"]+)"/i)
+      const filename = filenameMatch?.[1] || 'ict-cmac-monthly-activities.csv'
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to download the monthly activity compilation.')
+    } finally {
+      setIsDownloadingPastEvents(false)
     }
   }
 
@@ -160,7 +206,20 @@ export default function RequestsPage() {
               {f === 'ALL' ? 'All Requests' : getStatusLabel(f as ServiceRequest['status'])}
             </button>
           ))}
-          <span className="ml-auto text-xs font-bold text-slate-400 uppercase tracking-widest">{filtered.length} Results</span>
+          <div className="ml-auto flex items-center gap-3">
+            {isPrivilegedUser && (
+              <button
+                onClick={handleDownloadPastEvents}
+                disabled={isDownloadingPastEvents}
+                className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-700 transition-all hover:border-emerald-300 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                title="Download current month plus the previous three months"
+              >
+                <Download size={14} />
+                {isDownloadingPastEvents ? 'Preparing Export...' : 'Monthly Activities (4 Months)'}
+              </button>
+            )}
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{filtered.length} Results</span>
+          </div>
         </div>
 
         {/* Table */}
@@ -481,7 +540,7 @@ export default function RequestsPage() {
                   )}
 
                   {/* Admin Delete Action */}
-                  {['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes((session?.user as any)?.role) && (
+                  {isPrivilegedUser && (
                     <div className="pt-6 border-t border-slate-100 space-y-3">
                       <button
                         onClick={() => {
@@ -501,7 +560,7 @@ export default function RequestsPage() {
 
 
               {/* Conflict Side Panel (Integrated) */}
-              {['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes((session?.user as any)?.role) && (
+              {isPrivilegedUser && (
                 <div className="w-72 bg-slate-50/80 flex flex-col shrink-0 border-l border-slate-100 animate-slide-in-right">
                   <div className="p-8 bg-slate-900 text-white">
                     <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">Scheduling Check</p>
