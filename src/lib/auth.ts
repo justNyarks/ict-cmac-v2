@@ -1,4 +1,5 @@
-import { prisma } from "@/lib/prisma"
+import { hasUserSecurityFields, prisma } from "@/lib/prisma"
+import { sanitizeEmailAddress, sanitizePasswordInput } from "@/lib/sanitization"
 import bcrypt from "bcryptjs"
 import { type NextAuthOptions } from "next-auth"
 import CredentialsProvider from "next-auth/providers/credentials"
@@ -16,16 +17,40 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        const email = credentials.email.trim().toLowerCase()
-        const user = await prisma.user.findUnique({
-          where: { email }
-        })
+        let email: string
+        let password: string
 
-        if (!user || !user.password) {
+        try {
+          email = sanitizeEmailAddress(credentials.email)
+          password = sanitizePasswordInput(credentials.password, {
+            fieldName: 'Password',
+            required: true,
+            maxLength: 255,
+          })
+        } catch {
           return null
         }
 
-        const isPasswordValid = await bcrypt.compare(credentials.password, user.password)
+        const user = await prisma.user.findUnique({
+          where: { email },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            password: true,
+            role: true,
+            school: true,
+            isActive: true,
+            pmacMemberId: true,
+            ...(hasUserSecurityFields() ? { mustChangePassword: true } : {}),
+          }
+        })
+
+        if (!user || !user.password || !user.isActive) {
+          return null
+        }
+
+        const isPasswordValid = await bcrypt.compare(password, user.password)
 
         if (!isPasswordValid) {
           return null
@@ -37,6 +62,9 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           role: user.role,
           school: user.school,
+          isActive: user.isActive,
+          pmacMemberId: user.pmacMemberId,
+          mustChangePassword: hasUserSecurityFields() ? user.mustChangePassword : false,
         }
       }
     })
@@ -49,12 +77,24 @@ export const authOptions: NextAuthOptions = {
         token.role = user.role
         token.school = user.school
         token.name = user.name
+        token.isActive = user.isActive
+        token.pmacMemberId = user.pmacMemberId
+        token.mustChangePassword = user.mustChangePassword
       }
       // Keep the JWT aligned with the current DB record after profile updates.
       if (trigger === 'update' && (token.id || token.sub)) {
         const fresh = await prisma.user.findUnique({
           where: { id: (token.id || token.sub) as string },
-          select: { id: true, email: true, name: true, role: true, school: true }
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            school: true,
+            isActive: true,
+            pmacMemberId: true,
+            ...(hasUserSecurityFields() ? { mustChangePassword: true } : {}),
+          }
         })
         if (fresh) {
           token.id = fresh.id
@@ -62,6 +102,9 @@ export const authOptions: NextAuthOptions = {
           token.name = fresh.name
           token.role = fresh.role
           token.school = fresh.school
+          token.isActive = fresh.isActive
+          token.pmacMemberId = fresh.pmacMemberId
+          token.mustChangePassword = hasUserSecurityFields() ? fresh.mustChangePassword : false
         }
       }
       return token
@@ -73,6 +116,9 @@ export const authOptions: NextAuthOptions = {
         session.user.role = token.role
         session.user.school = token.school ?? null
         session.user.id = token.id
+        session.user.isActive = token.isActive ?? true
+        session.user.pmacMemberId = token.pmacMemberId ?? null
+        session.user.mustChangePassword = token.mustChangePassword ?? false
       }
       return session
     }

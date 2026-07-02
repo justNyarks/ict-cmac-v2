@@ -1,0 +1,80 @@
+type ReportStats = {
+  members: number
+  activeMembers: number
+  events: number
+  openPolls: number
+  attachments: number
+  activity: number
+}
+
+const REPORT_LINKS = [
+  { type: 'members', label: 'Member Directory Export', description: 'Roster, account role, active status, and password-reset flags.' },
+  { type: 'events', label: 'Event Operations Export', description: 'Event lifecycle, staffing counts, attendance, and attachments.' },
+  { type: 'polls', label: 'Poll Governance Export', description: 'Poll status, linked events, votes cast, and attachment totals.' },
+  { type: 'activity', label: 'Activity Audit Export', description: 'Recent PMAC actions for oversight, governance, and reliability tracking.' },
+] as const
+
+export default function PmacReportsPanel({
+  title,
+  description,
+  stats,
+}: {
+  title: string
+  description: string
+  stats: ReportStats
+}) {
+  return (
+    <div className="mx-auto max-w-6xl space-y-6 animate-fade-in">
+      <div className="space-y-2">
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">PMAC Reports</p>
+        <h2 className="font-display text-3xl font-bold text-slate-800">{title}</h2>
+        <p className="text-sm text-slate-500">{description}</p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <div className="card p-5">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Members</p>
+          <p className="mt-3 text-3xl font-bold text-slate-800">{stats.members}</p>
+          <p className="mt-1 text-xs text-slate-500">{stats.activeMembers} active accounts</p>
+        </div>
+        <div className="card p-5">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Events</p>
+          <p className="mt-3 text-3xl font-bold text-slate-800">{stats.events}</p>
+          <p className="mt-1 text-xs text-slate-500">Operational records available</p>
+        </div>
+        <div className="card p-5">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Open Polls</p>
+          <p className="mt-3 text-3xl font-bold text-slate-800">{stats.openPolls}</p>
+          <p className="mt-1 text-xs text-slate-500">Governance votes in flight</p>
+        </div>
+        <div className="card p-5">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Attachments</p>
+          <p className="mt-3 text-3xl font-bold text-slate-800">{stats.attachments}</p>
+          <p className="mt-1 text-xs text-slate-500">{stats.activity} activity log entries</p>
+        </div>
+      </div>
+
+      <div className="card overflow-hidden">
+        <div className="border-b border-slate-100 px-6 py-4">
+          <h3 className="font-semibold text-slate-800">Exports</h3>
+          <p className="mt-1 text-xs text-slate-400">Download PMAC-ready CSV reports for reporting, backups, and coordination reviews.</p>
+        </div>
+        <div className="divide-y divide-slate-50">
+          {REPORT_LINKS.map((report) => (
+            <a
+              key={report.type}
+              href={`/api/exports/pmac?type=${report.type}`}
+              className="flex flex-col gap-3 px-6 py-5 transition-colors hover:bg-slate-50 md:flex-row md:items-center md:justify-between"
+            >
+              <div>
+                <p className="text-sm font-semibold text-slate-800">{report.label}</p>
+                <p className="mt-1 text-sm text-slate-500">{report.description}</p>
+              </div>
+              <span className="status-badge bg-emerald-50 text-emerald-700 border-emerald-200">Download CSV</span>
+            </a>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}

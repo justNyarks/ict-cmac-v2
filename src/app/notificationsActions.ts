@@ -9,5 +9,10 @@ export async function getNotifications() {
   const session = await getServerSession(authOptions)
   if (!session || !session.user) return []
 
-  return getNotificationFeed(session.user, 8)
+  try {
+    return await getNotificationFeed(session.user, 8)
+  } catch (error) {
+    console.error('GET_NOTIFICATIONS_ERROR:', error)
+    return []
+  }
 }

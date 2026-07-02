@@ -1,0 +1,39 @@
+services:
+  db:
+    image: mysql:8.4
+    container_name: ict-cmac-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ict_cmac
+    ports:
+      - "3306:3306"
+    volumes:
+      - ict-cmac-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ict-cmac-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: mysql://root:root@db:3306/ict_cmac
+      SERVER_ACTION_ALLOWED_ORIGINS: ${SERVER_ACTION_ALLOWED_ORIGINS:-}
+      PRISMA_SKIP_DB_PUSH: ${PRISMA_SKIP_DB_PUSH:-0}
+      PRISMA_RUN_SEED: ${PRISMA_RUN_SEED:-0}
+
+volumes:
+  ict-cmac-mysql-data:

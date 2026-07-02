@@ -120,7 +120,6 @@ function DonutRing({ segments }: { segments: { label: string; value: number; col
 export default async function AnalyticsPage() {
   const session = await requireRoleAccess(['CMAC_COORDINATOR', 'ICT_DIRECTOR'], {
     nextPath: '/analytics',
-    zeroTrust: true,
   })
   const analytics = await getAnalyticsSnapshot(session.user)
 

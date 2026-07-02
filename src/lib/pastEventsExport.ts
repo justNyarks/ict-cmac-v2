@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 import { getRequestListWhere } from '@/lib/requestWorkflow'
+import { sanitizeCsvCell } from '@/lib/sanitization'
 import type { Session } from 'next-auth'
 
 type ExportRequest = Prisma.ServiceRequestGetPayload<{
@@ -77,11 +78,6 @@ function getMonthKey(value: Date) {
 
 function getMonthLabel(value: Date) {
   return monthFormatter.format(value)
-}
-
-function csvEscape(value: unknown) {
-  const normalized = value == null ? '' : String(value)
-  return `"${normalized.replace(/"/g, '""')}"`
 }
 
 function buildAuditCommentTrail(request: ExportRequest) {
@@ -250,6 +246,6 @@ export function buildPastEventsCsv(requests: ExportRequest[]) {
   ])
 
   return [headers, ...rows]
-    .map(row => row.map(csvEscape).join(','))
+    .map(row => row.map(sanitizeCsvCell).join(','))
     .join('\n')
 }

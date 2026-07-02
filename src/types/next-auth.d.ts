@@ -7,6 +7,9 @@ declare module "next-auth" {
       id: string
       role: Role
       school: School | null
+      isActive: boolean
+      pmacMemberId: string | null
+      mustChangePassword: boolean
     }
   }
 
@@ -14,6 +17,9 @@ declare module "next-auth" {
     id: string
     role: Role
     school: School | null
+    isActive: boolean
+    pmacMemberId: string | null
+    mustChangePassword: boolean
   }
 }
 
@@ -22,6 +28,9 @@ declare module "next-auth/jwt" {
     id?: string
     role?: Role
     school?: School | null
+    isActive?: boolean
+    pmacMemberId?: string | null
+    mustChangePassword?: boolean
     name?: string | null
   }
 }

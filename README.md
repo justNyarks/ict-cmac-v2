@@ -9,7 +9,7 @@ A Next.js App Router application for managing CMAC and PMAC documentation reques
 - Coordinator and director approval workflow
 - Shared event calendar with conflict detection
 - Dashboard and notifications for request activity
-- Prisma + PostgreSQL persistence
+- Prisma + MySQL persistence
 - NextAuth credential-based authentication
 
 ## Tech Stack
@@ -19,7 +19,7 @@ A Next.js App Router application for managing CMAC and PMAC documentation reques
 - TypeScript
 - Tailwind CSS
 - Prisma
-- PostgreSQL
+- MySQL
 - NextAuth
 
 ## Getting Started
@@ -28,7 +28,7 @@ A Next.js App Router application for managing CMAC and PMAC documentation reques
 
 - Node.js 18+
 - npm
-- PostgreSQL database
+- MySQL database
 
 ### Install
 
@@ -41,11 +41,21 @@ npm install
 Create a `.env` file with at least:
 
 ```bash
-DATABASE_URL="postgresql://..."
+DATABASE_URL="mysql://root@127.0.0.1:3306/ict_cmac"
 NEXTAUTH_SECRET="replace-me"
+NEXTAUTH_URL="http://localhost:3000"
+SERVER_ACTION_ALLOWED_ORIGINS="localhost:3000,127.0.0.1:3000"
 ```
 
+If you are using XAMPP's default local MySQL, `root` usually has no password, which matches the example above.
+
 ### Database
+
+If you do not already have MySQL running locally, start the bundled container first:
+
+```bash
+docker compose up -d db
+```
 
 ```bash
 npx prisma generate
@@ -72,6 +82,34 @@ Open `http://localhost:3000`.
 - `npm run build` - create a production build
 - `npm run start` - run the production build
 - `npm run lint` - run ESLint
+
+## Docker
+
+Build and run the app container:
+
+```bash
+docker compose up --build
+```
+
+The container expects these environment variables:
+
+```bash
+DATABASE_URL="mysql://root:root@127.0.0.1:3306/ict_cmac"
+NEXTAUTH_SECRET="replace-me"
+NEXTAUTH_URL="http://localhost:3000"
+SERVER_ACTION_ALLOWED_ORIGINS="localhost:3000,127.0.0.1:3000"
+```
+
+Optional container startup flags:
+
+```bash
+PRISMA_SKIP_DB_PUSH=0
+PRISMA_RUN_SEED=0
+```
+
+By default `docker compose` starts a local MySQL service named `db`, and the app container points Prisma at that service automatically.
+The container also runs `prisma db push` before starting Next.js so the schema stays in sync with the configured database.
+The container keeps the same runtime contract as the non-Docker app: `DATABASE_URL`, `NEXTAUTH_SECRET`, and `NEXTAUTH_URL` must be provided. `docker compose` loads them from `.env`, and the entrypoint fails fast if any required value is missing.
 
 ## Main Routes
 

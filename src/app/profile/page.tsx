@@ -4,13 +4,8 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { User, Lock, CheckCircle2, AlertCircle } from 'lucide-react'
 import { updateProfile } from './actions'
+import { getRoleLabel } from '@/lib/roles'
 import clsx from 'clsx'
-
-const ROLE_LABELS: Record<string, string> = {
-  SECRETARY: 'Secretary',
-  CMAC_COORDINATOR: 'CMAC Coordinator',
-  ICT_DIRECTOR: 'ICT Director',
-}
 
 export default function ProfilePage() {
   const { data: session, update } = useSession()
@@ -78,7 +73,7 @@ export default function ProfilePage() {
           <h2 className="text-white font-display text-2xl font-bold leading-tight">{user?.name || 'User'}</h2>
           <p className="text-emerald-300 text-sm font-medium mt-1">{user?.email}</p>
           <span className="mt-2 inline-block bg-white/10 text-emerald-100 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
-            {ROLE_LABELS[user?.role] || user?.role}
+            {getRoleLabel(user?.role)}
           </span>
           {user?.school && (
             <span className="mt-2 ml-2 inline-block bg-white/10 text-emerald-100 text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
@@ -90,6 +85,13 @@ export default function ProfilePage() {
 
       {/* Edit Form */}
       <div className="card p-8 space-y-8">
+        {user?.mustChangePassword && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-900">
+            <p className="text-sm font-bold">Password update required</p>
+            <p className="mt-1 text-xs text-amber-700">This account was created or reset by an administrator. Set a personal password before continuing normal PMAC work.</p>
+          </div>
+        )}
+
         {/* Identity */}
         <div className="space-y-4">
           <div className="flex items-center gap-3 pb-3 border-b border-slate-100">

@@ -9,13 +9,22 @@ import { findRequestConflicts } from "@/lib/conflicts"
 import { prisma } from "@/lib/prisma"
 import { getCalendarWhere, getRequestListWhere, revalidateRequestViews } from "@/lib/requestWorkflow"
 import { assertActionAccess } from "@/lib/security"
+import { sanitizeSingleLineText } from "@/lib/sanitization"
+import { isCoreWorkflowRole } from "@/lib/roles"
 import { isPrivilegedRole } from "@/lib/zeroTrust"
 
 export async function approveRequest(id: string, note: string, serviceType?: ServiceType) {
   const session = await assertActionAccess(['CMAC_COORDINATOR', 'ICT_DIRECTOR'], { zeroTrust: true })
 
   const { user } = session
-  const trimmedNote = note.trim()
+  const sanitizedNote = sanitizeSingleLineText(note, {
+    fieldName: 'Approval note',
+    maxLength: 191,
+  })
+  const actorName = sanitizeSingleLineText(user.name, {
+    fieldName: 'Actor name',
+    maxLength: 191,
+  }) || 'Unknown'
 
   await prisma.$transaction(async (tx) => {
     const request = await tx.serviceRequest.findUnique({ where: { id } })
@@ -27,7 +36,7 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
         where: { id },
         data: {
           status: 'COORDINATOR_APPROVED',
-          coordinatorNote: trimmedNote,
+          coordinatorNote: sanitizedNote,
           coordinatorId: user.id,
           coordinatorApprovedAt: new Date(),
         },
@@ -37,9 +46,9 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
         data: {
           requestId: id,
           action: 'COORDINATOR_APPROVED',
-          actorName: user.name || 'Unknown',
+          actorName,
           actorRole: user.role,
-          details: trimmedNote ? `Note: ${trimmedNote}` : 'Approved without additional notes.',
+          details: sanitizedNote ? `Note: ${sanitizedNote}` : 'Approved without additional notes.',
         },
       })
 
@@ -52,7 +61,7 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
       }
 
       const isDirectBypass = request.status === 'PENDING'
-      if (isDirectBypass && !trimmedNote) {
+      if (isDirectBypass && !sanitizedNote) {
         throw new Error('A bypass reason is required when the director skips coordinator review')
       }
 
@@ -60,7 +69,7 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
         where: { id },
         data: {
           status: 'DIRECTOR_APPROVED',
-          directorNote: trimmedNote,
+          directorNote: sanitizedNote,
           directorId: user.id,
           directorApprovedAt: new Date(),
           serviceType,
@@ -72,10 +81,10 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
         data: {
           requestId: id,
           action: isDirectBypass ? 'DIRECT_BYPASS' : 'DIRECTOR_APPROVED',
-          actorName: user.name || 'Unknown',
+          actorName,
           actorRole: user.role,
-          details: trimmedNote
-            ? `Note: ${trimmedNote}`
+          details: sanitizedNote
+            ? `Note: ${sanitizedNote}`
             : isDirectBypass
               ? 'Approved directly by the ICT Director.'
               : 'Approved without additional notes.',
@@ -95,6 +104,15 @@ export async function rejectRequest(id: string, note: string) {
   const session = await assertActionAccess(['CMAC_COORDINATOR', 'ICT_DIRECTOR'], { zeroTrust: true })
 
   const { user } = session
+  const sanitizedNote = sanitizeSingleLineText(note, {
+    fieldName: 'Rejection note',
+    maxLength: 191,
+    required: true,
+  })
+  const actorName = sanitizeSingleLineText(user.name, {
+    fieldName: 'Actor name',
+    maxLength: 191,
+  }) || 'Unknown'
 
   await prisma.$transaction(async (tx) => {
     const request = await tx.serviceRequest.findUnique({ where: { id } })
@@ -105,20 +123,20 @@ export async function rejectRequest(id: string, note: string) {
       where: { id },
       data: {
         status: 'REJECTED',
-        coordinatorNote: user.role === 'CMAC_COORDINATOR' ? note : undefined,
-        directorNote: user.role === 'ICT_DIRECTOR' ? note : undefined,
+        coordinatorNote: user.role === 'CMAC_COORDINATOR' ? sanitizedNote : undefined,
+        directorNote: user.role === 'ICT_DIRECTOR' ? sanitizedNote : undefined,
       },
     })
 
     await tx.auditLog.create({
-      data: {
-        requestId: id,
-        action: 'REJECTED',
-        actorName: user.name || 'Unknown',
-        actorRole: user.role,
-        details: `Rejected by ${user.role.replace('_', ' ')}. Note: ${note}`,
-      },
-    })
+        data: {
+          requestId: id,
+          action: 'REJECTED',
+          actorName,
+          actorRole: user.role,
+          details: `Rejected by ${user.role.replace('_', ' ')}. Note: ${sanitizedNote}`,
+        },
+      })
   })
 
   revalidateRequestViews(true)
@@ -128,6 +146,10 @@ export async function deleteRequest(id: string) {
   const session = await assertActionAccess(['CMAC_COORDINATOR', 'ICT_DIRECTOR'], { zeroTrust: true })
 
   const { user } = session
+  const actorName = sanitizeSingleLineText(user.name, {
+    fieldName: 'Actor name',
+    maxLength: 191,
+  }) || 'Unknown'
 
   await prisma.$transaction(async (tx) => {
     const request = await tx.serviceRequest.findUnique({
@@ -145,13 +167,13 @@ export async function deleteRequest(id: string) {
     })
 
     await tx.auditLog.create({
-      data: {
-        requestId: id,
-        action: 'DELETED',
-        actorName: user.name || 'Unknown',
-        actorRole: user.role,
-        details: `Request for "${request.eventTitle || 'Unknown'}" was deleted from the system.`,
-      },
+        data: {
+          requestId: id,
+          action: 'DELETED',
+          actorName,
+          actorRole: user.role,
+          details: `Request for "${request.eventTitle || 'Unknown'}" was deleted from the system.`,
+        },
     })
   })
 
@@ -168,8 +190,11 @@ export async function getRequests() {
     }
 
     const { user } = session
+    if (!isCoreWorkflowRole(user.role)) {
+      return []
+    }
     if (isPrivilegedRole(user.role)) {
-      await assertActionAccess(['CMAC_COORDINATOR', 'ICT_DIRECTOR'], { zeroTrust: true })
+      await assertActionAccess(['CMAC_COORDINATOR', 'ICT_DIRECTOR'])
     }
     const where = getRequestListWhere(user)
 
@@ -198,6 +223,7 @@ export async function getRequests() {
 export async function getCalendarRequests() {
   const session = await getServerSession(authOptions)
   if (!session || !session.user) return []
+  if (!isCoreWorkflowRole(session.user.role)) return []
 
   return prisma.serviceRequest.findMany({
     where: getCalendarWhere(session.user),
@@ -231,7 +257,7 @@ export async function checkConflict(startDate: string, startTime?: string, endDa
 }
 
 export async function getAuditLogs() {
-  await assertActionAccess(['CMAC_COORDINATOR'], { zeroTrust: true })
+  await assertActionAccess(['CMAC_COORDINATOR'])
 
   return prisma.auditLog.findMany({
     include: {

@@ -1,5 +1,6 @@
 import type { Session } from "next-auth"
 
+import { sanitizeAttachmentReference, sanitizeMultilineText, sanitizeSingleLineText } from "@/lib/sanitization"
 import type { DocumentationType, School, ServiceType } from "@/types"
 
 export interface RequestInput {
@@ -40,6 +41,10 @@ type SessionUser = Session["user"]
 
 const MIN_ADVANCE_DAYS = 3
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/
+const SCHOOLS = ['SNAHS', 'SBAHM', 'SITE', 'SASTE', 'MEDICINE', 'BEU', 'UNIVERSITY', 'HR'] as const satisfies readonly School[]
+const SERVICE_TYPES = ['CMAC', 'PMAC'] as const satisfies readonly ServiceType[]
+const DOCUMENTATION_TYPES = ['PHOTO', 'VIDEO', 'BOTH'] as const satisfies readonly DocumentationType[]
+const CAMPUS_TYPES = ['IN_CAMPUS', 'OFF_CAMPUS'] as const
 
 function parseDateOnly(value: string, label: string) {
   if (!value) {
@@ -76,19 +81,45 @@ function differenceInDays(start: Date, end: Date) {
   return Math.floor((end.getTime() - start.getTime()) / 86400000)
 }
 
+function assertAllowedValue<T extends string>(
+  value: string | null | undefined,
+  allowedValues: readonly T[],
+  fieldName: string
+): T {
+  const normalized = sanitizeSingleLineText(value, {
+    fieldName,
+    maxLength: 191,
+    required: true,
+  })
+
+  if (!allowedValues.includes(normalized as T)) {
+    throw new Error(`${fieldName} is invalid.`)
+  }
+
+  return normalized as T
+}
+
 export function validateAndNormalizeRequestInput(
   formData: RequestInput,
   user: SessionUser
 ): NormalizedRequestInput {
-  const eventTitle = formData.eventTitle.trim()
-  if (!eventTitle) {
-    throw new Error("Event title is required.")
-  }
+  const eventTitle = sanitizeSingleLineText(formData.eventTitle, {
+    fieldName: "Event title",
+    maxLength: 191,
+    required: true,
+  })
 
-  const eventVenue = formData.eventVenue.trim()
-  if (!eventVenue) {
-    throw new Error("Venue is required.")
-  }
+  const eventVenue = sanitizeSingleLineText(formData.eventVenue, {
+    fieldName: "Venue",
+    maxLength: 191,
+    required: true,
+  })
+  const school = assertAllowedValue(formData.school, SCHOOLS, 'School / Department')
+  const documentationType = assertAllowedValue(formData.documentationType, DOCUMENTATION_TYPES, 'Documentation type')
+  const campusType = assertAllowedValue(formData.campusType, CAMPUS_TYPES, 'Campus type')
+  const serviceType = formData.serviceType == null || formData.serviceType === ''
+    ? null
+    : assertAllowedValue(formData.serviceType, SERVICE_TYPES, 'Service type')
 
   const eventDate = parseDateOnly(formData.eventDate, "Start date")
   const endDate = formData.endDate?.trim()
@@ -141,13 +172,16 @@ export function validateAndNormalizeRequestInput(
     startTime,
     endTime,
     eventVenue,
-    school: formData.school,
-    serviceType: formData.serviceType ?? null,
-    documentationType: formData.documentationType,
-    letterUrl: formData.letterUrl?.trim() || null,
-    letterContent: formData.letterContent?.trim() || null,
+    school,
+    serviceType,
+    documentationType,
+    letterUrl: sanitizeAttachmentReference(formData.letterUrl),
+    letterContent: sanitizeMultilineText(formData.letterContent, {
+      fieldName: "Request letter",
+      maxLength: 10000,
+    }) || null,
     needsSameDayEdit: Boolean(formData.needsSameDayEdit),
     needsSameDayPhoto: Boolean(formData.needsSameDayPhoto),
-    campusType: formData.campusType ?? "IN_CAMPUS",
+    campusType,
   }
 }

@@ -7,6 +7,7 @@ import { AlertCircle, Briefcase, CheckCircle2, Mail, PencilLine, Shield, User as
 import clsx from 'clsx'
 
 import Portal from '@/components/Portal'
+import { runWithReverification } from '@/lib/reverificationClient'
 import type { Role } from '@/types'
 import { addUser, getUsers, removeUser, updateUserEmail } from './actions'
 
@@ -41,6 +42,36 @@ const ROLE_META: Record<Role, { label: string; color: string; icon: ElementType;
     color: 'bg-indigo-50 text-indigo-700 border-indigo-200',
     icon: Shield,
     desc: 'Final approver for all documentation requests.',
+  },
+  PMAC_DIRECTOR: {
+    label: 'PMAC Director',
+    color: 'bg-sky-50 text-sky-700 border-sky-200',
+    icon: Shield,
+    desc: 'PMAC director account with access to the PMAC module.',
+  },
+  PMAC_ASSISTANT_DIRECTOR: {
+    label: 'PMAC Assistant Director',
+    color: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+    icon: Briefcase,
+    desc: 'PMAC assistant director account with protected PMAC access.',
+  },
+  PMAC_SECRETARY: {
+    label: 'PMAC Secretary',
+    color: 'bg-teal-50 text-teal-700 border-teal-200',
+    icon: UserIcon,
+    desc: 'PMAC secretary account for future PMAC coordination flows.',
+  },
+  PMAC_EXECUTIVE: {
+    label: 'PMAC Executive',
+    color: 'bg-violet-50 text-violet-700 border-violet-200',
+    icon: UserIcon,
+    desc: 'PMAC executive account with protected PMAC dashboard access.',
+  },
+  PMAC_MEMBER: {
+    label: 'PMAC Member',
+    color: 'bg-slate-50 text-slate-700 border-slate-200',
+    icon: UserIcon,
+    desc: 'General PMAC member account with placeholder dashboard access.',
   },
 }
 
@@ -87,13 +118,22 @@ export default function AdminPageClient() {
       return showToast('error', 'Please fill all required fields.')
     }
 
-    const res = await addUser({
-      name: newUser.name,
-      email: newUser.email,
-      password: newUser.password,
-      role: newUser.role,
-      school: newUser.role === 'SECRETARY' ? newUser.school : undefined,
-    })
+    let res
+    try {
+      res = await runWithReverification(
+        () => addUser({
+          name: newUser.name,
+          email: newUser.email,
+          password: newUser.password,
+          role: newUser.role,
+          school: newUser.role === 'SECRETARY' ? newUser.school : undefined,
+        }),
+        result => result.success ? null : result.error
+      )
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to verify this change.')
+      return
+    }
 
     if (res.success) {
       showToast('success', 'User added successfully!')
@@ -108,7 +148,16 @@ export default function AdminPageClient() {
   async function handleRemoveUser(id: string, name: string | null) {
     if (!confirm(`Remove ${name || 'this user'}? This cannot be undone.`)) return
 
-    const res = await removeUser(id)
+    let res
+    try {
+      res = await runWithReverification(
+        () => removeUser(id),
+        result => result.success ? null : result.error
+      )
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to verify this change.')
+      return
+    }
     if (res.success) {
       showToast('success', 'User removed.')
       await fetchUsers()
@@ -127,7 +176,10 @@ export default function AdminPageClient() {
 
     setSavingEmail(true)
     try {
-      const res = await updateUserEmail(editingUser.id, editingEmail)
+      const res = await runWithReverification(
+        () => updateUserEmail(editingUser.id, editingEmail),
+        result => result.success ? null : result.error
+      )
       if (res.success) {
         if (editingUser.id === session?.user?.id) {
           await update()
@@ -140,12 +192,23 @@ export default function AdminPageClient() {
       } else {
         showToast('error', res.error || 'Failed to update email.')
       }
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to verify this change.')
     } finally {
       setSavingEmail(false)
     }
   }
 
-  const grouped = (['SECRETARY', 'CMAC_COORDINATOR', 'ICT_DIRECTOR'] as Role[]).map(role => ({
+  const grouped = ([
+    'SECRETARY',
+    'CMAC_COORDINATOR',
+    'ICT_DIRECTOR',
+    'PMAC_DIRECTOR',
+    'PMAC_ASSISTANT_DIRECTOR',
+    'PMAC_SECRETARY',
+    'PMAC_EXECUTIVE',
+    'PMAC_MEMBER',
+  ] as Role[]).map(role => ({
     role,
     users: users.filter(user => user.role === role),
   }))
@@ -179,7 +242,16 @@ export default function AdminPageClient() {
       )}
 
       <div className="grid gap-4 md:grid-cols-3">
-        {(['SECRETARY', 'CMAC_COORDINATOR', 'ICT_DIRECTOR'] as Role[]).map(role => {
+        {([
+          'SECRETARY',
+          'CMAC_COORDINATOR',
+          'ICT_DIRECTOR',
+          'PMAC_DIRECTOR',
+          'PMAC_ASSISTANT_DIRECTOR',
+          'PMAC_SECRETARY',
+          'PMAC_EXECUTIVE',
+          'PMAC_MEMBER',
+        ] as Role[]).map(role => {
           const meta = ROLE_META[role]
           const Icon = meta.icon
           const count = users.filter(user => user.role === role).length

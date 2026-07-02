@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -14,6 +14,87 @@ enum Role {
   SECRETARY
   CMAC_COORDINATOR
   ICT_DIRECTOR
+  PMAC_DIRECTOR
+  PMAC_ASSISTANT_DIRECTOR
+  PMAC_SECRETARY
+  PMAC_EXECUTIVE
+  PMAC_MEMBER
+}
+
+enum PmacClubRole {
+  DIRECTOR
+  ASSISTANT_DIRECTOR
+  SECRETARY
+  EXECUTIVE
+  MEMBER
+}
+
+enum PmacMemberStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum PmacEventStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum PmacEventDutyRole {
+  PHOTOGRAPHER
+  VIDEOGRAPHER
+  JOURNALIST
+  GRAPHIC_DESIGNER
+  ALL_AROUND
+}
+
+enum PmacAvailabilityStatus {
+  PENDING
+  YES
+  NO
+}
+
+enum PmacAttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  EXCUSED
+}
+
+enum PmacPollType {
+  GENERAL
+  EVENT
+  SCHEDULE_PREFERENCE
+  OFFICER_DECISION
+}
+
+enum PmacPollStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+enum PmacPollResultsVisibility {
+  IMMEDIATE
+  AFTER_CLOSE
+}
+
+enum PmacVoteChoice {
+  YES
+  NO
+  ABSTAIN
+}
+
+enum PmacActivityEntityType {
+  EVENT
+  POLL
+  MEMBER
+  ACCOUNT
+  ATTACHMENT
+  REPORT
 }
 
 enum School {
@@ -51,22 +132,217 @@ enum RequestStatus {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  password      String    // In a real app, use hashed passwords
-  role          Role      @default(SECRETARY)
-  school        School?
-  
+  id           String      @id @default(cuid())
+  name         String?
+  email        String      @unique
+  password     String // Stores a bcrypt password hash
+  role         Role        @default(SECRETARY)
+  school       School?
+  isActive     Boolean     @default(true)
+  mustChangePassword Boolean @default(false)
+  passwordUpdatedAt  DateTime?
+  pmacMemberId String?     @unique
+  pmacMember   PmacMember? @relation(fields: [pmacMemberId], references: [id], onDelete: SetNull)
+
   // Requests submitted by this user (if Secretary)
   submittedRequests ServiceRequest[] @relation("SubmittedBy")
-  
-  // Requests reviewed by this user (if Coordinator or Director)
-  coordinatorReviews ServiceRequest[] @relation("Coordinator")
-  directorReviews    ServiceRequest[] @relation("Director")
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  // Requests reviewed by this user (if Coordinator or Director)
+  coordinatorReviews      ServiceRequest[]      @relation("Coordinator")
+  directorReviews         ServiceRequest[]      @relation("Director")
+  createdPmacEvents       PmacEvent[]           @relation("PmacEventCreatedBy")
+  approvedPmacEvents      PmacEvent[]           @relation("PmacEventApprovedBy")
+  assignedPmacEventDuties PmacEventAssignment[] @relation("PmacEventAssignmentAssignedBy")
+  recordedPmacAttendance  PmacAttendance[]      @relation("PmacAttendanceRecordedBy")
+  createdPmacPolls        PmacPoll[]            @relation("PmacPollCreatedBy")
+  castPmacVotes           PmacVote[]            @relation("PmacVoteCastBy")
+  pmacActivityLogs        PmacActivityLog[]     @relation("PmacActivityActor")
+  uploadedPmacAttachments PmacAttachment[]      @relation("PmacAttachmentUploadedBy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PmacMember {
+  id                 String                @id @default(cuid())
+  fullName           String
+  clubRole           PmacClubRole          @default(MEMBER)
+  status             PmacMemberStatus      @default(ACTIVE)
+  email              String                @unique
+  phone              String?
+  courseOrDepartment String?
+  notes              String?               @db.Text
+  joinedAt           DateTime?
+  account            User?
+  eventAssignments   PmacEventAssignment[]
+  attendanceRecords  PmacAttendance[]
+  votes              PmacVote[]
+  attachments        PmacAttachment[]
+  activityLogs       PmacActivityLog[]
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  @@index([clubRole, status])
+}
+
+model PmacEvent {
+  id              String                @id @default(cuid())
+  title           String
+  description     String?               @db.Text
+  venue           String
+  startDateTime   DateTime
+  endDateTime     DateTime
+  status          PmacEventStatus       @default(DRAFT)
+  createdById     String
+  createdBy       User                  @relation("PmacEventCreatedBy", fields: [createdById], references: [id])
+  approvedById    String?
+  approvedBy      User?                 @relation("PmacEventApprovedBy", fields: [approvedById], references: [id])
+  approvalRemarks String?               @db.Text
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  completedAt     DateTime?
+  assignments     PmacEventAssignment[]
+  attendance      PmacAttendance[]
+  polls           PmacPoll[]
+  attachments     PmacAttachment[]
+  activityLogs    PmacActivityLog[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([status, startDateTime])
+  @@index([createdById, status])
+}
+
+model PmacEventAssignment {
+  id                   String                 @id @default(cuid())
+  eventId              String
+  event                PmacEvent              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  memberId             String
+  member               PmacMember             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  assignmentRole       PmacEventDutyRole
+  availabilityResponse PmacAvailabilityStatus @default(PENDING)
+  assignmentNotes      String?                @db.Text
+  assignedById         String
+  assignedBy           User                   @relation("PmacEventAssignmentAssignedBy", fields: [assignedById], references: [id])
+  respondedAt          DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@unique([eventId, memberId, assignmentRole])
+  @@index([memberId, availabilityResponse])
+  @@index([eventId, assignmentRole])
+}
+
+model PmacAttendance {
+  id           String               @id @default(cuid())
+  eventId      String
+  event        PmacEvent            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  memberId     String
+  member       PmacMember           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  status       PmacAttendanceStatus
+  notes        String?              @db.Text
+  recordedById String
+  recordedBy   User                 @relation("PmacAttendanceRecordedBy", fields: [recordedById], references: [id])
+  recordedAt   DateTime             @default(now())
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@unique([eventId, memberId])
+  @@index([eventId, status])
+}
+
+model PmacPoll {
+  id                String                    @id @default(cuid())
+  title             String
+  description       String?                   @db.Text
+  type              PmacPollType              @default(GENERAL)
+  status            PmacPollStatus            @default(DRAFT)
+  opensAt           DateTime?
+  closesAt          DateTime?
+  createdById       String
+  createdBy         User                      @relation("PmacPollCreatedBy", fields: [createdById], references: [id])
+  linkedEventId     String?
+  linkedEvent       PmacEvent?                @relation(fields: [linkedEventId], references: [id], onDelete: SetNull)
+  resultsVisibility PmacPollResultsVisibility @default(AFTER_CLOSE)
+  votes             PmacVote[]
+  attachments       PmacAttachment[]
+  activityLogs      PmacActivityLog[]
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  @@index([status, opensAt, closesAt])
+  @@index([createdById, status])
+  @@index([linkedEventId])
+}
+
+model PmacVote {
+  id             String         @id @default(cuid())
+  pollId         String
+  poll           PmacPoll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  voterId        String
+  voter          User           @relation("PmacVoteCastBy", fields: [voterId], references: [id], onDelete: Cascade)
+  voterMemberId  String
+  voterMember    PmacMember     @relation(fields: [voterMemberId], references: [id], onDelete: Cascade)
+  selectedOption PmacVoteChoice
+  votedAt        DateTime       @default(now())
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@unique([pollId, voterId])
+  @@index([voterId, votedAt])
+  @@index([voterMemberId, votedAt])
+}
+
+model PmacAttachment {
+  id           String      @id @default(cuid())
+  eventId      String?
+  event        PmacEvent?  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  pollId       String?
+  poll         PmacPoll?   @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  memberId     String?
+  member       PmacMember? @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  uploadedById String
+  uploadedBy   User        @relation("PmacAttachmentUploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
+  fileName     String
+  storedName   String
+  filePath     String
+  mimeType     String
+  sizeBytes    Int
+  description  String?     @db.Text
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([eventId, createdAt])
+  @@index([pollId, createdAt])
+  @@index([memberId, createdAt])
+  @@index([uploadedById, createdAt])
+}
+
+model PmacActivityLog {
+  id         String                 @id @default(cuid())
+  entityType PmacActivityEntityType
+  entityId   String
+  eventId    String?
+  event      PmacEvent?             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  pollId     String?
+  poll       PmacPoll?              @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  memberId   String?
+  member     PmacMember?            @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  actorId    String?
+  actor      User?                  @relation("PmacActivityActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorName  String
+  actorRole  Role
+  action     String
+  summary    String
+  details    String?                @db.Text
+  createdAt  DateTime               @default(now())
+
+  @@index([entityType, entityId, createdAt])
+  @@index([eventId, createdAt])
+  @@index([pollId, createdAt])
+  @@index([memberId, createdAt])
+  @@index([actorId, createdAt])
 }
 
 model ServiceRequest {
@@ -81,45 +357,45 @@ model ServiceRequest {
   serviceType       ServiceType?
   documentationType DocumentationType
   campusType        CampusType        @default(IN_CAMPUS)
-  letterUrl         String?           // Path or URL to the uploaded request letter
+  letterUrl         String? // Path or URL to the uploaded request letter
   eventDetails      String?           @db.Text
   letterContent     String?           @db.Text
-  
-  // Technical requirements
-  needsSameDayEdit  Boolean           @default(false)
-  needsSameDayPhoto Boolean           @default(false)
-  
-  status            RequestStatus     @default(PENDING)
-  
-  // Notes from approvers
-  coordinatorNote   String?
-  directorNote      String?
-  
-  // Relations
-  secretary         User              @relation("SubmittedBy", fields: [secretaryId], references: [id])
-  secretaryId       String
-  
-  coordinator       User?             @relation("Coordinator", fields: [coordinatorId], references: [id])
-  coordinatorId     String?
-  coordinatorApprovedAt DateTime?
-  
-  director          User?             @relation("Director", fields: [directorId], references: [id])
-  directorId        String?
-  directorApprovedAt DateTime?
-  deletedAt         DateTime?
 
-  logs              AuditLog[]
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  // Technical requirements
+  needsSameDayEdit  Boolean @default(false)
+  needsSameDayPhoto Boolean @default(false)
+
+  status RequestStatus @default(PENDING)
+
+  // Notes from approvers
+  coordinatorNote String?
+  directorNote    String?
+
+  // Relations
+  secretary   User   @relation("SubmittedBy", fields: [secretaryId], references: [id])
+  secretaryId String
+
+  coordinator           User?     @relation("Coordinator", fields: [coordinatorId], references: [id])
+  coordinatorId         String?
+  coordinatorApprovedAt DateTime?
+
+  director           User?     @relation("Director", fields: [directorId], references: [id])
+  directorId         String?
+  directorApprovedAt DateTime?
+  deletedAt          DateTime?
+
+  logs      AuditLog[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 }
 
 model AuditLog {
-  id              String         @id @default(cuid())
-  requestId       String
-  request         ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  action          String         // e.g., "SUBMITTED", "COORDINATOR_APPROVED", "DIRECTOR_APPROVED", "REJECTED", "DIRECT_BYPASS"
-  actorName       String
-  actorRole       Role
-  details         String?        @db.Text
-  createdAt       DateTime       @default(now())
+  id        String         @id @default(cuid())
+  requestId String
+  request   ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  action    String // e.g., "SUBMITTED", "COORDINATOR_APPROVED", "DIRECTOR_APPROVED", "REJECTED", "DIRECT_BYPASS"
+  actorName String
+  actorRole Role
+  details   String?        @db.Text
+  createdAt DateTime       @default(now())
 }

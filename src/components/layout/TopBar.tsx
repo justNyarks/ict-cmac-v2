@@ -9,6 +9,7 @@ import { Bell, CheckCircle2, Clock, Info, X, XCircle } from 'lucide-react'
 import clsx from 'clsx'
 
 import { getNotifications } from '@/app/notificationsActions'
+import { getRoleLabel } from '@/lib/roles'
 import type { AppNotification } from '@/types/notifications'
 
 const PAGE_TITLES: Record<string, string> = {
@@ -18,6 +19,26 @@ const PAGE_TITLES: Record<string, string> = {
   '/calendar': 'Event Calendar',
   '/analytics': 'Analytics',
   '/admin': 'Admin',
+  '/coordinator/pmac': 'PMAC Management',
+  '/coordinator/pmac/officers': 'Officer Assignments',
+  '/coordinator/pmac/events': 'PMAC Event Oversight',
+  '/coordinator/pmac/polls': 'PMAC Poll Oversight',
+  '/coordinator/pmac/activity': 'PMAC Activity Oversight',
+  '/coordinator/pmac/reports': 'PMAC Reports',
+  '/pmac/director': 'PMAC Director',
+  '/pmac/assistant-director': 'PMAC Assistant Director',
+  '/pmac/secretary': 'PMAC Secretary',
+  '/pmac/executive': 'PMAC Executive',
+  '/pmac/member': 'PMAC Member',
+  '/pmac/events': 'PMAC Events',
+  '/pmac/events/new': 'New PMAC Event',
+  '/pmac/polls': 'PMAC Polls',
+  '/pmac/polls/new': 'New PMAC Poll',
+  '/pmac/calendar': 'PMAC Calendar',
+  '/pmac/assignments': 'PMAC Assignments',
+  '/pmac/attendance': 'PMAC Attendance',
+  '/pmac/activity': 'PMAC Activity',
+  '/pmac/reports': 'PMAC Reports',
 }
 
 const DISMISSED_NOTIFICATIONS_KEY = 'dismissedNotifications.v2'
@@ -51,7 +72,13 @@ export default function TopBar() {
     const dismissed = JSON.parse(localStorage.getItem(DISMISSED_NOTIFICATIONS_KEY) || '[]') as string[]
     setDismissedNotifs(dismissed)
 
-    const fetchNotifs = () => getNotifications().then(setNotifications)
+    const fetchNotifs = () =>
+      getNotifications()
+        .then(setNotifications)
+        .catch((error) => {
+          console.error('TOPBAR_NOTIFICATIONS_ERROR:', error)
+          setNotifications([])
+        })
     fetchNotifs()
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -93,18 +120,25 @@ export default function TopBar() {
     localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(updated))
   }
 
-  const handleNotifClick = (id: string) => {
-    const updated = Array.from(new Set([...dismissedNotifs, id]))
+  const handleNotifClick = (notification: AppNotification) => {
+    const updated = Array.from(new Set([...dismissedNotifs, notification.id]))
     setDismissedNotifs(updated)
     localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(updated))
     setShowNotifs(false)
-    router.push('/requests')
+    router.push(notification.href)
   }
+
+  const pageTitle = PAGE_TITLES[pathname]
+    ?? (pathname.startsWith('/pmac/events/')
+      ? 'PMAC Event Workspace'
+      : pathname.startsWith('/pmac/polls/')
+        ? 'PMAC Poll Workspace'
+        : 'ICT CMAC')
 
   return (
     <header className="flex items-center justify-between h-20 px-10 bg-white/80 backdrop-blur-md border-b border-emerald-100/50 shadow-sm flex-shrink-0 z-20 print:hidden">
       <h1 className="font-display text-xl text-[var(--text-dark)] font-extrabold uppercase tracking-tight">
-        {pathname === '/' ? 'Dashboard Overview' : (PAGE_TITLES[pathname] ?? 'ICT CMAC')}
+        {pathname === '/' ? 'Dashboard Overview' : pageTitle}
       </h1>
 
       <div className="flex items-center gap-8">
@@ -144,7 +178,7 @@ export default function TopBar() {
                   visibleNotifs.map((notification) => (
                     <div
                       key={notification.id}
-                      onClick={() => handleNotifClick(notification.id)}
+                      onClick={() => handleNotifClick(notification)}
                       className="flex items-start gap-3 p-4 hover:bg-emerald-50/50 transition-colors border-b border-emerald-50/50 group cursor-pointer"
                     >
                       <div className={clsx(
@@ -175,11 +209,11 @@ export default function TopBar() {
                 )}
               </div>
               <Link
-                href="/requests"
+                href={session?.user?.role?.startsWith('PMAC_') ? '/pmac/events' : session?.user?.role === 'CMAC_COORDINATOR' ? '/coordinator/pmac' : '/requests'}
                 onClick={() => setShowNotifs(false)}
                 className="block p-4 text-center text-[10px] font-black text-emerald-600 uppercase tracking-widest hover:bg-emerald-50 transition-colors"
               >
-                View All Requests
+                View Notifications
               </Link>
             </div>
           )}
@@ -191,7 +225,7 @@ export default function TopBar() {
             <p className="text-sm font-bold text-[var(--text-dark)] leading-none group-hover:text-emerald-700 transition-colors">{session?.user?.name || 'User Name'}</p>
             <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mt-1.5 flex items-center justify-end gap-1">
               <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></span>
-              Online
+              {getRoleLabel(session?.user?.role)}
             </p>
           </div>
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform duration-300">

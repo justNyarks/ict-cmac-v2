@@ -5,11 +5,13 @@ import { prisma } from "@/lib/prisma"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { getNotificationFeed } from "@/lib/notifications"
+import { isCoreWorkflowRole } from "@/lib/roles"
 
 export async function getDashboardStats() {
   noStore()
   const session = await getServerSession(authOptions)
   if (!session || !session.user) return null
+  if (!isCoreWorkflowRole(session.user.role)) return null
 
   const emptyStats = {
     total: 0,

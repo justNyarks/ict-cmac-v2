@@ -6,6 +6,7 @@ import { CheckCircle, Download, Eye, Filter, FileCheck2, Printer, X, Trash2 } fr
 import clsx from 'clsx'
 import Portal from '@/components/Portal'
 import ConfirmModal from '@/components/ConfirmModal'
+import { runWithReverification } from '@/lib/reverificationClient'
 
 const FILTERS = ['ALL', 'PENDING', 'COORDINATOR_APPROVED', 'DIRECTOR_APPROVED', 'REJECTED'] as const
 
@@ -114,7 +115,7 @@ export default function RequestsPage() {
     }
 
     try {
-      await approveRequest(id, note, selectedServiceType)
+      await runWithReverification(() => approveRequest(id, note, selectedServiceType))
       await fetchRequests()
 
       setSelected(null)
@@ -126,7 +127,7 @@ export default function RequestsPage() {
 
   async function handleReject(id: string) {
     try {
-      await rejectRequest(id, note)
+      await runWithReverification(() => rejectRequest(id, note))
       await fetchRequests()
       setSelected(null)
       setNote('')
@@ -138,7 +139,7 @@ export default function RequestsPage() {
   async function handleDelete() {
     if (!idToDelete) return;
     try {
-      await deleteRequest(idToDelete)
+      await runWithReverification(() => deleteRequest(idToDelete))
       await fetchRequests()
       setIdToDelete(null)
       setNote('')

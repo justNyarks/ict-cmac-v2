@@ -6,27 +6,17 @@ import {
   CalendarDays,
   BarChart3,
   FilePlus2,
+  Briefcase,
   ClipboardList,
   Settings,
-  Camera,
   User,
   Aperture,
   History,
-  ShieldCheck,
+  CheckCircle,
+  Vote,
 } from 'lucide-react'
 import clsx from 'clsx'
-
-const NAV_ITEMS = [
-  { href: '/',           label: 'Dashboard',  icon: LayoutDashboard },
-  { href: '/requests',   label: 'Requests',   icon: ClipboardList   },
-  { href: '/new-request',label: 'New Request', icon: FilePlus2      },
-  { href: '/calendar',   label: 'Calendar',   icon: CalendarDays    },
-  { href: '/analytics',  label: 'Analytics',  icon: BarChart3       },
-  { href: '/logs',       label: 'System Logs', icon: History      },
-  { href: '/admin',      label: 'Admin',      icon: Settings        },
-  { href: '/zero-trust', label: 'Zero Trust', icon: ShieldCheck     },
-  { href: '/profile',    label: 'My Profile', icon: User            },
-]
+import { getHomePathForRole, getRoleLabel, isPmacSystemRole } from '@/lib/roles'
 
 import { useSession, signOut } from 'next-auth/react'
 import { LogOut } from 'lucide-react'
@@ -36,13 +26,49 @@ export default function Sidebar() {
   const { data: session } = useSession()
   const user = session?.user
   const role = user?.role
+  const homeHref = getHomePathForRole(role)
 
-  const navItems = NAV_ITEMS.filter(item => {
+  const navItems = [
+    { href: homeHref, label: 'Dashboard', icon: LayoutDashboard },
+    ...(isPmacSystemRole(role)
+      ? [
+          { href: '/pmac/events', label: 'PMAC Events', icon: ClipboardList },
+          { href: '/pmac/polls', label: 'PMAC Polls', icon: Vote },
+          { href: '/pmac/calendar', label: 'PMAC Calendar', icon: CalendarDays },
+          { href: '/pmac/assignments', label: 'Assignments', icon: Briefcase },
+          { href: '/pmac/activity', label: 'Activity', icon: History },
+          ...(role === 'PMAC_DIRECTOR' || role === 'PMAC_ASSISTANT_DIRECTOR' || role === 'PMAC_SECRETARY'
+            ? [{ href: '/pmac/reports', label: 'Reports', icon: BarChart3 }]
+            : []),
+          ...(role === 'PMAC_SECRETARY'
+            ? [{ href: '/pmac/attendance', label: 'Attendance', icon: CheckCircle }]
+            : []),
+        ]
+      : [
+          { href: '/requests', label: 'Requests', icon: ClipboardList },
+          { href: '/new-request', label: 'New Request', icon: FilePlus2 },
+          { href: '/calendar', label: 'Calendar', icon: CalendarDays },
+          { href: '/analytics', label: 'Analytics', icon: BarChart3 },
+          { href: '/logs', label: 'System Logs', icon: History },
+          { href: '/admin', label: 'Admin', icon: Settings },
+        ]),
+    ...(role === 'CMAC_COORDINATOR'
+      ? [
+          { href: '/coordinator/pmac', label: 'PMAC Management', icon: Settings },
+          { href: '/coordinator/pmac/officers', label: 'Officer Assignments', icon: Briefcase },
+          { href: '/coordinator/pmac/events', label: 'PMAC Events', icon: ClipboardList },
+          { href: '/coordinator/pmac/polls', label: 'PMAC Polls', icon: Vote },
+          { href: '/coordinator/pmac/activity', label: 'PMAC Activity', icon: History },
+          { href: '/coordinator/pmac/reports', label: 'PMAC Reports', icon: BarChart3 },
+        ]
+      : []),
+    { href: '/profile', label: 'My Profile', icon: User },
+  ]
+  const filteredNavItems = navItems.filter(item => {
     if (item.href === '/new-request') return role === 'SECRETARY' || role === 'ICT_DIRECTOR'
     if (item.href === '/admin') return role === 'ICT_DIRECTOR'
     if (item.href === '/analytics') return role === 'CMAC_COORDINATOR' || role === 'ICT_DIRECTOR'
     if (item.href === '/logs') return role === 'CMAC_COORDINATOR'
-    if (item.href === '/zero-trust') return role === 'CMAC_COORDINATOR' || role === 'ICT_DIRECTOR'
     return true
   })
 
@@ -65,7 +91,7 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-5 space-y-1">
-        {navItems.map(({ href, label, icon: Icon }) => {
+        {filteredNavItems.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || (href !== '/' && pathname.startsWith(href))
           return (
             <Link
@@ -94,7 +120,7 @@ export default function Sidebar() {
             </div>
             <div>
               <p className="text-white text-xs font-semibold">{user?.name || 'Loading...'}</p>
-              <p className="text-emerald-300 text-[10px]">{user?.role?.replace('_', ' ')}</p>
+              <p className="text-emerald-300 text-[10px]">{getRoleLabel(user?.role)}</p>
             </div>
           </div>
           <button 

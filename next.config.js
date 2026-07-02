@@ -1,19 +1,76 @@
+const os = require('os')
+
+const DEFAULT_ALLOWED_ORIGINS = [
+  'localhost:3000',
+  '127.0.0.1:3000',
+  '192.168.0.127:3000',
+  'localhost:3001',
+  '127.0.0.1:3001',
+  '192.168.0.127:3001',
+]
+
+function normalizeAllowedOrigin(value) {
+  if (!value) {
+    return null
+  }
+
+  try {
+    const url = value.includes('://') ? new URL(value) : new URL(`http://${value}`)
+    return url.port ? `${url.hostname}:${url.port}` : url.hostname
+  } catch {
+    return null
+  }
+}
+
+function getLocalNetworkOrigins() {
+  const interfaces = os.networkInterfaces()
+  const ports = ['3000', '3001']
+  const origins = []
+
+  for (const addresses of Object.values(interfaces)) {
+    for (const address of addresses || []) {
+      if (address.family !== 'IPv4' || address.internal) {
+        continue
+      }
+
+      for (const port of ports) {
+        origins.push(`${address.address}:${port}`)
+      }
+    }
+  }
+
+  return origins
+}
+
+function getAllowedOrigins() {
+  const envOrigins = (process.env.SERVER_ACTION_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean)
+
+  const configuredOrigins = [
+    ...DEFAULT_ALLOWED_ORIGINS,
+    ...getLocalNetworkOrigins(),
+    process.env.NEXTAUTH_URL,
+    ...envOrigins,
+  ]
+    .map(normalizeAllowedOrigin)
+    .filter(Boolean)
+
+  return [...new Set(configuredOrigins)]
+}
+
+const allowedOrigins = getAllowedOrigins()
+const allowedDevOrigins = [...new Set(allowedOrigins.map(origin => origin.split(':')[0]))]
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  allowedDevOrigins: ['localhost', '127.0.0.1', '192.168.0.127'],
+  allowedDevOrigins,
   experimental: {
     serverActions: {
-      allowedOrigins: [
-        'localhost:3000',
-        '127.0.0.1:3000',
-        '192.168.0.127:3000',
-        'localhost:3001',
-        '127.0.0.1:3001',
-        '192.168.0.127:3001',
-      ],
+      allowedOrigins,
     },
   },
 }
 
 module.exports = nextConfig
-// trigger restart

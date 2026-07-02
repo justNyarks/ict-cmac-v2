@@ -8,6 +8,7 @@ import { findRequestConflicts } from "@/lib/conflicts"
 import { prisma } from "@/lib/prisma"
 import { revalidateRequestViews } from "@/lib/requestWorkflow"
 import { validateAndNormalizeRequestInput } from "@/lib/requestValidation"
+import { sanitizeSingleLineText } from "@/lib/sanitization"
 import type { DocumentationType, School, ServiceType } from "@/types"
 
 export async function createServiceRequest(formData: {
@@ -49,7 +50,10 @@ export async function createServiceRequest(formData: {
       return { success: false, error: 'Directly approved events must have a service type.' }
     }
 
-    const bypassReason = formData.directorBypassReason?.trim() || ''
+    const bypassReason = sanitizeSingleLineText(formData.directorBypassReason, {
+      fieldName: 'Bypass reason',
+      maxLength: 191,
+    })
     if (isDirector && !bypassReason) {
       return { success: false, error: 'A bypass reason is required when the director adds an event directly to the calendar.' }
     }
@@ -100,7 +104,10 @@ export async function createServiceRequest(formData: {
         data: {
           requestId: createdRequest.id,
           action: isDirector ? 'DIRECT_BYPASS' : 'SUBMITTED',
-          actorName: user.name || 'Unknown',
+          actorName: sanitizeSingleLineText(user.name, {
+            fieldName: 'Actor name',
+            maxLength: 191,
+          }) || 'Unknown',
           actorRole: user.role,
           details: isDirector
             ? `Event directly added to calendar by Director. Reason: ${bypassReason}`

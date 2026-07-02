@@ -2,6 +2,7 @@ import type { RequestStatus } from "@prisma/client"
 import { differenceInCalendarDays, isSameDay, max, min } from "date-fns"
 
 import { prisma } from "@/lib/prisma"
+import { sanitizeSingleLineText } from "@/lib/sanitization"
 
 interface ConflictCheckInput {
   startDate: string
@@ -153,6 +154,10 @@ export async function findRequestConflicts({
   try {
     const requestStart = new Date(startDate)
     const requestEnd = endDate?.trim() ? new Date(endDate) : new Date(startDate)
+    const normalizedVenue = sanitizeSingleLineText(eventVenue, {
+      fieldName: 'Venue',
+      maxLength: 191,
+    })
 
     const overlappingBookings = await prisma.serviceRequest.findMany({
       where: {
@@ -182,7 +187,7 @@ export async function findRequestConflicts({
     })
 
     const conflicts = overlappingBookings.filter((booking) => {
-      if (eventVenue && booking.eventVenue !== eventVenue) {
+      if (normalizedVenue && booking.eventVenue !== normalizedVenue) {
         return false
       }
 

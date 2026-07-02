@@ -3,11 +3,12 @@
 import type { Role, School } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { assertActionAccess } from "@/lib/security"
+import { sanitizeEmailAddress, sanitizePasswordInput, sanitizeSingleLineText } from "@/lib/sanitization"
 import bcrypt from "bcryptjs"
 import { revalidatePath } from "next/cache"
 
 export async function getUsers() {
-  await assertActionAccess(['ICT_DIRECTOR'], { zeroTrust: true })
+  await assertActionAccess(['ICT_DIRECTOR'])
 
   return prisma.user.findMany({
     select: {
@@ -31,20 +32,37 @@ export async function addUser(data: { name: string; email: string; password: str
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' }
   }
 
-  if (!data.name.trim() || !data.email.trim() || !data.password.trim()) {
-    return { success: false, error: 'Name, email, and password are required.' }
+  let sanitizedName: string
+  let normalizedEmail: string
+  let sanitizedPassword: string
+
+  try {
+    sanitizedName = sanitizeSingleLineText(data.name, {
+      fieldName: 'Name',
+      maxLength: 191,
+      required: true,
+    })
+    normalizedEmail = sanitizeEmailAddress(data.email)
+    sanitizedPassword = sanitizePasswordInput(data.password, {
+      fieldName: 'Password',
+      required: true,
+      minLength: 8,
+      maxLength: 255,
+    })
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Invalid user details.' }
   }
 
   // Check if email already exists
-  const existing = await prisma.user.findUnique({ where: { email: data.email } })
+  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } })
   if (existing) return { success: false, error: 'A user with this email already exists.' }
 
-  const hashedPassword = await bcrypt.hash(data.password, 10)
+  const hashedPassword = await bcrypt.hash(sanitizedPassword, 10)
 
   await prisma.user.create({
     data: {
-      name: data.name.trim(),
-      email: data.email.trim().toLowerCase(),
+      name: sanitizedName,
+      email: normalizedEmail,
       password: hashedPassword,
       role: data.role,
       school: data.role === 'SECRETARY' ? data.school || null : null,
@@ -79,14 +97,12 @@ export async function updateUserEmail(id: string, email: string) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' }
   }
 
-  const normalizedEmail = email.trim().toLowerCase()
-  if (!normalizedEmail) {
-    return { success: false, error: 'Email is required.' }
-  }
+  let normalizedEmail: string
 
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (!emailPattern.test(normalizedEmail)) {
-    return { success: false, error: 'Please enter a valid email address.' }
+  try {
+    normalizedEmail = sanitizeEmailAddress(email)
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Please enter a valid email address.' }
   }
 
   const user = await prisma.user.findUnique({
