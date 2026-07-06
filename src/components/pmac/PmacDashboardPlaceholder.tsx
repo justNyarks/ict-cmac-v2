@@ -146,14 +146,19 @@ export default function PmacDashboardPlaceholder({
       </div>
 
       {stats.length ? (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-2xl border border-emerald-100 bg-white/80 px-4 py-3 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Quick Reminders</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           {stats.map((item) => (
-            <div key={item.label} className="card p-5">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{item.label}</p>
-              <p className="mt-3 text-3xl font-bold text-slate-800">{item.value}</p>
-              <p className="mt-2 text-sm text-slate-500">{item.helper}</p>
+            <div key={item.label} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">{item.label}</p>
+                <p className="text-lg font-bold text-slate-800">{item.value}</p>
+              </div>
+              <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-500">{item.helper}</p>
             </div>
           ))}
+          </div>
         </div>
       ) : null}
 
