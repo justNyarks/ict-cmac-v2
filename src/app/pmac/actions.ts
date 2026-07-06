@@ -3439,6 +3439,7 @@ export async function getPmacProjects() {
         : null,
       canManageProject: hasLauncherAccess || hasAssignedHeadAccess || hasUnassignedBranchAccess,
       canManageMembers: hasLauncherAccess || hasAssignedHeadAccess || hasUnassignedBranchAccess,
+      mustSelectProjectMembers: session.user.role === 'PMAC_EXECUTIVE' && (hasAssignedHeadAccess || hasUnassignedBranchAccess),
       canCloseProject: session.user.role === 'CMAC_COORDINATOR' || (hasAssignedHeadAccess && hasDirectorCheck),
       isWaitingForDirectorCheck: hasAssignedHeadAccess && !hasDirectorCheck && project.status !== 'COMPLETED',
       canDirectorCheckProject: session.user.role === 'PMAC_DIRECTOR' && !hasDirectorCheck && project.status !== 'COMPLETED',
@@ -3900,6 +3901,10 @@ export async function assignPmacProjectMembers(payload: PmacProjectMemberPayload
     const project = await assertPmacProjectAccess(projectId, session.user)
     const assignableMemberIds = memberIds.filter(memberId => memberId !== project.headMemberId)
     const requiredSpecialty = PMAC_EXECUTIVE_BRANCH_SPECIALTY[project.branch]
+
+    if (session.user.role === 'PMAC_EXECUTIVE' && assignableMemberIds.length === 0) {
+      throw new Error(`Please select at least one active ${PMAC_SPECIALTY_LABELS[requiredSpecialty]} member for this project.`)
+    }
 
     const members = assignableMemberIds.length
       ? await prisma.pmacMember.findMany({

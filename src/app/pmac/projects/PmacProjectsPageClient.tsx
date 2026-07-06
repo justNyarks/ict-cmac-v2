@@ -368,6 +368,7 @@ export default function PmacProjectsPageClient() {
             ? PMAC_PROJECT_STATUSES
             : PMAC_PROJECT_STATUSES.filter(status => status !== 'COMPLETED')
           const canChangeProjectStatus = project.canManageProject && (project.status !== 'COMPLETED' || project.canCloseProject)
+          const needsMemberSelection = project.mustSelectProjectMembers && selectedTeamMemberIds.length === 0
           return (
             <div key={project.id} className="card p-6">
               <div className="flex flex-wrap items-start justify-between gap-4">
@@ -475,10 +476,15 @@ export default function PmacProjectsPageClient() {
                       <p className="mt-2 text-xs text-slate-500">
                         Showing active members with {PMAC_SPECIALTY_LABELS[requiredSpecialty]} specialty.
                       </p>
+                      {needsMemberSelection ? (
+                        <p className="mt-1 text-xs font-semibold text-amber-700">
+                          Select at least one eligible member before saving.
+                        </p>
+                      ) : null}
                     </div>
                     <button
                       type="button"
-                      disabled={isPending}
+                      disabled={isPending || needsMemberSelection}
                       onClick={() => assignProjectMembers(project.id, selectedTeamMemberIds)}
                       className="rounded-xl bg-[#064e3b] px-4 py-2 text-sm font-semibold text-white hover:bg-[#065f46] disabled:opacity-60 md:self-start"
                     >
