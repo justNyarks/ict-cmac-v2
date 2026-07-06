@@ -93,6 +93,14 @@ export const PMAC_SPECIALTY_LABELS: Record<PmacSpecialtyValue, string> = {
   ALL_AROUND: 'All Around',
 }
 
+export const PMAC_EXECUTIVE_BRANCH_SPECIALTY: Record<PmacExecutiveTitleValue, PmacSpecialtyValue> = {
+  HEAD_PHOTOGRAPHER: 'PHOTOGRAPHY',
+  HEAD_VIDEOGRAPHER: 'VIDEOGRAPHY',
+  HEAD_GRAPHIC_DESIGNER: 'GRAPHIC_DESIGN',
+  HEAD_JOURNALIST: 'JOURNALISM',
+  TECHNICAL_HEAD: 'TECHNICAL_SUPPORT',
+}
+
 const PMAC_SPECIALTY_DUTY_ROLE_MAP: Record<PmacSpecialtyValue, readonly DutyRoleType[]> = {
   PHOTOGRAPHY: ['PHOTOGRAPHER'],
   VIDEOGRAPHY: ['VIDEOGRAPHER'],

@@ -9,6 +9,7 @@ import {
   calculatePmacReadinessScore,
   getDutyRolesForSpecialties,
   PMAC_EXECUTIVE_TITLE_LABELS,
+  PMAC_EXECUTIVE_BRANCH_SPECIALTY,
   getRecommendedAssignmentRoles,
   getPmacReadinessLabel,
   isPmacAssignmentResponderRole,
@@ -34,6 +35,7 @@ import {
   PMAC_PROJECT_LINK_TYPES,
   PMAC_PROJECT_MILESTONE_STATUSES,
   PMAC_PROJECT_STATUSES,
+  PMAC_SPECIALTY_LABELS,
   PMAC_VOTE_CHOICES,
   isPmacProjectLauncherRole,
 } from '@/lib/pmac'
@@ -3077,6 +3079,14 @@ async function getPmacProjectPeopleOptions() {
         clubRole: true,
         executiveTitle: true,
         email: true,
+        specialties: {
+          select: {
+            specialty: true,
+          },
+          orderBy: {
+            specialty: 'asc',
+          },
+        },
       },
       orderBy: [
         { clubRole: 'asc' },
@@ -3302,6 +3312,14 @@ export async function getPmacProjects() {
               email: true,
               clubRole: true,
               executiveTitle: true,
+              specialties: {
+                select: {
+                  specialty: true,
+                },
+                orderBy: {
+                  specialty: 'asc',
+                },
+              },
             },
           },
           assignedBy: {
@@ -3738,6 +3756,7 @@ export async function assignPmacProjectMembers(payload: PmacProjectMemberPayload
 
     const project = await assertPmacProjectAccess(projectId, session.user)
     const assignableMemberIds = memberIds.filter(memberId => memberId !== project.headMemberId)
+    const requiredSpecialty = PMAC_EXECUTIVE_BRANCH_SPECIALTY[project.branch]
 
     const members = assignableMemberIds.length
       ? await prisma.pmacMember.findMany({
@@ -3746,6 +3765,11 @@ export async function assignPmacProjectMembers(payload: PmacProjectMemberPayload
               in: assignableMemberIds,
             },
             status: 'ACTIVE',
+            specialties: {
+              some: {
+                specialty: requiredSpecialty,
+              },
+            },
           },
           select: {
             id: true,
@@ -3755,7 +3779,7 @@ export async function assignPmacProjectMembers(payload: PmacProjectMemberPayload
       : []
 
     if (members.length !== assignableMemberIds.length) {
-      throw new Error('All selected project members must be active PMAC members.')
+      throw new Error(`All selected project members must be active PMAC members with ${PMAC_SPECIALTY_LABELS[requiredSpecialty]} specialty.`)
     }
 
     await prisma.$transaction(async (tx) => {

@@ -15,6 +15,7 @@ import {
   updatePmacProjectStatus,
 } from '@/app/pmac/actions'
 import {
+  PMAC_EXECUTIVE_BRANCH_SPECIALTY,
   PMAC_EXECUTIVE_TITLE_LABELS,
   PMAC_PROJECT_MILESTONE_STATUS_LABELS,
   PMAC_PROJECT_MILESTONE_STATUSES,
@@ -22,6 +23,7 @@ import {
   PMAC_PROJECT_LINK_TYPES,
   PMAC_PROJECT_STATUS_LABELS,
   PMAC_PROJECT_STATUSES,
+  PMAC_SPECIALTY_LABELS,
   getPmacProjectMilestoneStatusBadgeClass,
   getPmacProjectStatusBadgeClass,
 } from '@/lib/pmac'
@@ -341,8 +343,13 @@ export default function PmacProjectsPageClient() {
           const milestoneForm = milestoneForms[project.id] ?? DEFAULT_MILESTONE_FORM
           const linkForm = linkForms[project.id] ?? DEFAULT_LINK_FORM
           const assignedMemberIds = project.memberAssignments.map(assignment => assignment.memberId)
-          const selectedTeamMemberIds = teamForms[project.id] ?? assignedMemberIds
-          const teamOptions = (board?.assignableMembers ?? []).filter(member => member.id !== project.headMemberId)
+          const requiredSpecialty = PMAC_EXECUTIVE_BRANCH_SPECIALTY[project.branch]
+          const teamOptions = (board?.assignableMembers ?? []).filter(member => (
+            member.id !== project.headMemberId
+            && member.specialties.some(entry => entry.specialty === requiredSpecialty)
+          ))
+          const teamOptionIds = new Set(teamOptions.map(member => member.id))
+          const selectedTeamMemberIds = (teamForms[project.id] ?? assignedMemberIds).filter(memberId => teamOptionIds.has(memberId))
           return (
             <div key={project.id} className="card p-6">
               <div className="flex flex-wrap items-start justify-between gap-4">
@@ -410,25 +417,30 @@ export default function PmacProjectsPageClient() {
                 </div>
                 {project.canManageMembers ? (
                   <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
-                    <select
-                      multiple
-                      value={selectedTeamMemberIds}
-                      onChange={event => setTeamForms(previous => ({
-                        ...previous,
-                        [project.id]: Array.from(event.target.selectedOptions, option => option.value),
-                      }))}
-                      className="min-h-32 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-200"
-                    >
-                      {teamOptions.map(member => (
-                        <option key={member.id} value={member.id}>
-                          {member.fullName}{member.executiveTitle ? ` - ${PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle]}` : ''}
-                        </option>
-                      ))}
-                    </select>
+                    <div>
+                      <select
+                        multiple
+                        value={selectedTeamMemberIds}
+                        onChange={event => setTeamForms(previous => ({
+                          ...previous,
+                          [project.id]: Array.from(event.target.selectedOptions, option => option.value),
+                        }))}
+                        className="min-h-32 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-200"
+                      >
+                        {teamOptions.map(member => (
+                          <option key={member.id} value={member.id}>
+                            {member.fullName}{member.executiveTitle ? ` - ${PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle]}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-2 text-xs text-slate-500">
+                        Showing active members with {PMAC_SPECIALTY_LABELS[requiredSpecialty]} specialty.
+                      </p>
+                    </div>
                     <button
                       type="button"
                       disabled={isPending}
-                      onClick={() => assignProjectMembers(project.id, assignedMemberIds)}
+                      onClick={() => assignProjectMembers(project.id, selectedTeamMemberIds)}
                       className="rounded-xl bg-[#064e3b] px-4 py-2 text-sm font-semibold text-white hover:bg-[#065f46] disabled:opacity-60 md:self-start"
                     >
                       Assign Members
