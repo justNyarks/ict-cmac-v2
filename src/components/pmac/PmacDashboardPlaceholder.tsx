@@ -104,9 +104,9 @@ export default function PmacDashboardPlaceholder({
             <p className="mt-2 text-sm font-medium text-emerald-100">{roleLabel}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/10 px-5 py-4 text-right text-white backdrop-blur-sm">
-            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-200">Module Status</p>
-            <p className="mt-1 text-2xl font-bold">V4 Ready</p>
-            <p className="mt-1 text-xs text-emerald-100">Operations, governance, visibility, and exports are live.</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-200">Today&apos;s Focus</p>
+            <p className="mt-1 text-2xl font-bold">PMAC Operations</p>
+            <p className="mt-1 text-xs text-emerald-100">Review events, assignments, attendance, and project updates.</p>
           </div>
         </div>
       </div>
