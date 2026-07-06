@@ -170,7 +170,7 @@ export default function PmacProjectCalendarPageClient() {
                         >
                           <span className="block truncate">{item.type === 'MILESTONE' ? 'Milestone: ' : ''}{item.title}</span>
                           <span className="mt-0.5 block truncate text-[10px] opacity-75">
-                            {PMAC_EXECUTIVE_TITLE_LABELS[item.branch]} · {item.type === 'PROJECT' ? PMAC_PROJECT_STATUS_LABELS[item.status] : PMAC_PROJECT_MILESTONE_STATUS_LABELS[item.status]}
+                            {PMAC_EXECUTIVE_TITLE_LABELS[item.branch]} | {item.type === 'PROJECT' ? PMAC_PROJECT_STATUS_LABELS[item.status] : PMAC_PROJECT_MILESTONE_STATUS_LABELS[item.status]}
                           </span>
                         </Link>
                       ))}

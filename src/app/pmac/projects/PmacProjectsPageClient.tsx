@@ -372,15 +372,17 @@ export default function PmacProjectsPageClient() {
                     </div>
                   ) : null}
                 </div>
-                <select
-                  value={project.status}
-                  onChange={event => changeProjectStatus(project.id, event.target.value as PmacProjectStatus)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-200"
-                >
-                  {PMAC_PROJECT_STATUSES.map(status => (
-                    <option key={status} value={status}>{PMAC_PROJECT_STATUS_LABELS[status]}</option>
-                  ))}
-                </select>
+                {project.canManageProject ? (
+                  <select
+                    value={project.status}
+                    onChange={event => changeProjectStatus(project.id, event.target.value as PmacProjectStatus)}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-200"
+                  >
+                    {PMAC_PROJECT_STATUSES.map(status => (
+                      <option key={status} value={status}>{PMAC_PROJECT_STATUS_LABELS[status]}</option>
+                    ))}
+                  </select>
+                ) : null}
               </div>
 
               <div className="mt-5">
@@ -388,7 +390,7 @@ export default function PmacProjectsPageClient() {
                   <div className="h-full rounded-full bg-emerald-500" style={{ width: `${project.health.progress}%` }} />
                 </div>
                 <p className="mt-2 text-xs text-slate-500">
-                  {project.health.progress}% milestone completion{project.health.nextDueAt ? ` · Next due ${formatDate(project.health.nextDueAt)}` : ''}
+                  {project.health.progress}% milestone completion{project.health.nextDueAt ? ` | Next due ${formatDate(project.health.nextDueAt)}` : ''}
                 </p>
               </div>
 
@@ -444,15 +446,21 @@ export default function PmacProjectsPageClient() {
                           <p className="text-sm font-bold text-slate-800">{milestone.title}</p>
                           <p className="mt-1 text-xs text-slate-500">Due {formatDate(milestone.dueDate)}</p>
                         </div>
-                        <select
-                          value={milestone.status}
-                          onChange={event => changeMilestoneStatus(milestone.id, event.target.value as PmacProjectMilestoneStatus)}
-                          className={`rounded-xl border px-3 py-2 text-xs font-bold outline-none ${getPmacProjectMilestoneStatusBadgeClass(milestone.status)}`}
-                        >
-                          {PMAC_PROJECT_MILESTONE_STATUSES.map(status => (
-                            <option key={status} value={status}>{PMAC_PROJECT_MILESTONE_STATUS_LABELS[status]}</option>
-                          ))}
-                        </select>
+                        {project.canManageProject ? (
+                          <select
+                            value={milestone.status}
+                            onChange={event => changeMilestoneStatus(milestone.id, event.target.value as PmacProjectMilestoneStatus)}
+                            className={`rounded-xl border px-3 py-2 text-xs font-bold outline-none ${getPmacProjectMilestoneStatusBadgeClass(milestone.status)}`}
+                          >
+                            {PMAC_PROJECT_MILESTONE_STATUSES.map(status => (
+                              <option key={status} value={status}>{PMAC_PROJECT_MILESTONE_STATUS_LABELS[status]}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className={`rounded-xl border px-3 py-2 text-xs font-bold ${getPmacProjectMilestoneStatusBadgeClass(milestone.status)}`}>
+                            {PMAC_PROJECT_MILESTONE_STATUS_LABELS[milestone.status]}
+                          </span>
+                        )}
                       </div>
                       {milestone.notes ? <p className="mt-2 text-xs text-slate-500">{milestone.notes}</p> : null}
                     </div>
@@ -463,29 +471,31 @@ export default function PmacProjectsPageClient() {
                   )}
                 </div>
 
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
-                  <p className="text-sm font-bold text-slate-800">Add Milestone</p>
-                  <input
-                    value={milestoneForm.title}
-                    onChange={event => setMilestoneForms(previous => ({ ...previous, [project.id]: { ...milestoneForm, title: event.target.value } }))}
-                    placeholder="Milestone title"
-                    className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-200"
-                  />
-                  <input
-                    type="date"
-                    value={milestoneForm.dueDate}
-                    onChange={event => setMilestoneForms(previous => ({ ...previous, [project.id]: { ...milestoneForm, dueDate: event.target.value } }))}
-                    className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-200"
-                  />
-                  <button
-                    type="button"
-                    disabled={isPending}
-                    onClick={() => submitMilestone(project.id)}
-                    className="mt-3 w-full rounded-xl bg-[#064e3b] px-4 py-2 text-sm font-semibold text-white hover:bg-[#065f46] disabled:opacity-60"
-                  >
-                    Add Milestone
-                  </button>
-                </div>
+                {project.canManageProject ? (
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
+                    <p className="text-sm font-bold text-slate-800">Add Milestone</p>
+                    <input
+                      value={milestoneForm.title}
+                      onChange={event => setMilestoneForms(previous => ({ ...previous, [project.id]: { ...milestoneForm, title: event.target.value } }))}
+                      placeholder="Milestone title"
+                      className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-200"
+                    />
+                    <input
+                      type="date"
+                      value={milestoneForm.dueDate}
+                      onChange={event => setMilestoneForms(previous => ({ ...previous, [project.id]: { ...milestoneForm, dueDate: event.target.value } }))}
+                      className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-200"
+                    />
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => submitMilestone(project.id)}
+                      className="mt-3 w-full rounded-xl bg-[#064e3b] px-4 py-2 text-sm font-semibold text-white hover:bg-[#065f46] disabled:opacity-60"
+                    >
+                      Add Milestone
+                    </button>
+                  </div>
+                ) : null}
               </div>
 
               <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_0.8fr]">
@@ -524,41 +534,43 @@ export default function PmacProjectsPageClient() {
                   )}
                 </div>
 
-                <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
-                  <p className="text-sm font-bold text-slate-800">Attach Link</p>
-                  <select
-                    value={linkForm.type}
-                    onChange={event => setLinkForms(previous => ({ ...previous, [project.id]: { ...linkForm, type: event.target.value as PmacProjectLinkType } }))}
-                    className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-                  >
-                    {PMAC_PROJECT_LINK_TYPES.map(type => (
-                      <option key={type} value={type}>{PMAC_PROJECT_LINK_TYPE_LABELS[type]}</option>
-                    ))}
-                  </select>
-                  <input
-                    value={linkForm.label}
-                    onChange={event => setLinkForms(previous => ({ ...previous, [project.id]: { ...linkForm, label: event.target.value } }))}
-                    placeholder="Link label"
-                    className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-                  />
-                  <input
-                    value={linkForm.url}
-                    onChange={event => setLinkForms(previous => ({ ...previous, [project.id]: { ...linkForm, url: event.target.value } }))}
-                    placeholder="https://..."
-                    className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
-                  />
-                  <button
-                    type="button"
-                    disabled={isPending}
-                    onClick={() => submitProjectLink(project.id)}
-                    className="mt-3 w-full rounded-xl bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-60"
-                  >
-                    Attach Link
-                  </button>
-                </div>
+                {project.canManageProject ? (
+                  <div className="rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
+                    <p className="text-sm font-bold text-slate-800">Attach Link</p>
+                    <select
+                      value={linkForm.type}
+                      onChange={event => setLinkForms(previous => ({ ...previous, [project.id]: { ...linkForm, type: event.target.value as PmacProjectLinkType } }))}
+                      className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
+                    >
+                      {PMAC_PROJECT_LINK_TYPES.map(type => (
+                        <option key={type} value={type}>{PMAC_PROJECT_LINK_TYPE_LABELS[type]}</option>
+                      ))}
+                    </select>
+                    <input
+                      value={linkForm.label}
+                      onChange={event => setLinkForms(previous => ({ ...previous, [project.id]: { ...linkForm, label: event.target.value } }))}
+                      placeholder="Link label"
+                      className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
+                    />
+                    <input
+                      value={linkForm.url}
+                      onChange={event => setLinkForms(previous => ({ ...previous, [project.id]: { ...linkForm, url: event.target.value } }))}
+                      placeholder="https://..."
+                      className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
+                    />
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => submitProjectLink(project.id)}
+                      className="mt-3 w-full rounded-xl bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-60"
+                    >
+                      Attach Link
+                    </button>
+                  </div>
+                ) : null}
               </div>
 
-              {project.status !== 'COMPLETED' ? (
+              {project.canManageProject && project.status !== 'COMPLETED' ? (
                 <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
                   <p className="text-sm font-bold text-slate-800">Submit Project Output</p>
                   <textarea

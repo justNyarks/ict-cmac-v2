@@ -35,7 +35,7 @@ export default function Sidebar() {
     ...(isPmacSystemRole(role)
       ? [
           { href: '/pmac/events', label: 'PMAC Events', icon: ClipboardList },
-          ...(role === 'PMAC_DIRECTOR' || role === 'PMAC_SECRETARY' || role === 'PMAC_EXECUTIVE'
+          ...(role === 'PMAC_DIRECTOR' || role === 'PMAC_SECRETARY' || role === 'PMAC_EXECUTIVE' || role === 'PMAC_MEMBER'
             ? [{ href: '/pmac/projects', label: 'Branch Projects', icon: FolderKanban }]
             : []),
           { href: '/pmac/polls', label: 'PMAC Polls', icon: Vote },

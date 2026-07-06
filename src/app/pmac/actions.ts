@@ -3343,6 +3343,9 @@ export async function getPmacProjects() {
   const viewerBranch = await getExecutiveBranchForUser(session.user)
   const mappedProjects = projects.map(project => ({
     ...mapProjectForClient(project),
+    canManageProject: isPmacProjectLauncherRole(session.user.role)
+      || (session.user.role === 'PMAC_EXECUTIVE' && project.headMemberId === session.user.pmacMemberId)
+      || (session.user.role === 'PMAC_EXECUTIVE' && !project.headMemberId && project.branch === viewerBranch),
     canManageMembers: isPmacProjectLauncherRole(session.user.role)
       || (session.user.role === 'PMAC_EXECUTIVE' && project.headMemberId === session.user.pmacMemberId)
       || (session.user.role === 'PMAC_EXECUTIVE' && !project.headMemberId && project.branch === viewerBranch),
