@@ -74,7 +74,7 @@ export async function addUser(data: { name: string; email: string; password: str
 }
 
 export async function removeUser(id: string) {
-  let session
+  let session: Awaited<ReturnType<typeof assertActionAccess>> | undefined
   try {
     session = await assertActionAccess(['ICT_DIRECTOR'], { zeroTrust: true })
   } catch (error) {

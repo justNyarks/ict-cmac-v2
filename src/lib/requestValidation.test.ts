@@ -6,6 +6,9 @@ const baseUser = {
   id: 'user-1',
   role: 'SECRETARY' as const,
   school: 'SNAHS' as const,
+  isActive: true,
+  pmacMemberId: null,
+  mustChangePassword: false,
 }
 
 const validInput = {
@@ -49,6 +52,10 @@ describe('validateAndNormalizeRequestInput', () => {
     }, {
       id: 'user-2',
       role: 'ICT_DIRECTOR',
+      school: null,
+      isActive: true,
+      pmacMemberId: null,
+      mustChangePassword: false,
     })).toThrow('Service type is invalid.')
   })
 })

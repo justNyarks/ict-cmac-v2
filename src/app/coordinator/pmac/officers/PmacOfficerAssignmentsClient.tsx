@@ -5,7 +5,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertCircle, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import clsx from 'clsx'
 
+import { PMAC_EXECUTIVE_TITLES, PMAC_EXECUTIVE_TITLE_LABELS } from '@/lib/pmac'
 import {
+  getDefaultClubRoleForSystemRole,
   PMAC_CLUB_ROLES,
   PMAC_CLUB_ROLE_LABELS,
   PMAC_MEMBER_STATUSES,
@@ -16,7 +18,7 @@ import {
 } from '@/lib/roles'
 import { runWithReverification } from '@/lib/reverificationClient'
 import { assignPmacOfficerRole, getPmacMembers } from '../actions'
-import type { PmacClubRole, PmacMemberStatus, Role } from '@/types'
+import type { PmacClubRole, PmacExecutiveTitle, PmacMemberStatus, Role } from '@/types'
 
 type PmacSystemRole = Extract<Role, 'PMAC_DIRECTOR' | 'PMAC_ASSISTANT_DIRECTOR' | 'PMAC_SECRETARY' | 'PMAC_EXECUTIVE' | 'PMAC_MEMBER'>
 type PmacMemberRecord = Awaited<ReturnType<typeof getPmacMembers>>[number]
@@ -68,6 +70,7 @@ export default function PmacOfficerAssignmentsClient() {
           memberId: member.id,
           clubRole: member.clubRole as PmacClubRole,
           status: member.status as PmacMemberStatus,
+          executiveTitle: (member.executiveTitle as PmacExecutiveTitle | null) ?? null,
           systemRole: member.account?.role as PmacSystemRole,
         }),
         response => response.success ? null : response.error
@@ -121,17 +124,18 @@ export default function PmacOfficerAssignmentsClient() {
       </div>
 
       <div className="card overflow-hidden">
-        <div className="grid grid-cols-[1.4fr_1fr_1fr_0.9fr_auto] gap-4 border-b border-slate-100 px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
+        <div className="grid grid-cols-[1.3fr_1fr_1fr_1.1fr_0.9fr_auto] gap-4 border-b border-slate-100 px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
           <span>Member</span>
           <span>Club Role</span>
           <span>System Access</span>
+          <span>Executive Title</span>
           <span>Status</span>
           <span className="text-right">Action</span>
         </div>
 
         <div className="divide-y divide-slate-50">
           {members.map(member => (
-            <div key={member.id} className="grid grid-cols-[1.4fr_1fr_1fr_0.9fr_auto] items-center gap-4 px-6 py-4">
+            <div key={member.id} className="grid grid-cols-[1.3fr_1fr_1fr_1.1fr_0.9fr_auto] items-center gap-4 px-6 py-4">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-800">{member.fullName}</p>
                 <p className="text-xs text-slate-400">{member.email}</p>
@@ -141,12 +145,20 @@ export default function PmacOfficerAssignmentsClient() {
                 value={member.clubRole}
                 onChange={event => {
                   const clubRole = event.target.value as PmacClubRole
+                  const nextSystemRole = clubRole === 'EXECUTIVE'
+                    ? 'PMAC_EXECUTIVE'
+                    : member.account?.role === 'PMAC_EXECUTIVE'
+                      ? getDefaultSystemRoleForClubRole(clubRole)
+                      : getDefaultSystemRoleForClubRole(clubRole)
                   updateLocalMember(member.id, {
                     clubRole,
+                    executiveTitle: clubRole === 'EXECUTIVE' || nextSystemRole === 'PMAC_EXECUTIVE'
+                      ? member.executiveTitle
+                      : null,
                     account: member.account
                       ? {
                           ...member.account,
-                          role: getDefaultSystemRoleForClubRole(clubRole),
+                          role: nextSystemRole,
                         }
                       : member.account,
                   })
@@ -162,19 +174,46 @@ export default function PmacOfficerAssignmentsClient() {
 
               <select
                 value={member.account?.role}
-                onChange={event => updateLocalMember(member.id, {
-                  account: member.account
-                    ? {
-                        ...member.account,
-                        role: event.target.value as PmacSystemRole,
-                      }
-                    : member.account,
-                })}
+                onChange={event => {
+                  const systemRole = event.target.value as PmacSystemRole
+                  const nextClubRole = systemRole === 'PMAC_EXECUTIVE'
+                    ? 'EXECUTIVE'
+                    : member.clubRole === 'EXECUTIVE'
+                      ? getDefaultClubRoleForSystemRole(systemRole)
+                      : member.clubRole
+
+                  updateLocalMember(member.id, {
+                    clubRole: nextClubRole,
+                    executiveTitle: systemRole === 'PMAC_EXECUTIVE' || nextClubRole === 'EXECUTIVE'
+                      ? member.executiveTitle
+                      : null,
+                    account: member.account
+                      ? {
+                          ...member.account,
+                          role: systemRole,
+                        }
+                      : member.account,
+                  })
+                }}
                 className="rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
               >
                 {PMAC_SYSTEM_ROLES.map(role => (
                   <option key={role} value={role}>
                     {ROLE_LABELS[role]}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={member.executiveTitle ?? ''}
+                onChange={event => updateLocalMember(member.id, { executiveTitle: event.target.value ? event.target.value as PmacExecutiveTitle : null })}
+                disabled={member.clubRole !== 'EXECUTIVE' && member.account?.role !== 'PMAC_EXECUTIVE'}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:bg-slate-50 disabled:text-slate-400"
+              >
+                <option value="">{member.clubRole === 'EXECUTIVE' || member.account?.role === 'PMAC_EXECUTIVE' ? 'Select title' : 'Not executive'}</option>
+                {PMAC_EXECUTIVE_TITLES.map((title) => (
+                  <option key={title} value={title}>
+                    {PMAC_EXECUTIVE_TITLE_LABELS[title]}
                   </option>
                 ))}
               </select>

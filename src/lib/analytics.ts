@@ -1,20 +1,10 @@
+import { SCHOOL_LABELS, SCHOOLS } from '@/lib/schools'
 import { prisma } from '@/lib/prisma'
 import { getRequestListWhere } from '@/lib/requestWorkflow'
 import type { DocumentationType, RequestStatus, School, ServiceType } from '@/types'
 import type { Session } from 'next-auth'
 
-export const SCHOOLS: School[] = ['SNAHS', 'SBAHM', 'SITE', 'SASTE', 'MEDICINE', 'BEU', 'UNIVERSITY', 'HR']
-
-export const SCHOOL_LABELS: Record<School, string> = {
-  SNAHS: 'SNAHS',
-  SBAHM: 'SBAHM',
-  SITE: 'SITE',
-  SASTE: 'SASTE',
-  MEDICINE: 'SOM',
-  BEU: 'BEU',
-  UNIVERSITY: 'UNIVERSITY',
-  HR: 'HR',
-}
+export { SCHOOL_LABELS, SCHOOLS }
 
 type AnalyticsSourceRequest = {
   school: School

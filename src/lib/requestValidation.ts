@@ -1,7 +1,8 @@
 import type { Session } from "next-auth"
 
+import { SCHOOLS } from "@/lib/schools"
 import { sanitizeAttachmentReference, sanitizeMultilineText, sanitizeSingleLineText } from "@/lib/sanitization"
-import type { DocumentationType, School, ServiceType } from "@/types"
+import type { CampusType, DocumentationType, Role, School, ServiceType } from "@/types"
 
 export interface RequestInput {
   eventTitle: string
@@ -11,13 +12,14 @@ export interface RequestInput {
   endTime?: string
   eventVenue: string
   school: School
-  serviceType?: ServiceType | null
+  serviceType?: ServiceType | '' | null
   documentationType: DocumentationType
   letterUrl?: string | null
   letterContent?: string | null
   needsSameDayEdit?: boolean
   needsSameDayPhoto?: boolean
-  campusType?: "IN_CAMPUS" | "OFF_CAMPUS"
+  campusType?: CampusType
+  directorBypassReason?: string | null
 }
 
 export interface NormalizedRequestInput {
@@ -34,14 +36,37 @@ export interface NormalizedRequestInput {
   letterContent: string | null
   needsSameDayEdit: boolean
   needsSameDayPhoto: boolean
-  campusType: "IN_CAMPUS" | "OFF_CAMPUS"
+  campusType: CampusType
 }
 
 type SessionUser = Session["user"]
+export type RequestQualityStep = 1 | 2 | 3 | 4
+export type RequestSubmissionMethod = 'upload' | 'generate'
+export type RequestQualityAssessment = {
+  errors: string[]
+  warnings: string[]
+  score: number
+}
+export type RequestQualityInput = Pick<
+  RequestInput,
+  | 'eventTitle'
+  | 'eventDate'
+  | 'endDate'
+  | 'startTime'
+  | 'endTime'
+  | 'eventVenue'
+  | 'serviceType'
+  | 'needsSameDayEdit'
+  | 'directorBypassReason'
+> & {
+  school: School | ''
+  documentationType: DocumentationType | ''
+  campusType?: CampusType | ''
+  letterContent?: string | null
+}
 
 const MIN_ADVANCE_DAYS = 3
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/
-const SCHOOLS = ['SNAHS', 'SBAHM', 'SITE', 'SASTE', 'MEDICINE', 'BEU', 'UNIVERSITY', 'HR'] as const satisfies readonly School[]
 const SERVICE_TYPES = ['CMAC', 'PMAC'] as const satisfies readonly ServiceType[]
 const DOCUMENTATION_TYPES = ['PHOTO', 'VIDEO', 'BOTH'] as const satisfies readonly DocumentationType[]
 const CAMPUS_TYPES = ['IN_CAMPUS', 'OFF_CAMPUS'] as const
@@ -81,6 +106,13 @@ function differenceInDays(start: Date, end: Date) {
   return Math.floor((end.getTime() - start.getTime()) / 86400000)
 }
 
+function formatDateInput(date: Date) {
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function assertAllowedValue<T extends string>(
   value: string | null | undefined,
   allowedValues: readonly T[],
@@ -97,6 +129,148 @@ function assertAllowedValue<T extends string>(
   }
 
   return normalized as T
+}
+
+export function getMinimumAdvanceRequestDate(now = new Date()) {
+  const minimumDate = startOfLocalDay(now)
+  minimumDate.setDate(minimumDate.getDate() + MIN_ADVANCE_DAYS)
+  return formatDateInput(minimumDate)
+}
+
+export function buildRequestQualityAssessment(
+  formData: RequestQualityInput,
+  options: {
+    role?: Role | null
+    submissionMethod: RequestSubmissionMethod
+    maxStep: RequestQualityStep
+    now?: Date
+    hasUploadedLetter?: boolean
+  }
+): RequestQualityAssessment {
+  const errors: string[] = []
+  const warnings: string[] = []
+  const requiredChecks: boolean[] = []
+  const isDirector = options.role === 'ICT_DIRECTOR'
+  const referenceDate = startOfLocalDay(options.now ?? new Date())
+
+  if (options.maxStep >= 1) {
+    requiredChecks.push(!!formData.campusType)
+    if (!formData.campusType) errors.push('Location type is missing.')
+
+    requiredChecks.push(!!formData.school)
+    if (!formData.school) errors.push('School/Department is missing.')
+
+    const eventTitle = formData.eventTitle?.trim() ?? ''
+    requiredChecks.push(!!eventTitle)
+    if (!eventTitle) {
+      errors.push('Event title is missing.')
+    } else if (eventTitle.length < 6) {
+      warnings.push('Event title is very short and may need refinement.')
+    }
+
+    requiredChecks.push(!!formData.eventDate)
+    if (!formData.eventDate) errors.push('Event date is missing.')
+
+    requiredChecks.push(!!formData.endDate)
+    if (!formData.endDate) errors.push('End date is missing.')
+
+    requiredChecks.push(!!formData.startTime)
+    if (!formData.startTime) errors.push('Start time is missing.')
+
+    requiredChecks.push(!!formData.endTime)
+    if (!formData.endTime) errors.push('End time is missing.')
+
+    const venue = formData.eventVenue?.trim() ?? ''
+    requiredChecks.push(!!venue)
+    if (!venue) errors.push('Venue is missing.')
+
+    if (formData.eventDate) {
+      const eventDate = parseDateOnly(formData.eventDate, 'Event date')
+      const leadDays = differenceInDays(referenceDate, startOfLocalDay(eventDate))
+      if (leadDays < 0) {
+        errors.push('Event date cannot be in the past.')
+      } else if (leadDays < MIN_ADVANCE_DAYS && !isDirector) {
+        errors.push('Lead time is below the 3-day requirement.')
+      } else if (leadDays <= 5) {
+        warnings.push('This request is close to the lead-time minimum.')
+      }
+    }
+
+    if (formData.eventDate && formData.endDate && formData.endDate < formData.eventDate) {
+      errors.push('End date cannot be before the start date.')
+    }
+
+    if (
+      formData.eventDate
+      && formData.endDate
+      && formData.eventDate === formData.endDate
+      && formData.startTime
+      && formData.endTime
+      && formData.startTime >= formData.endTime
+    ) {
+      errors.push('End time must be after the start time for a single-day event.')
+    }
+
+    if (formData.campusType === 'OFF_CAMPUS' && venue && venue.length < 6) {
+      warnings.push('Off-campus venue details look incomplete.')
+    }
+  }
+
+  if (options.maxStep >= 2) {
+    requiredChecks.push(!!formData.documentationType)
+    if (!formData.documentationType) errors.push('Documentation type has not been selected.')
+
+    if (isDirector) {
+      requiredChecks.push(!!formData.serviceType)
+      if (!formData.serviceType) errors.push('Service type is missing.')
+    }
+
+    if (formData.documentationType === 'PHOTO' && formData.needsSameDayEdit) {
+      warnings.push('Same-day edit is enabled while documentation type is Photo only.')
+    }
+  }
+
+  if (options.maxStep >= 3) {
+    const hasDocument = options.submissionMethod === 'generate'
+      ? !!formData.letterContent?.trim()
+      : !!options.hasUploadedLetter
+    requiredChecks.push(hasDocument)
+    if (!hasDocument) {
+      errors.push(options.submissionMethod === 'generate' ? 'Generated request letter is still empty.' : 'No request file has been uploaded yet.')
+    }
+  }
+
+  if (options.maxStep >= 4 && isDirector) {
+    requiredChecks.push(!!formData.directorBypassReason?.trim())
+    if (!formData.directorBypassReason?.trim()) {
+      errors.push('Director bypass reason is missing.')
+    }
+  }
+
+  const totalRequired = requiredChecks.length
+  const completedRequired = requiredChecks.filter(Boolean).length
+  const baseScore = totalRequired ? Math.round((completedRequired / totalRequired) * 100) : 100
+  const warningPenalty = Math.min(warnings.length * 6, 18)
+  const errorPenalty = errors.length ? 8 : 0
+
+  return {
+    errors,
+    warnings,
+    score: Math.max(0, baseScore - warningPenalty - errorPenalty),
+  }
+}
+
+export function getRequestBlockingError(
+  formData: RequestQualityInput,
+  options: {
+    role?: Role | null
+    submissionMethod: RequestSubmissionMethod
+    maxStep: RequestQualityStep
+    now?: Date
+    hasUploadedLetter?: boolean
+  }
+) {
+  return buildRequestQualityAssessment(formData, options).errors[0] ?? ''
 }
 
 export function validateAndNormalizeRequestInput(

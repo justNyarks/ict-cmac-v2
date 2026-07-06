@@ -1,5 +1,6 @@
 import type { Role } from '@/types'
 import { authOptions } from '@/lib/auth'
+import { hasUserSecurityFields, prisma } from '@/lib/prisma'
 import {
   ZERO_TRUST_COOKIE_NAME,
   ZERO_TRUST_TTL_SECONDS,
@@ -10,15 +11,65 @@ import {
 } from '@/lib/zeroTrust'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { getServerSession } from 'next-auth'
+import { getServerSession, type Session } from 'next-auth'
 
 type AccessOptions = {
   nextPath?: string
   zeroTrust?: boolean
 }
 
-export async function requireAuthenticatedSession() {
-  const session = await getServerSession(authOptions)
+type AuthSession = Session & {
+  user: NonNullable<Session['user']>
+}
+
+async function resolveCurrentSession(session: Session | null): Promise<AuthSession | null> {
+  if (!session?.user) {
+    return null
+  }
+
+  const userSelect = {
+    id: true,
+    email: true,
+    name: true,
+    role: true,
+    school: true,
+    isActive: true,
+    pmacMemberId: true,
+    ...(hasUserSecurityFields() ? { mustChangePassword: true } : {}),
+  }
+
+  let freshUser = session.user.id
+    ? await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: userSelect,
+      })
+    : null
+
+  if (!freshUser && session.user.email) {
+    freshUser = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: userSelect,
+    })
+  }
+
+  if (!freshUser || !freshUser.isActive) {
+    return null
+  }
+
+  session.user.id = freshUser.id
+  session.user.email = freshUser.email
+  session.user.name = freshUser.name
+  session.user.role = freshUser.role
+  session.user.school = freshUser.school
+  session.user.isActive = freshUser.isActive
+  session.user.pmacMemberId = freshUser.pmacMemberId
+  session.user.mustChangePassword = hasUserSecurityFields() ? freshUser.mustChangePassword : false
+
+  return session
+}
+
+export async function requireAuthenticatedSession(): Promise<AuthSession> {
+  const session = await resolveCurrentSession(await getServerSession(authOptions))
 
   if (!session?.user) {
     redirect('/auth/signin')
@@ -42,7 +93,7 @@ export async function hasValidZeroTrustSession(userId: string, role: Role) {
   return verifyZeroTrustToken(token, userId, role)
 }
 
-export async function requireRoleAccess(allowedRoles: readonly Role[], options: AccessOptions = {}) {
+export async function requireRoleAccess(allowedRoles: readonly Role[], options: AccessOptions = {}): Promise<AuthSession> {
   const session = await requireAuthenticatedSession()
 
   if (!allowedRoles.includes(session.user.role)) {
@@ -60,11 +111,11 @@ export async function requireRoleAccess(allowedRoles: readonly Role[], options: 
   return session
 }
 
-export async function assertActionAccess(allowedRoles: readonly Role[], options: AccessOptions = {}) {
-  const session = await getServerSession(authOptions)
+export async function assertActionAccess(allowedRoles: readonly Role[], options: AccessOptions = {}): Promise<AuthSession> {
+  const session = await resolveCurrentSession(await getServerSession(authOptions))
 
   if (!session?.user) {
-    throw new Error('Not authenticated')
+    throw new Error('Authentication required. Please sign out and sign back in.')
   }
 
   if (!allowedRoles.includes(session.user.role)) {

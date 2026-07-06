@@ -7,5 +7,5 @@ export default async function CoordinatorPmacPage() {
     nextPath: '/coordinator/pmac',
   })
 
-  return <PmacManagementPageClient />
+  return <PmacManagementPageClient canManageMembers={false} />
 }

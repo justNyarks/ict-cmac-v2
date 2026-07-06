@@ -7,6 +7,8 @@ import clsx from 'clsx'
 
 import { getPmacCalendarEvents } from '@/app/pmac/actions'
 import { PmacEventStatusBadge } from '@/components/pmac/PmacBadges'
+import { getPmacEventSourceBadgeClass, PMAC_EVENT_SOURCE_LABELS } from '@/lib/pmac'
+import type { PmacEventSourceType } from '@/types'
 
 type CalendarEvent = Awaited<ReturnType<typeof getPmacCalendarEvents>>[number]
 
@@ -29,6 +31,14 @@ function formatDateTime(value: string | Date) {
     hour: 'numeric',
     minute: '2-digit',
   })
+}
+
+function renderSourceBadge(sourceType: PmacEventSourceType) {
+  return (
+    <span className={`status-badge ${getPmacEventSourceBadgeClass(sourceType)}`}>
+      {PMAC_EVENT_SOURCE_LABELS[sourceType]}
+    </span>
+  )
 }
 
 export default function PmacCalendarPageClient() {
@@ -95,7 +105,7 @@ export default function PmacCalendarPageClient() {
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">PMAC Calendar</p>
           <h2 className="mt-2 font-display text-3xl font-bold text-slate-800">Approved PMAC Schedule</h2>
-          <p className="mt-2 text-sm text-slate-500">Only approved and completed PMAC events appear here, separate from the CMAC request calendar.</p>
+          <p className="mt-2 text-sm text-slate-500">Approved PMAC events and ICT-approved CMAC requests assigned to PMAC appear here as upcoming operations work.</p>
         </div>
         <Link
           href="/pmac/events"
@@ -202,7 +212,10 @@ export default function PmacCalendarPageClient() {
               <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Selected Event</p>
               <h3 className="mt-2 font-display text-2xl font-bold text-slate-800">{selected.title}</h3>
             </div>
-            <PmacEventStatusBadge status={selected.status} />
+            <div className="flex flex-wrap gap-2">
+              <PmacEventStatusBadge status={selected.status} />
+              {renderSourceBadge(selected.sourceType)}
+            </div>
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">

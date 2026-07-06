@@ -3,6 +3,257 @@ const bcrypt = require('bcryptjs')
 
 const prisma = new PrismaClient()
 
+type SeedPmacRole =
+  | 'PMAC_DIRECTOR'
+  | 'PMAC_ASSISTANT_DIRECTOR'
+  | 'PMAC_SECRETARY'
+  | 'PMAC_EXECUTIVE'
+  | 'PMAC_MEMBER'
+
+type SeedPmacClubRole =
+  | 'DIRECTOR'
+  | 'ASSISTANT_DIRECTOR'
+  | 'SECRETARY'
+  | 'EXECUTIVE'
+  | 'MEMBER'
+
+type SeedPmacExecutiveTitle =
+  | 'HEAD_PHOTOGRAPHER'
+  | 'HEAD_VIDEOGRAPHER'
+  | 'HEAD_GRAPHIC_DESIGNER'
+  | 'HEAD_JOURNALIST'
+  | 'TECHNICAL_HEAD'
+
+type SeedPmacSpecialty =
+  | 'PHOTOGRAPHY'
+  | 'VIDEOGRAPHY'
+  | 'GRAPHIC_DESIGN'
+  | 'JOURNALISM'
+  | 'TECHNICAL_SUPPORT'
+  | 'ALL_AROUND'
+
+type SeedPmacAccount = {
+  key: string
+  email: string
+  fullName: string
+  role: SeedPmacRole
+  clubRole: SeedPmacClubRole
+  courseOrDepartment: string
+  executiveTitle: SeedPmacExecutiveTitle | null
+  specialties: SeedPmacSpecialty[]
+}
+
+type SeedServiceRequest = {
+  id: string
+  createdAt: Date
+  eventTitle: string
+  eventDate: Date
+  endDate: Date | null
+  startTime: string | null
+  endTime: string | null
+  eventVenue: string
+  school: string
+  documentationType: string
+  campusType: string
+  letterContent: string | null
+  eventDetails: string | null
+  secretaryId: string
+  coordinatorApprovedAt: Date | null
+  directorId: string | null
+  directorApprovedAt: Date | null
+  directorNote: string | null
+  coordinatorNote: string | null
+}
+
+function applyTime(date: Date, time: string | null, fallbackHour: number, fallbackMinute: number) {
+  const next = new Date(date)
+
+  if (time) {
+    const [hours, minutes] = time.split(':').map(Number)
+    if (Number.isFinite(hours) && Number.isFinite(minutes)) {
+      next.setHours(hours, minutes, 0, 0)
+      return next
+    }
+  }
+
+  next.setHours(fallbackHour, fallbackMinute, 0, 0)
+  return next
+}
+
+function buildPmacEventScheduleFromRequest(request: Pick<SeedServiceRequest, 'eventDate' | 'endDate' | 'startTime' | 'endTime'>) {
+  const startDateTime = applyTime(request.eventDate, request.startTime, 8, 0)
+  const endDateBase = request.endDate ?? request.eventDate
+  let endDateTime = applyTime(endDateBase, request.endTime, 17, 0)
+
+  if (endDateTime <= startDateTime) {
+    endDateTime = new Date(startDateTime.getTime() + (60 * 60 * 1000))
+  }
+
+  return {
+    startDateTime,
+    endDateTime,
+  }
+}
+
+function buildImportedEventDescription(request: Pick<SeedServiceRequest, 'school' | 'documentationType' | 'campusType' | 'eventDetails' | 'letterContent'>) {
+  const details = request.eventDetails || request.letterContent
+
+  return [
+    'Imported from an approved CMAC request assigned to PMAC.',
+    `School/Department: ${request.school}.`,
+    `Documentation: ${request.documentationType}.`,
+    `Location: ${request.campusType === 'OFF_CAMPUS' ? 'Off-Campus' : 'In-Campus'}.`,
+    details,
+  ].filter(Boolean).join('\n\n')
+}
+
+function buildApprovalRemarks(request: Pick<SeedServiceRequest, 'directorNote' | 'coordinatorNote'>) {
+  return request.directorNote || request.coordinatorNote || 'Approved in CMAC and released to PMAC for staffing.'
+}
+
+async function removeLegacyPmacMockData() {
+  await prisma.pmacPoll.deleteMany({
+    where: {
+      OR: [
+        {
+          title: 'PMAC Uniform Update Approval',
+          description: 'Draft governance poll for finalizing the updated PMAC identification uniform guidelines.',
+        },
+        {
+          title: 'Homecoming Coverage Theme Approval',
+          description: 'Approve the proposed creative treatment for the alumni homecoming PMAC coverage package.',
+        },
+        {
+          title: 'Preferred Weekly PMAC Meeting Slot',
+          description: 'Internal schedule preference poll for the regular weekly PMAC coordination meeting.',
+        },
+      ],
+    },
+  })
+
+  await prisma.pmacEvent.deleteMany({
+    where: {
+      OR: [
+        {
+          title: 'PMAC Skills Workshop Planning',
+          description: 'Draft internal workshop for camera handling and coverage preparation.',
+          venue: 'Media Lab 2',
+        },
+        {
+          title: 'Freshmen Media Orientation Coverage',
+          description: 'Pending PMAC event awaiting CMAC approval for student orientation coverage.',
+          venue: 'Auditorium',
+        },
+        {
+          title: 'Alumni Homecoming PMAC Coverage',
+          description: 'Approved PMAC event for photo, video, and article coverage during alumni homecoming.',
+          venue: 'Main Gymnasium',
+        },
+        {
+          title: 'Campus Ministry Feature Story',
+          description: 'Completed PMAC feature coverage with follow-up attendance records.',
+          venue: 'Chapel Grounds',
+        },
+      ],
+    },
+  })
+
+  await prisma.pmacMemberTag.deleteMany({
+    where: {
+      label: {
+        in: [
+          'Portrait Coverage',
+          'Feature Writer',
+          'Layout Support',
+          'B-Roll Support',
+          'Livestream Backup',
+        ],
+      },
+      member: {
+        email: {
+          in: ['pmac.member@spup.edu.ph', 'pmac.member.support@spup.edu.ph'],
+        },
+      },
+    },
+  })
+}
+
+async function syncApprovedPmacRequestsFromCurrentData() {
+  const requests = await prisma.serviceRequest.findMany({
+    where: {
+      serviceType: 'PMAC',
+      status: 'DIRECTOR_APPROVED',
+      deletedAt: null,
+    },
+  })
+
+  let syncedCount = 0
+
+  for (const request of requests as SeedServiceRequest[]) {
+    const existingEvent = await prisma.pmacEvent.findFirst({
+      where: {
+        OR: [
+          { id: request.id },
+          { sourceRequestId: request.id },
+        ],
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    })
+    const { startDateTime, endDateTime } = buildPmacEventScheduleFromRequest(request)
+    const eventData = {
+      title: request.eventTitle,
+      description: buildImportedEventDescription(request),
+      venue: request.eventVenue,
+      startDateTime,
+      endDateTime,
+      status: existingEvent?.status === 'COMPLETED' ? 'COMPLETED' : 'APPROVED',
+      sourceType: 'CMAC_REQUEST',
+      sourceRequestId: request.id,
+      sourceLabel: 'Imported from approved CMAC request',
+      sourceSchool: request.school,
+      sourceDocumentationType: request.documentationType,
+      sourceCampusType: request.campusType,
+      createdById: request.directorId ?? request.secretaryId,
+      approvedById: request.directorId,
+      approvalRemarks: buildApprovalRemarks(request),
+      submittedAt: request.coordinatorApprovedAt ?? request.createdAt,
+      approvedAt: request.directorApprovedAt ?? request.createdAt,
+      rejectedAt: null,
+    }
+
+    if (existingEvent) {
+      await prisma.pmacEvent.update({
+        where: { id: existingEvent.id },
+        data: eventData,
+      })
+    } else {
+      await prisma.pmacEvent.create({
+        data: {
+          id: request.id,
+          ...eventData,
+        },
+      })
+    }
+
+    syncedCount += 1
+  }
+
+  await prisma.pmacEvent.deleteMany({
+    where: {
+      sourceType: 'CMAC_REQUEST',
+      sourceRequestId: {
+        not: null,
+        notIn: requests.map((request: SeedServiceRequest) => request.id),
+      },
+    },
+  })
+
+  return syncedCount
+}
+
 async function main() {
   const seedPassword = process.env.SEED_DEFAULT_PASSWORD || 'password123'
   const password = await bcrypt.hash(seedPassword, 10)
@@ -60,43 +311,109 @@ async function main() {
     },
   })
 
-  const pmacAccounts = [
+  const pmacAccounts: SeedPmacAccount[] = [
     {
+      key: 'director',
       email: 'pmac.director@spup.edu.ph',
       fullName: 'Paula Ramos',
       role: 'PMAC_DIRECTOR',
       clubRole: 'DIRECTOR',
       courseOrDepartment: 'PMAC Leadership',
+      executiveTitle: null,
+      specialties: ['ALL_AROUND', 'JOURNALISM'],
     },
     {
+      key: 'assistant',
       email: 'pmac.assistant@spup.edu.ph',
       fullName: 'Miguel Torres',
       role: 'PMAC_ASSISTANT_DIRECTOR',
       clubRole: 'ASSISTANT_DIRECTOR',
       courseOrDepartment: 'PMAC Leadership',
+      executiveTitle: null,
+      specialties: ['VIDEOGRAPHY', 'ALL_AROUND'],
     },
     {
+      key: 'secretary',
       email: 'pmac.secretary@spup.edu.ph',
       fullName: 'Andrea Flores',
       role: 'PMAC_SECRETARY',
       clubRole: 'SECRETARY',
       courseOrDepartment: 'PMAC Secretariat',
+      executiveTitle: null,
+      specialties: ['JOURNALISM', 'GRAPHIC_DESIGN'],
     },
     {
-      email: 'pmac.executive@spup.edu.ph',
+      key: 'exec_photo',
+      email: 'pmac.exec.photo@spup.edu.ph',
       fullName: 'Carla Mendoza',
       role: 'PMAC_EXECUTIVE',
       clubRole: 'EXECUTIVE',
-      courseOrDepartment: 'PMAC Executive Board',
+      courseOrDepartment: 'Photo Unit',
+      executiveTitle: 'HEAD_PHOTOGRAPHER',
+      specialties: ['PHOTOGRAPHY', 'ALL_AROUND'],
     },
     {
+      key: 'exec_video',
+      email: 'pmac.exec.video@spup.edu.ph',
+      fullName: 'Luis Navarro',
+      role: 'PMAC_EXECUTIVE',
+      clubRole: 'EXECUTIVE',
+      courseOrDepartment: 'Video Unit',
+      executiveTitle: 'HEAD_VIDEOGRAPHER',
+      specialties: ['VIDEOGRAPHY', 'TECHNICAL_SUPPORT'],
+    },
+    {
+      key: 'exec_graphics',
+      email: 'pmac.exec.graphics@spup.edu.ph',
+      fullName: 'Bea Santos',
+      role: 'PMAC_EXECUTIVE',
+      clubRole: 'EXECUTIVE',
+      courseOrDepartment: 'Design Unit',
+      executiveTitle: 'HEAD_GRAPHIC_DESIGNER',
+      specialties: ['GRAPHIC_DESIGN', 'JOURNALISM'],
+    },
+    {
+      key: 'exec_journal',
+      email: 'pmac.exec.journal@spup.edu.ph',
+      fullName: 'Mika Reyes',
+      role: 'PMAC_EXECUTIVE',
+      clubRole: 'EXECUTIVE',
+      courseOrDepartment: 'Writers Desk',
+      executiveTitle: 'HEAD_JOURNALIST',
+      specialties: ['JOURNALISM', 'PHOTOGRAPHY'],
+    },
+    {
+      key: 'exec_technical',
+      email: 'pmac.exec.tech@spup.edu.ph',
+      fullName: 'Paolo Cruz',
+      role: 'PMAC_EXECUTIVE',
+      clubRole: 'EXECUTIVE',
+      courseOrDepartment: 'Technical Operations',
+      executiveTitle: 'TECHNICAL_HEAD',
+      specialties: ['TECHNICAL_SUPPORT', 'VIDEOGRAPHY'],
+    },
+    {
+      key: 'member_primary',
       email: 'pmac.member@spup.edu.ph',
       fullName: 'John Villanueva',
       role: 'PMAC_MEMBER',
       clubRole: 'MEMBER',
       courseOrDepartment: 'General Membership',
+      executiveTitle: null,
+      specialties: ['PHOTOGRAPHY', 'JOURNALISM'],
+    },
+    {
+      key: 'member_support',
+      email: 'pmac.member.support@spup.edu.ph',
+      fullName: 'Nina Garcia',
+      role: 'PMAC_MEMBER',
+      clubRole: 'MEMBER',
+      courseOrDepartment: 'General Membership',
+      executiveTitle: null,
+      specialties: ['GRAPHIC_DESIGN', 'VIDEOGRAPHY'],
     },
   ]
+  const legacySharedExecutiveEmail = 'pmac.executive@spup.edu.ph'
 
   for (const account of pmacAccounts) {
     const member = await prisma.pmacMember.upsert({
@@ -106,6 +423,7 @@ async function main() {
         clubRole: account.clubRole,
         status: 'ACTIVE',
         courseOrDepartment: account.courseOrDepartment,
+        executiveTitle: account.executiveTitle,
       },
       create: {
         fullName: account.fullName,
@@ -113,8 +431,22 @@ async function main() {
         status: 'ACTIVE',
         email: account.email,
         courseOrDepartment: account.courseOrDepartment,
+        executiveTitle: account.executiveTitle,
         joinedAt: new Date(),
       },
+    })
+
+    await prisma.pmacMemberSpecialty.deleteMany({
+      where: {
+        memberId: member.id,
+      },
+    })
+
+    await prisma.pmacMemberSpecialty.createMany({
+      data: account.specialties.map((specialty) => ({
+        memberId: member.id,
+        specialty,
+      })),
     })
 
     await prisma.user.upsert({
@@ -141,312 +473,21 @@ async function main() {
     })
   }
 
-  const pmacUsers = await prisma.user.findMany({
+  await prisma.user.deleteMany({
     where: {
-      email: {
-        in: pmacAccounts.map(account => account.email),
-      },
-    },
-    select: {
-      id: true,
-      email: true,
-      pmacMemberId: true,
+      email: legacySharedExecutiveEmail,
     },
   })
-  const coordinator = await prisma.user.findUnique({
-    where: { email: 'coordinator@ict.edu' },
-    select: { id: true },
+  await prisma.pmacMember.deleteMany({
+    where: {
+      email: legacySharedExecutiveEmail,
+    },
   })
 
-  let directorUser = null
-  let assistantUser = null
-  let secretaryUser = null
-  let executiveUser = null
-  let memberUser = null
+  await removeLegacyPmacMockData()
+  const syncedPmacRequestCount = await syncApprovedPmacRequestsFromCurrentData()
 
-  for (const user of pmacUsers) {
-    if (user.email === 'pmac.director@spup.edu.ph') {
-      directorUser = user
-    } else if (user.email === 'pmac.assistant@spup.edu.ph') {
-      assistantUser = user
-    } else if (user.email === 'pmac.secretary@spup.edu.ph') {
-      secretaryUser = user
-    } else if (user.email === 'pmac.executive@spup.edu.ph') {
-      executiveUser = user
-    } else if (user.email === 'pmac.member@spup.edu.ph') {
-      memberUser = user
-    }
-  }
-
-  if (
-    coordinator &&
-    directorUser?.pmacMemberId &&
-    assistantUser?.pmacMemberId &&
-    secretaryUser?.pmacMemberId &&
-    executiveUser?.pmacMemberId &&
-    memberUser?.pmacMemberId
-  ) {
-    await prisma.pmacVote.deleteMany()
-    await prisma.pmacAttachment.deleteMany()
-    await prisma.pmacActivityLog.deleteMany()
-    await prisma.pmacPoll.deleteMany()
-    await prisma.pmacAttendance.deleteMany()
-    await prisma.pmacEventAssignment.deleteMany()
-    await prisma.pmacEvent.deleteMany()
-
-    const draftEvent = await prisma.pmacEvent.create({
-      data: {
-        title: 'PMAC Skills Workshop Planning',
-        description: 'Draft internal workshop for camera handling and coverage preparation.',
-        venue: 'Media Lab 2',
-        startDateTime: new Date('2026-07-12T09:00:00'),
-        endDateTime: new Date('2026-07-12T12:00:00'),
-        status: 'DRAFT',
-        createdById: directorUser.id,
-      },
-    })
-
-    const pendingEvent = await prisma.pmacEvent.create({
-      data: {
-        title: 'Freshmen Media Orientation Coverage',
-        description: 'Pending PMAC event awaiting CMAC approval for student orientation coverage.',
-        venue: 'Auditorium',
-        startDateTime: new Date('2026-07-18T08:00:00'),
-        endDateTime: new Date('2026-07-18T11:30:00'),
-        status: 'PENDING_APPROVAL',
-        createdById: directorUser.id,
-        submittedAt: new Date('2026-07-02T08:15:00'),
-      },
-    })
-
-    const approvedEvent = await prisma.pmacEvent.create({
-      data: {
-        title: 'Alumni Homecoming PMAC Coverage',
-        description: 'Approved PMAC event for photo, video, and article coverage during alumni homecoming.',
-        venue: 'Main Gymnasium',
-        startDateTime: new Date('2026-07-20T14:00:00'),
-        endDateTime: new Date('2026-07-20T18:30:00'),
-        status: 'APPROVED',
-        createdById: directorUser.id,
-        approvedById: coordinator.id,
-        submittedAt: new Date('2026-07-01T09:00:00'),
-        approvedAt: new Date('2026-07-02T10:00:00'),
-        approvalRemarks: 'Approved for PMAC coverage. Coordinate staffing and attendance.',
-      },
-    })
-
-    const completedEvent = await prisma.pmacEvent.create({
-      data: {
-        title: 'Campus Ministry Feature Story',
-        description: 'Completed PMAC feature coverage with follow-up attendance records.',
-        venue: 'Chapel Grounds',
-        startDateTime: new Date('2026-06-28T15:00:00'),
-        endDateTime: new Date('2026-06-28T17:00:00'),
-        status: 'COMPLETED',
-        createdById: assistantUser.id,
-        approvedById: coordinator.id,
-        submittedAt: new Date('2026-06-24T09:00:00'),
-        approvedAt: new Date('2026-06-25T08:30:00'),
-        completedAt: new Date('2026-06-28T18:00:00'),
-        approvalRemarks: 'Approved. Event completed successfully.',
-      },
-    })
-
-    await prisma.pmacEventAssignment.createMany({
-      data: [
-        {
-          eventId: approvedEvent.id,
-          memberId: executiveUser.pmacMemberId,
-          assignmentRole: 'VIDEOGRAPHER',
-          availabilityResponse: 'PENDING',
-          assignmentNotes: 'Bring tripod and backup storage.',
-          assignedById: directorUser.id,
-        },
-        {
-          eventId: approvedEvent.id,
-          memberId: memberUser.pmacMemberId,
-          assignmentRole: 'PHOTOGRAPHER',
-          availabilityResponse: 'YES',
-          assignmentNotes: 'Focus on stage and audience coverage.',
-          assignedById: secretaryUser.id,
-          respondedAt: new Date('2026-07-02T11:00:00'),
-        },
-        {
-          eventId: completedEvent.id,
-          memberId: executiveUser.pmacMemberId,
-          assignmentRole: 'JOURNALIST',
-          availabilityResponse: 'YES',
-          assignmentNotes: 'Prepare interview guide before the feature story.',
-          assignedById: assistantUser.id,
-          respondedAt: new Date('2026-06-26T08:00:00'),
-        },
-        {
-          eventId: completedEvent.id,
-          memberId: memberUser.pmacMemberId,
-          assignmentRole: 'GRAPHIC_DESIGNER',
-          availabilityResponse: 'YES',
-          assignmentNotes: 'Deliver recap graphics after the event.',
-          assignedById: assistantUser.id,
-          respondedAt: new Date('2026-06-26T08:30:00'),
-        },
-      ],
-    })
-
-    await prisma.pmacAttendance.createMany({
-      data: [
-        {
-          eventId: completedEvent.id,
-          memberId: executiveUser.pmacMemberId,
-          status: 'PRESENT',
-          notes: 'Interview notes submitted on time.',
-          recordedById: secretaryUser.id,
-          recordedAt: new Date('2026-06-28T18:10:00'),
-        },
-        {
-          eventId: completedEvent.id,
-          memberId: memberUser.pmacMemberId,
-          status: 'LATE',
-          notes: 'Arrived after venue setup but completed deliverables.',
-          recordedById: secretaryUser.id,
-          recordedAt: new Date('2026-06-28T18:15:00'),
-        },
-      ],
-    })
-
-    await prisma.pmacPoll.create({
-      data: {
-        title: 'PMAC Uniform Update Approval',
-        description: 'Draft governance poll for finalizing the updated PMAC identification uniform guidelines.',
-        type: 'GENERAL',
-        status: 'DRAFT',
-        opensAt: new Date('2026-07-08T09:00:00'),
-        closesAt: new Date('2026-07-10T18:00:00'),
-        resultsVisibility: 'AFTER_CLOSE',
-        createdById: directorUser.id,
-      },
-    })
-
-    const openPoll = await prisma.pmacPoll.create({
-      data: {
-        title: 'Homecoming Coverage Theme Approval',
-        description: 'Approve the proposed creative treatment for the alumni homecoming PMAC coverage package.',
-        type: 'EVENT',
-        status: 'OPEN',
-        opensAt: new Date('2026-07-02T09:00:00'),
-        closesAt: new Date('2026-07-05T18:00:00'),
-        linkedEventId: approvedEvent.id,
-        resultsVisibility: 'IMMEDIATE',
-        createdById: assistantUser.id,
-      },
-    })
-
-    const closedPoll = await prisma.pmacPoll.create({
-      data: {
-        title: 'Preferred Weekly PMAC Meeting Slot',
-        description: 'Internal schedule preference poll for the regular weekly PMAC coordination meeting.',
-        type: 'SCHEDULE_PREFERENCE',
-        status: 'CLOSED',
-        opensAt: new Date('2026-06-29T08:00:00'),
-        closesAt: new Date('2026-07-01T18:00:00'),
-        resultsVisibility: 'AFTER_CLOSE',
-        createdById: directorUser.id,
-      },
-    })
-
-    await prisma.pmacVote.createMany({
-      data: [
-        {
-          pollId: openPoll.id,
-          voterId: executiveUser.id,
-          voterMemberId: executiveUser.pmacMemberId,
-          selectedOption: 'YES',
-          votedAt: new Date('2026-07-02T11:30:00'),
-        },
-        {
-          pollId: openPoll.id,
-          voterId: memberUser.id,
-          voterMemberId: memberUser.pmacMemberId,
-          selectedOption: 'ABSTAIN',
-          votedAt: new Date('2026-07-02T11:45:00'),
-        },
-        {
-          pollId: closedPoll.id,
-          voterId: directorUser.id,
-          voterMemberId: directorUser.pmacMemberId,
-          selectedOption: 'YES',
-          votedAt: new Date('2026-06-29T09:00:00'),
-        },
-        {
-          pollId: closedPoll.id,
-          voterId: assistantUser.id,
-          voterMemberId: assistantUser.pmacMemberId,
-          selectedOption: 'YES',
-          votedAt: new Date('2026-06-29T09:15:00'),
-        },
-        {
-          pollId: closedPoll.id,
-          voterId: secretaryUser.id,
-          voterMemberId: secretaryUser.pmacMemberId,
-          selectedOption: 'NO',
-          votedAt: new Date('2026-06-29T10:00:00'),
-        },
-        {
-          pollId: closedPoll.id,
-          voterId: executiveUser.id,
-          voterMemberId: executiveUser.pmacMemberId,
-          selectedOption: 'YES',
-          votedAt: new Date('2026-06-29T11:00:00'),
-        },
-        {
-          pollId: closedPoll.id,
-          voterId: memberUser.id,
-          voterMemberId: memberUser.pmacMemberId,
-          selectedOption: 'ABSTAIN',
-          votedAt: new Date('2026-06-29T11:30:00'),
-        },
-      ],
-    })
-
-    await prisma.pmacActivityLog.createMany({
-      data: [
-        {
-          entityType: 'EVENT',
-          entityId: approvedEvent.id,
-          eventId: approvedEvent.id,
-          actorId: coordinator.id,
-          actorName: 'Liza Mendoza',
-          actorRole: 'CMAC_COORDINATOR',
-          action: 'EVENT_APPROVED',
-          summary: 'Approved a PMAC event for operations.',
-          details: 'Seeded sample activity for the V4 PMAC dashboard.',
-        },
-        {
-          entityType: 'POLL',
-          entityId: openPoll.id,
-          pollId: openPoll.id,
-          actorId: assistantUser.id,
-          actorName: 'Miguel Torres',
-          actorRole: 'PMAC_ASSISTANT_DIRECTOR',
-          action: 'POLL_OPENED',
-          summary: 'Opened a PMAC governance poll for member voting.',
-          details: 'Seeded sample activity for the V4 PMAC dashboard.',
-        },
-        {
-          entityType: 'POLL',
-          entityId: openPoll.id,
-          pollId: openPoll.id,
-          actorId: executiveUser.id,
-          action: 'VOTE_CAST',
-          actorName: 'Carla Mendoza',
-          actorRole: 'PMAC_EXECUTIVE',
-          summary: 'Recorded a yes vote in a PMAC poll.',
-          details: null,
-        },
-      ],
-    })
-  }
-
-  console.log('Seed completed. Core CMAC/ICT accounts, PMAC starter accounts, PMAC V2 sample events, and PMAC V3 sample polls are ready.')
+  console.log(`Seed completed. Core CMAC/ICT accounts and PMAC accounts are ready. Synced ${syncedPmacRequestCount} approved PMAC request(s) into the PMAC calendar.`)
 }
 
 main()

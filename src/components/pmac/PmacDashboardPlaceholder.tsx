@@ -27,6 +27,7 @@ type PlaceholderProps = {
   }>
   stats?: SummaryItem[]
   upcomingEvents?: LinkCard[]
+  branchProjects?: LinkCard[]
   openPolls?: LinkCard[]
   recentActivity?: LinkCard[]
   notifications?: AppNotification[]
@@ -84,6 +85,7 @@ export default function PmacDashboardPlaceholder({
   links = [],
   stats = [],
   upcomingEvents = [],
+  branchProjects = [],
   openPolls = [],
   recentActivity = [],
   notifications = [],
@@ -162,13 +164,18 @@ export default function PmacDashboardPlaceholder({
           items={upcomingEvents}
         />
         <ListSection
-          title="Open Polls"
-          description="Live PMAC voting items and governance decisions that still need attention."
-          items={openPolls}
+          title="Branch Projects"
+          description="Active project work assigned to executive heads and selected members."
+          items={branchProjects}
         />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
+        <ListSection
+          title="Open Polls"
+          description="Live PMAC voting items and governance decisions that still need attention."
+          items={openPolls}
+        />
         <div className="card p-6">
           <div className="space-y-1">
             <h3 className="font-display text-xl font-bold text-slate-800">Notifications</h3>

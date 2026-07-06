@@ -1,19 +1,18 @@
 'use server'
 
 import bcrypt from 'bcryptjs'
-import { getServerSession } from 'next-auth'
 
-import { authOptions } from '@/lib/auth'
-import { issueZeroTrustSession } from '@/lib/security'
+import { assertActionAccess, issueZeroTrustSession } from '@/lib/security'
 import { prisma } from '@/lib/prisma'
 import { sanitizePasswordInput } from '@/lib/sanitization'
 import { isPrivilegedRole } from '@/lib/zeroTrust'
 
 export async function verifySensitiveActionPassword(input: { password: string }) {
-  const session = await getServerSession(authOptions)
-
-  if (!session?.user) {
-    return { success: false, error: 'Your session has expired. Please sign in again.' }
+  let session: Awaited<ReturnType<typeof assertActionAccess>> | undefined
+  try {
+    session = await assertActionAccess(['CMAC_COORDINATOR', 'ICT_DIRECTOR'])
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Your session has expired. Please sign in again.' }
   }
 
   if (!isPrivilegedRole(session.user.role)) {

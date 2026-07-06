@@ -1,16 +1,16 @@
 'use client'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { getStatusLabel, getStatusColor } from '@/lib/data'
-import { ServiceRequest } from '@/types'
 import { CheckCircle, Download, Eye, Filter, FileCheck2, Printer, X, Trash2 } from 'lucide-react'
 import clsx from 'clsx'
 import Portal from '@/components/Portal'
 import ConfirmModal from '@/components/ConfirmModal'
 import { runWithReverification } from '@/lib/reverificationClient'
+import { SCHOOL_LABELS } from '@/lib/schools'
 
 const FILTERS = ['ALL', 'PENDING', 'COORDINATOR_APPROVED', 'DIRECTOR_APPROVED', 'REJECTED'] as const
 
-import { approveRequest, rejectRequest, deleteRequest, getRequests, checkConflict } from './actions'
+import { approveRequest, bulkApproveRequests, bulkRejectRequests, rejectRequest, deleteRequest, getRequests, checkConflict } from './actions'
 import { useSession } from 'next-auth/react'
 import { useEffect } from 'react'
 
@@ -19,6 +19,10 @@ export default function RequestsPage() {
   const [requests, setRequests] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<typeof FILTERS[number]>('ALL')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [schoolFilter, setSchoolFilter] = useState<'ALL' | string>('ALL')
+  const [serviceFilter, setServiceFilter] = useState<'ALL' | 'CMAC' | 'PMAC' | 'UNASSIGNED'>('ALL')
+  const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | 'NEXT7' | 'THIS_MONTH'>('ALL')
   const [selected, setSelected] = useState<any | null>(null)
   const [note, setNote] = useState('')
   const [conflicts, setConflicts] = useState<{title: string, date: string, startTime: string | null, venue: string}[]>([])
@@ -28,6 +32,8 @@ export default function RequestsPage() {
   const [printMode, setPrintMode] = useState<'LETTER' | 'RECEIPT'>('LETTER')
   const [selectedServiceType, setSelectedServiceType] = useState<any>(null)
   const [isDownloadingPastEvents, setIsDownloadingPastEvents] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [slaReferenceTime] = useState(() => Date.now())
   const selectedServiceLabel = selected?.serviceType || 'Unassigned'
   const isPrivilegedUser = ['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes((session?.user as any)?.role)
   const isDirectorBypassApproval = selected?.status === 'PENDING' && (session?.user as any)?.role === 'ICT_DIRECTOR'
@@ -43,17 +49,6 @@ export default function RequestsPage() {
         ? 'text-[8.6px] leading-[1.5]'
         : 'text-[9.2px] leading-[1.6]'
 
-  const SCHOOL_LABELS: Record<string, string> = {
-    SNAHS: 'SNAHS',
-    SBAHM: 'SBAHM',
-    SITE: 'SITE',
-    SASTE: 'SASTE',
-    MEDICINE: 'SOM',
-    BEU: 'BEU',
-    UNIVERSITY: 'UNIVERSITY',
-    HR: 'HR',
-  }
-
   function getRequesterName(request: any) {
     const letterContent = request?.letterContent
     if (typeof letterContent === 'string') {
@@ -68,7 +63,7 @@ export default function RequestsPage() {
 
   function getSecretaryTitle(school?: string) {
     if (!school) return 'School Secretary'
-    return `${SCHOOL_LABELS[school] || school} Secretary`
+    return `${SCHOOL_LABELS[school as keyof typeof SCHOOL_LABELS] || school} Secretary`
   }
 
   const fetchRequests = async () => {
@@ -106,7 +101,80 @@ export default function RequestsPage() {
     }
   }, [selected, session])
 
-  const filtered = filter === 'ALL' ? requests : requests.filter(r => r.status === filter)
+  const filtered = useMemo(() => {
+    const now = new Date()
+    const nextWeek = new Date(now)
+    nextWeek.setDate(now.getDate() + 7)
+
+    return requests.filter((request) => {
+      if (filter !== 'ALL' && request.status !== filter) return false
+      if (schoolFilter !== 'ALL' && request.school !== schoolFilter) return false
+      if (serviceFilter === 'UNASSIGNED' && request.serviceType) return false
+      if (serviceFilter !== 'ALL' && serviceFilter !== 'UNASSIGNED' && request.serviceType !== serviceFilter) return false
+      if (searchQuery.trim()) {
+        const haystack = [
+          request.eventTitle,
+          request.school,
+          request.serviceType || 'Unassigned',
+          request.eventVenue,
+          request.secretary?.name || '',
+        ].join(' ').toLowerCase()
+        if (!haystack.includes(searchQuery.trim().toLowerCase())) return false
+      }
+
+      const eventDate = new Date(request.eventDate)
+      if (dateFilter === 'TODAY') {
+        if (eventDate.toDateString() !== now.toDateString()) return false
+      } else if (dateFilter === 'NEXT7') {
+        if (eventDate < now || eventDate > nextWeek) return false
+      } else if (dateFilter === 'THIS_MONTH') {
+        if (eventDate.getMonth() !== now.getMonth() || eventDate.getFullYear() !== now.getFullYear()) return false
+      }
+
+      return true
+    })
+  }, [requests, filter, schoolFilter, serviceFilter, searchQuery, dateFilter])
+
+  const schoolOptions = useMemo(() => Array.from(new Set(requests.map((request) => request.school))), [requests])
+
+  function getSlaLabel(request: any) {
+    const createdAt = new Date(request.createdAt)
+    const eventDate = new Date(request.eventDate)
+    const ageHours = Math.floor((slaReferenceTime - createdAt.getTime()) / 3600000)
+    const daysUntilEvent = Math.ceil((eventDate.getTime() - slaReferenceTime) / 86400000)
+
+    if (request.status === 'PENDING' && ageHours >= 24) return 'Needs coordinator review'
+    if (request.status === 'COORDINATOR_APPROVED' && ageHours >= 48) return 'Needs director sign-off'
+    if (request.status === 'DIRECTOR_APPROVED' && daysUntilEvent <= 2) return 'Upcoming soon'
+    if (request.status === 'REJECTED') return 'Closed'
+    return 'On track'
+  }
+
+  async function handleBulkApprove() {
+    if (!selectedIds.length) return
+
+    try {
+      await runWithReverification(() => bulkApproveRequests(selectedIds, note, selectedServiceType))
+      await fetchRequests()
+      setSelectedIds([])
+      setNote('')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to bulk approve requests.')
+    }
+  }
+
+  async function handleBulkReject() {
+    if (!selectedIds.length) return
+
+    try {
+      await runWithReverification(() => bulkRejectRequests(selectedIds, note || 'Bulk rejection from queue review.'))
+      await fetchRequests()
+      setSelectedIds([])
+      setNote('')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to bulk reject requests.')
+    }
+  }
 
   async function handleApprove(id: string) {
     if (isDirectorBypassApproval && !note.trim()) {
@@ -204,9 +272,33 @@ export default function RequestsPage() {
                   : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-200'
               )}
             >
-              {f === 'ALL' ? 'All Requests' : getStatusLabel(f as ServiceRequest['status'])}
+              {f === 'ALL' ? 'All Requests' : getStatusLabel(f)}
             </button>
           ))}
+          <input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search title, school, service, venue, requester"
+            className="min-w-[240px] rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600"
+          />
+          <select value={schoolFilter} onChange={(event) => setSchoolFilter(event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+            <option value="ALL">All schools</option>
+            {schoolOptions.map((school) => (
+              <option key={school} value={school}>{school}</option>
+            ))}
+          </select>
+          <select value={serviceFilter} onChange={(event) => setServiceFilter(event.target.value as typeof serviceFilter)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+            <option value="ALL">All services</option>
+            <option value="CMAC">CMAC</option>
+            <option value="PMAC">PMAC</option>
+            <option value="UNASSIGNED">Unassigned</option>
+          </select>
+          <select value={dateFilter} onChange={(event) => setDateFilter(event.target.value as typeof dateFilter)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+            <option value="ALL">All dates</option>
+            <option value="TODAY">Today</option>
+            <option value="NEXT7">Next 7 days</option>
+            <option value="THIS_MONTH">This month</option>
+          </select>
           <div className="ml-auto flex items-center gap-3">
             {isPrivilegedUser && (
               <button
@@ -223,12 +315,53 @@ export default function RequestsPage() {
           </div>
         </div>
 
+        {isPrivilegedUser ? (
+          <div className="card p-4 flex flex-wrap items-center gap-3">
+            <span className="text-xs font-black uppercase tracking-widest text-slate-400">{selectedIds.length} selected</span>
+            <input
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Optional bulk note / rejection reason"
+              className="min-w-[240px] flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600"
+            />
+            {(session?.user as any)?.role === 'ICT_DIRECTOR' ? (
+              <select value={selectedServiceType || 'CMAC'} onChange={(event) => setSelectedServiceType(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600">
+                <option value="CMAC">CMAC</option>
+                <option value="PMAC">PMAC</option>
+              </select>
+            ) : null}
+            <button
+              onClick={handleBulkApprove}
+              disabled={!selectedIds.length}
+              className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black uppercase tracking-widest text-white disabled:opacity-50"
+            >
+              Bulk Approve
+            </button>
+            <button
+              onClick={handleBulkReject}
+              disabled={!selectedIds.length}
+              className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-black uppercase tracking-widest text-red-700 disabled:opacity-50"
+            >
+              Bulk Reject
+            </button>
+          </div>
+        ) : null}
+
         {/* Table */}
         <div className="card overflow-hidden border border-emerald-100/50 shadow-xl shadow-emerald-900/5">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-emerald-50 bg-emerald-50/20">
-                {['Event & School', 'Service Type', 'Request Date', 'Status', ''].map(h => (
+                {isPrivilegedUser ? (
+                  <th className="px-4 py-4">
+                    <input
+                      type="checkbox"
+                      checked={filtered.length > 0 && selectedIds.length === filtered.length}
+                      onChange={(event) => setSelectedIds(event.target.checked ? filtered.map((request) => request.id) : [])}
+                    />
+                  </th>
+                ) : null}
+                {['Event & School', 'Service Type', 'Request Date', 'Status', 'SLA', ''].map(h => (
                   <th key={h} className="text-left px-6 py-4 text-[10px] font-black text-emerald-800/50 uppercase tracking-widest">{h}</th>
                 ))}
               </tr>
@@ -236,6 +369,15 @@ export default function RequestsPage() {
             <tbody className="divide-y divide-emerald-50/50">
               {filtered.map(req => (
                 <tr key={req.id} className="hover:bg-emerald-50/30 transition-colors group">
+                  {isPrivilegedUser ? (
+                    <td className="px-4 py-5">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(req.id)}
+                        onChange={(event) => setSelectedIds((previous) => event.target.checked ? [...previous, req.id] : previous.filter((id) => id !== req.id))}
+                      />
+                    </td>
+                  ) : null}
                   <td className="px-6 py-5">
                     <p className="font-bold text-[var(--text-dark)] group-hover:text-emerald-700 transition-colors">{req.eventTitle}</p>
                     <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tight">{req.school}</p>
@@ -252,6 +394,14 @@ export default function RequestsPage() {
                   <td className="px-6 py-5">
                     <span className={`status-badge font-bold ${getStatusColor(req.status)}`}>
                       {getStatusLabel(req.status)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-5">
+                    <span className={clsx(
+                      'text-[10px] font-black uppercase tracking-widest',
+                      getSlaLabel(req).includes('Needs') || getSlaLabel(req).includes('Upcoming') ? 'text-amber-600' : getSlaLabel(req) === 'Closed' ? 'text-red-500' : 'text-emerald-600'
+                    )}>
+                      {getSlaLabel(req)}
                     </span>
                   </td>
                   <td className="px-6 py-5 text-right">

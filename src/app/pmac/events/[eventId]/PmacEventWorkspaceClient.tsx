@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState, useTransition } from 'react'
-import { ArrowLeft, CheckCircle2, Paperclip, Plus, Trash2, Upload, XCircle } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, CheckCircle2, Paperclip, Plus, Trash2, Upload, XCircle } from 'lucide-react'
 import clsx from 'clsx'
 
 import {
@@ -13,18 +13,24 @@ import {
   respondToPmacAssignment,
   savePmacAssignments,
   savePmacAttendance,
+  savePmacEventWrapUp,
   submitPmacEvent,
   updatePmacEvent,
 } from '@/app/pmac/actions'
 import { PmacAttendanceBadge, PmacAvailabilityBadge, PmacEventStatusBadge } from '@/components/pmac/PmacBadges'
 import PmacEventForm from '@/components/pmac/PmacEventForm'
 import {
+  PMAC_EXECUTIVE_TITLE_LABELS,
+  getPmacEventSourceBadgeClass,
   PMAC_ATTENDANCE_LABELS,
   PMAC_ATTENDANCE_STATUSES,
+  PMAC_EVENT_SOURCE_LABELS,
   PMAC_EVENT_DUTY_ROLES,
   PMAC_EVENT_DUTY_ROLE_LABELS,
+  PMAC_SPECIALTY_LABELS,
 } from '@/lib/pmac'
 import { PMAC_CLUB_ROLE_LABELS } from '@/lib/roles'
+import type { PmacEventSourceType, PmacExecutiveTitle, PmacSpecialty } from '@/types'
 
 type WorkspaceData = Awaited<ReturnType<typeof getPmacEventWorkspace>>
 
@@ -41,10 +47,32 @@ type AttendanceRow = {
   notes: string
 }
 
+type WrapUpFields = {
+  deliveredOutputs: string
+  issuesEncountered: string
+  attachmentAuditNotes: string
+  wrapUpNotes: string
+}
+
 const EMPTY_ASSIGNMENT: AssignmentRow = {
   memberId: '',
   assignmentRole: 'PHOTOGRAPHER',
   assignmentNotes: '',
+}
+
+const EMPTY_WRAP_UP: WrapUpFields = {
+  deliveredOutputs: '',
+  issuesEncountered: '',
+  attachmentAuditNotes: '',
+  wrapUpNotes: '',
+}
+
+function buildTemplateRows(roles: readonly AssignmentRow['assignmentRole'][]) {
+  return roles.map((role) => ({
+    memberId: '',
+    assignmentRole: role,
+    assignmentNotes: '',
+  }))
 }
 
 function formatDateTime(value: string | Date | null | undefined) {
@@ -69,6 +97,14 @@ function formatDateTimeInput(value: string | Date) {
   const hours = `${date.getHours()}`.padStart(2, '0')
   const minutes = `${date.getMinutes()}`.padStart(2, '0')
   return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
+function renderSourceBadge(sourceType: PmacEventSourceType) {
+  return (
+    <span className={`status-badge ${getPmacEventSourceBadgeClass(sourceType)}`}>
+      {PMAC_EVENT_SOURCE_LABELS[sourceType]}
+    </span>
+  )
 }
 
 function buildAttendanceRows(workspace: NonNullable<WorkspaceData>): AttendanceRow[] {
@@ -102,6 +138,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
   const [approvalRemarks, setApprovalRemarks] = useState('')
   const [assignmentRows, setAssignmentRows] = useState<AssignmentRow[]>([EMPTY_ASSIGNMENT])
   const [attendanceRows, setAttendanceRows] = useState<AttendanceRow[]>([])
+  const [wrapUpFields, setWrapUpFields] = useState<WrapUpFields>(EMPTY_WRAP_UP)
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
   const [attachmentDescription, setAttachmentDescription] = useState('')
   const [attachmentBusy, setAttachmentBusy] = useState(false)
@@ -143,6 +180,12 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
         : [EMPTY_ASSIGNMENT]
     )
     setAttendanceRows(buildAttendanceRows(workspace))
+    setWrapUpFields({
+      deliveredOutputs: workspace.event.deliveredOutputs || '',
+      issuesEncountered: workspace.event.issuesEncountered || '',
+      attachmentAuditNotes: workspace.event.attachmentAuditNotes || '',
+      wrapUpNotes: workspace.event.wrapUpNotes || '',
+    })
   }, [workspace])
 
   useEffect(() => {
@@ -286,7 +329,10 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
         >
           <div className="flex flex-wrap items-start justify-between gap-6">
             <div className="space-y-2">
-              <PmacEventStatusBadge status={event.status} />
+              <div className="flex flex-wrap gap-2">
+                <PmacEventStatusBadge status={event.status} />
+                {renderSourceBadge(event.sourceType)}
+              </div>
               <p className="text-sm text-emerald-100">{event.venue}</p>
               <p className="text-sm text-emerald-100">
                 {formatDateTime(event.startDateTime)} to {formatDateTime(event.endDateTime)}
@@ -314,6 +360,66 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
             <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Attendance</p>
             <p className="mt-3 text-2xl font-bold text-slate-800">{event.attendance.length}</p>
             <p className="mt-1 text-sm text-slate-500">Attendance records already logged for this event.</p>
+          </div>
+        </div>
+      </div>
+
+      {event.sourceType === 'CMAC_REQUEST' ? (
+        <div className="card p-6 space-y-4">
+          <div className="space-y-1">
+            <h3 className="font-display text-xl font-bold text-slate-800">Imported CMAC Context</h3>
+            <p className="text-sm text-slate-500">This PMAC event came from an ICT-approved CMAC request and should be staffed here by PMAC leadership.</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-4">
+            <div className="rounded-2xl bg-slate-50 px-4 py-4">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Source</p>
+              <p className="mt-2 text-sm text-slate-700">{event.sourceLabel || 'Approved CMAC request'}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-50 px-4 py-4">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">School</p>
+              <p className="mt-2 text-sm text-slate-700">{event.sourceSchool || 'Not recorded'}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-50 px-4 py-4">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Documentation</p>
+              <p className="mt-2 text-sm text-slate-700">{event.sourceDocumentationType || 'Not recorded'}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-50 px-4 py-4">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Location</p>
+              <p className="mt-2 text-sm text-slate-700">
+                {event.sourceCampusType === 'OFF_CAMPUS' ? 'Off-Campus' : event.sourceCampusType === 'IN_CAMPUS' ? 'In-Campus' : 'Not recorded'}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="card p-6 space-y-4">
+        <div className="space-y-1">
+          <h3 className="font-display text-xl font-bold text-slate-800">Operational Readiness</h3>
+          <p className="text-sm text-slate-500">A quick view of staffing coverage, confirmations, and post-event follow-through for this PMAC event.</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-4">
+          <div className="rounded-2xl bg-slate-50 px-4 py-4">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Readiness</p>
+            <p className="mt-2 text-3xl font-bold text-slate-800">{workspace.staffingReadiness.readinessScore}%</p>
+            <p className="mt-1 text-xs text-slate-500">{workspace.staffingReadiness.readinessLabel}</p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 px-4 py-4">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Coverage</p>
+            <p className="mt-2 text-3xl font-bold text-slate-800">
+              {workspace.staffingReadiness.assignedRoleCount}/{workspace.staffingReadiness.recommendedRoleCount}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">Recommended coverage roles staffed</p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 px-4 py-4">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Responses</p>
+            <p className="mt-2 text-3xl font-bold text-slate-800">{workspace.staffingReadiness.confirmedAssignments}</p>
+            <p className="mt-1 text-xs text-slate-500">{workspace.staffingReadiness.pendingResponses} pending · {workspace.staffingReadiness.declinedAssignments} declined</p>
+          </div>
+          <div className="rounded-2xl bg-slate-50 px-4 py-4">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Wrap-Up</p>
+            <p className="mt-2 text-3xl font-bold text-slate-800">{workspace.staffingReadiness.wrapUpFilledCount}/4</p>
+            <p className="mt-1 text-xs text-slate-500">{workspace.staffingReadiness.attendancePrepared} attendance record(s) logged</p>
           </div>
         </div>
       </div>
@@ -405,6 +511,81 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                 <p className="text-sm text-slate-500">Assign PMAC members to operational duties after the event is approved.</p>
               </div>
 
+              {workspace.staffingReadiness.missingRoles.length ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle size={18} className="mt-0.5 text-amber-600" />
+                    <div>
+                      <p className="font-semibold">Coverage gaps detected</p>
+                      <p className="mt-1 text-amber-800">Recommended roles still missing for this event: {workspace.staffingReadiness.missingRoles.join(', ')}.</p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {workspace.assignmentTemplates.length ? (
+                <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                  <div className="space-y-1">
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Assignment Templates</p>
+                    <p className="text-sm text-slate-500">Start with a role layout based on the event’s coverage needs, then assign members to each slot.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {workspace.assignmentTemplates.map((template: any) => (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => setAssignmentRows(buildTemplateRows(template.roles))}
+                        className="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                      >
+                        {template.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {workspace.assignmentSuggestions.length ? (
+                <div className="space-y-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
+                  <div className="space-y-1">
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">Suggested Members</p>
+                    <p className="text-sm text-emerald-900">Recommendations balance recent workload, attendance reliability, and role fit for this event.</p>
+                  </div>
+                  <div className="grid gap-3 xl:grid-cols-2">
+                    {workspace.assignmentSuggestions.map((suggestion: any) => (
+                      <div key={suggestion.memberId} className="rounded-2xl border border-white/70 bg-white px-4 py-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-800">{suggestion.fullName}</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {PMAC_CLUB_ROLE_LABELS[suggestion.clubRole as keyof typeof PMAC_CLUB_ROLE_LABELS]}
+                              {suggestion.executiveTitle ? ` · ${PMAC_EXECUTIVE_TITLE_LABELS[suggestion.executiveTitle as PmacExecutiveTitle]}` : ''}
+                            </p>
+                          </div>
+                          <span className="status-badge bg-emerald-50 text-emerald-700 border-emerald-200">
+                            Match {suggestion.score}%
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className="status-badge bg-slate-100 text-slate-700 border-slate-200">{suggestion.workloadTier} load</span>
+                          <span className="status-badge bg-sky-50 text-sky-700 border-sky-200">{suggestion.attendanceRate}% attendance</span>
+                          {suggestion.matchedRoles.length ? (
+                            <span className="status-badge bg-amber-50 text-amber-700 border-amber-200">
+                              {suggestion.matchedRoles.map((role: AssignmentRow['assignmentRole']) => PMAC_EVENT_DUTY_ROLE_LABELS[role]).join(', ')}
+                            </span>
+                          ) : null}
+                          {suggestion.specialties?.map((specialty: PmacSpecialty) => (
+                            <span key={`${suggestion.memberId}-${specialty}`} className="status-badge bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200">
+                              {PMAC_SPECIALTY_LABELS[specialty]}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="mt-3 text-sm text-slate-600">{suggestion.fullName} {suggestion.reason}.</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               <div className="space-y-3">
                 {assignmentRows.map((row, index) => (
                   <div key={`${row.memberId}-${row.assignmentRole}-${index}`} className="grid gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4 md:grid-cols-[1.2fr_1fr_1fr_auto]">
@@ -420,7 +601,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                       <option value="">Select PMAC member</option>
                       {roster.map(member => (
                         <option key={member.id} value={member.id}>
-                          {member.fullName} - {PMAC_CLUB_ROLE_LABELS[member.clubRole]}
+                          {member.fullName} - {PMAC_CLUB_ROLE_LABELS[member.clubRole]}{member.executiveTitle ? ` (${PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle as PmacExecutiveTitle]})` : ''}
                         </option>
                       ))}
                     </select>
@@ -484,7 +665,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                         showToast('error', result.error || 'Failed to save PMAC assignments.')
                         return
                       }
-                      showToast('success', 'PMAC staffing assignments updated.')
+                      showToast('success', result.warnings?.length ? `PMAC staffing assignments updated. ${result.warnings.join(' ')}` : 'PMAC staffing assignments updated.')
                       await refreshWorkspace()
                     })
                   }}
@@ -739,6 +920,88 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                   No attendance has been recorded for this PMAC event yet.
                 </div>
               )}
+            </div>
+          ) : null}
+
+          {(permissions.canManageAssignments || permissions.canRecordAttendance || permissions.canApprove || event.wrapUpUpdatedAt) ? (
+            <div className="card p-6 space-y-4">
+              <div className="space-y-1">
+                <h3 className="font-display text-xl font-bold text-slate-800">Post-Event Wrap-Up</h3>
+                <p className="text-sm text-slate-500">Capture delivered outputs, issues, and attachment follow-through so PMAC leadership can review event quality without manual follow-up.</p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Delivered Outputs</label>
+                  <textarea
+                    value={wrapUpFields.deliveredOutputs}
+                    onChange={currentEvent => setWrapUpFields((previous) => ({ ...previous, deliveredOutputs: currentEvent.target.value }))}
+                    rows={4}
+                    disabled={!(permissions.canManageAssignments || permissions.canRecordAttendance)}
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:bg-slate-50"
+                    placeholder="Summarize coverage delivered, posts created, albums submitted, and final outputs."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Issues Encountered</label>
+                  <textarea
+                    value={wrapUpFields.issuesEncountered}
+                    onChange={currentEvent => setWrapUpFields((previous) => ({ ...previous, issuesEncountered: currentEvent.target.value }))}
+                    rows={4}
+                    disabled={!(permissions.canManageAssignments || permissions.canRecordAttendance)}
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:bg-slate-50"
+                    placeholder="Record delays, staffing issues, venue constraints, or production blockers."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Attachment Completeness</label>
+                  <textarea
+                    value={wrapUpFields.attachmentAuditNotes}
+                    onChange={currentEvent => setWrapUpFields((previous) => ({ ...previous, attachmentAuditNotes: currentEvent.target.value }))}
+                    rows={4}
+                    disabled={!(permissions.canManageAssignments || permissions.canRecordAttendance)}
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:bg-slate-50"
+                    placeholder="Note missing files, uploaded references, and anything still needed before closeout."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Leadership Notes</label>
+                  <textarea
+                    value={wrapUpFields.wrapUpNotes}
+                    onChange={currentEvent => setWrapUpFields((previous) => ({ ...previous, wrapUpNotes: currentEvent.target.value }))}
+                    rows={4}
+                    disabled={!(permissions.canManageAssignments || permissions.canRecordAttendance)}
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:bg-slate-50"
+                    placeholder="Add recommendations, follow-up actions, or coaching notes for future events."
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-slate-400">
+                  {event.wrapUpUpdatedAt ? `Last updated ${formatDateTime(event.wrapUpUpdatedAt)}` : 'No wrap-up saved yet.'}
+                </p>
+                {(permissions.canManageAssignments || permissions.canRecordAttendance) ? (
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => {
+                      startTransition(async () => {
+                        const result = await savePmacEventWrapUp(event.id, wrapUpFields)
+                        if (!result.success) {
+                          showToast('error', result.error || 'Failed to save wrap-up.')
+                          return
+                        }
+                        showToast('success', 'Post-event wrap-up saved.')
+                        await refreshWorkspace()
+                      })
+                    }}
+                    className="rounded-xl bg-[#064e3b] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#065f46] disabled:opacity-60"
+                  >
+                    {isPending ? 'Saving...' : 'Save Wrap-Up'}
+                  </button>
+                ) : null}
+              </div>
             </div>
           ) : null}
 

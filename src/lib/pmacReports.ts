@@ -1,7 +1,24 @@
 import { hasPmacV4Delegates, hasUserSecurityFields, prisma } from '@/lib/prisma'
+import { calculatePmacReadinessScore, getRecommendedAssignmentRoles, PMAC_EXECUTIVE_TITLE_LABELS, PMAC_SPECIALTY_LABELS } from '@/lib/pmac'
 import { sanitizeCsvCell } from '@/lib/sanitization'
 
-export type PmacReportType = 'members' | 'events' | 'polls' | 'activity'
+export type PmacReportType = 'members' | 'events' | 'polls' | 'activity' | 'staffing' | 'performance'
+export type PmacReportSummary = {
+  members: number
+  activeMembers: number
+  events: number
+  importedEvents: number
+  openPolls: number
+  pendingResponses: number
+  understaffedUpcoming: number
+  attendanceGaps: number
+  attachments: number
+  activity: number
+  averageReadinessScore: number
+  reliableMembers: number
+  overloadedMembers: number
+  wrapUpsPending: number
+}
 
 function joinCsv(rows: unknown[][]) {
   return rows.map((row) => row.map((cell) => sanitizeCsvCell(cell)).join(',')).join('\n')
@@ -18,19 +35,45 @@ export async function buildPmacMembersCsv() {
           ...(hasUserSecurityFields() ? { mustChangePassword: true } : {}),
         },
       },
+      specialties: {
+        select: {
+          specialty: true,
+        },
+        orderBy: {
+          specialty: 'asc',
+        },
+      },
+      receivedTags: {
+        include: {
+          assignedByMember: {
+            select: {
+              fullName: true,
+              executiveTitle: true,
+            },
+          },
+        },
+        orderBy: [
+          { label: 'asc' },
+          { createdAt: 'asc' },
+        ],
+      },
     },
     orderBy: [
       { clubRole: 'asc' },
+      { executiveTitle: 'asc' },
       { fullName: 'asc' },
     ],
   })
 
   return joinCsv([
-    ['Full Name', 'Email', 'Club Role', 'Status', 'System Role', 'Account Active', 'Password Reset Required', 'Joined At', 'Course / Department', 'Phone'],
+    ['Full Name', 'Email', 'Club Role', 'Executive Title', 'Specialties', 'Assigned Tags', 'Status', 'System Role', 'Account Active', 'Password Reset Required', 'Joined At', 'Course / Department', 'Phone'],
     ...members.map((member) => [
       member.fullName,
       member.email,
       member.clubRole,
+      member.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle] : '',
+      member.specialties.map((entry) => PMAC_SPECIALTY_LABELS[entry.specialty]).join(' | '),
+      member.receivedTags.map((tag) => `${tag.label} (${tag.assignedByMember.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[tag.assignedByMember.executiveTitle] : tag.assignedByMember.fullName})`).join(' | '),
       member.status,
       member.account?.role ?? '',
       member.account?.isActive ? 'Yes' : 'No',
@@ -77,10 +120,15 @@ export async function buildPmacEventsCsv() {
   })
 
   return joinCsv([
-    ['Title', 'Status', 'Venue', 'Starts At', 'Ends At', 'Created By', 'Creator Email', 'Approved By', 'Assignments', 'Attendance Records', 'Attachments'],
+    ['Title', 'Status', 'Source Type', 'Source Label', 'Source School', 'Source Documentation', 'Source Campus', 'Venue', 'Starts At', 'Ends At', 'Created By', 'Creator Email', 'Approved By', 'Assignments', 'Attendance Records', 'Attachments'],
     ...events.map((event) => [
       event.title,
       event.status,
+      event.sourceType,
+      event.sourceLabel ?? '',
+      event.sourceSchool ?? '',
+      event.sourceDocumentationType ?? '',
+      event.sourceCampusType ?? '',
       event.venue,
       event.startDateTime.toISOString(),
       event.endDateTime.toISOString(),
@@ -91,6 +139,119 @@ export async function buildPmacEventsCsv() {
       event._count.attendance,
       event._count.attachments,
     ]),
+  ])
+}
+
+export async function buildPmacStaffingCsv() {
+  const now = new Date()
+  const soon = new Date(now.getTime() + (1000 * 60 * 60 * 24 * 14))
+
+  const [upcomingEvents, memberWorkloads] = await Promise.all([
+    prisma.pmacEvent.findMany({
+      where: {
+        status: 'APPROVED',
+        startDateTime: {
+          gte: now,
+          lte: soon,
+        },
+      },
+      include: {
+        assignments: {
+          include: {
+            member: {
+              select: {
+                fullName: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        startDateTime: 'asc',
+      },
+    }),
+    prisma.pmacMember.findMany({
+      where: {
+        status: 'ACTIVE',
+      },
+      select: {
+        fullName: true,
+        clubRole: true,
+        executiveTitle: true,
+        specialties: {
+          select: {
+            specialty: true,
+          },
+          orderBy: {
+            specialty: 'asc',
+          },
+        },
+        eventAssignments: {
+          where: {
+            event: {
+              status: {
+                in: ['APPROVED', 'COMPLETED'],
+              },
+              startDateTime: {
+                gte: now,
+                lte: soon,
+              },
+            },
+          },
+          select: {
+            assignmentRole: true,
+            event: {
+              select: {
+                title: true,
+                startDateTime: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        fullName: 'asc',
+      },
+    }),
+  ])
+
+  const eventRows = upcomingEvents.map((event) => {
+    const assignedRoles = new Set(event.assignments.map((assignment) => assignment.assignmentRole))
+    const missingRoles = event.sourceDocumentationType
+      ? getRecommendedAssignmentRoles(event.sourceDocumentationType).filter((role) => !assignedRoles.has(role))
+      : []
+
+    return [
+      'EVENT',
+      event.title,
+      event.sourceType,
+      event.sourceLabel ?? '',
+      event.startDateTime.toISOString(),
+      event.venue,
+      event.assignments.length,
+      event.assignments.filter((assignment) => assignment.availabilityResponse === 'PENDING').length,
+      missingRoles.join(' | '),
+      event.assignments.map((assignment) => `${assignment.member.fullName} (${assignment.assignmentRole})`).join(' | '),
+    ]
+  })
+
+  const workloadRows = memberWorkloads.map((member) => [
+    'MEMBER',
+    member.fullName,
+    member.executiveTitle ? `${member.clubRole} (${PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle]})` : member.clubRole,
+    '',
+    '',
+    '',
+    member.eventAssignments.length,
+    member.eventAssignments.filter((assignment) => assignment.event.startDateTime >= now).length,
+    member.specialties.map((entry) => PMAC_SPECIALTY_LABELS[entry.specialty]).join(' | '),
+    member.eventAssignments.map((assignment) => `${assignment.event.title} (${assignment.assignmentRole})`).join(' | '),
+  ])
+
+  return joinCsv([
+    ['Section', 'Label', 'Source/Role', 'Source Label', 'Starts At', 'Venue', 'Assignment Count', 'Pending Responses', 'Missing Roles / Specialties', 'Assignment Details'],
+    ...eventRows,
+    ...workloadRows,
   ])
 }
 
@@ -145,6 +306,101 @@ export async function buildPmacPollsCsv() {
   ])
 }
 
+export async function buildPmacPerformanceCsv() {
+  const now = new Date()
+  const soon = new Date(now.getTime() + (1000 * 60 * 60 * 24 * 14))
+  const attendanceWindow = new Date(now.getTime() - (1000 * 60 * 60 * 24 * 90))
+
+  const members = await prisma.pmacMember.findMany({
+    where: {
+      status: 'ACTIVE',
+      account: {
+        is: {
+          isActive: true,
+        },
+      },
+    },
+    select: {
+      fullName: true,
+      clubRole: true,
+      executiveTitle: true,
+      specialties: {
+        select: {
+          specialty: true,
+        },
+        orderBy: {
+          specialty: 'asc',
+        },
+      },
+      eventAssignments: {
+        where: {
+          event: {
+            status: {
+              in: ['APPROVED', 'COMPLETED'],
+            },
+            startDateTime: {
+              gte: attendanceWindow,
+              lte: soon,
+            },
+          },
+        },
+        select: {
+          assignmentRole: true,
+          event: {
+            select: {
+              title: true,
+              startDateTime: true,
+            },
+          },
+        },
+      },
+      attendanceRecords: {
+        where: {
+          recordedAt: {
+            gte: attendanceWindow,
+          },
+        },
+        select: {
+          status: true,
+          event: {
+            select: {
+              title: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: [
+      { clubRole: 'asc' },
+      { fullName: 'asc' },
+    ],
+  })
+
+  return joinCsv([
+    ['Full Name', 'Club Role', 'Executive Title', 'Specialties', 'Upcoming Load', 'Recent Assignments', 'Attendance Rate', 'Late/Absent Count', 'Recent Duty History', 'Attendance Notes'],
+    ...members.map((member) => {
+      const upcomingLoad = member.eventAssignments.filter((assignment) => assignment.event.startDateTime >= now).length
+      const attendanceCount = member.attendanceRecords.length
+      const reliableAttendance = member.attendanceRecords.filter((record) => record.status === 'PRESENT' || record.status === 'LATE').length
+      const attendanceRate = attendanceCount ? Math.round((reliableAttendance / attendanceCount) * 100) : 100
+      const lateOrAbsentCount = member.attendanceRecords.filter((record) => record.status === 'LATE' || record.status === 'ABSENT').length
+
+      return [
+        member.fullName,
+        member.clubRole,
+        member.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle] : '',
+        member.specialties.map((entry) => PMAC_SPECIALTY_LABELS[entry.specialty]).join(' | '),
+        upcomingLoad,
+        member.eventAssignments.length,
+        `${attendanceRate}%`,
+        lateOrAbsentCount,
+        member.eventAssignments.map((assignment) => `${assignment.event.title} (${assignment.assignmentRole})`).join(' | '),
+        member.attendanceRecords.map((record) => `${record.event.title} (${record.status})`).join(' | '),
+      ]
+    }),
+  ])
+}
+
 export async function buildPmacActivityCsv() {
   if (!hasPmacV4Delegates()) {
     return joinCsv([
@@ -174,6 +430,213 @@ export async function buildPmacActivityCsv() {
   ])
 }
 
+export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
+  const now = new Date()
+  const soon = new Date(now.getTime() + (1000 * 60 * 60 * 24 * 14))
+  const recent = new Date(now.getTime() - (1000 * 60 * 60 * 24 * 7))
+  const attendanceWindow = new Date(now.getTime() - (1000 * 60 * 60 * 24 * 90))
+
+  const [
+    members,
+    activeMembers,
+    events,
+    importedEvents,
+    openPolls,
+    attachments,
+    activity,
+    pendingResponses,
+    upcomingEvents,
+    recentCompletedEvents,
+    activeMemberPerformance,
+    pendingWrapUps,
+  ] = await Promise.all([
+    prisma.pmacMember.count(),
+    prisma.user.count({
+      where: {
+        pmacMemberId: {
+          not: null,
+        },
+        isActive: true,
+      },
+    }),
+    prisma.pmacEvent.count(),
+    prisma.pmacEvent.count({
+      where: {
+        sourceType: 'CMAC_REQUEST',
+      },
+    }),
+    prisma.pmacPoll.count({
+      where: {
+        status: 'OPEN',
+      },
+    }),
+    hasPmacV4Delegates() ? prisma.pmacAttachment.count() : Promise.resolve(0),
+    hasPmacV4Delegates() ? prisma.pmacActivityLog.count() : Promise.resolve(0),
+    prisma.pmacEventAssignment.count({
+      where: {
+        availabilityResponse: 'PENDING',
+        event: {
+          status: 'APPROVED',
+        },
+      },
+    }),
+    prisma.pmacEvent.findMany({
+      where: {
+        status: 'APPROVED',
+        startDateTime: {
+          gte: now,
+          lte: soon,
+        },
+      },
+      select: {
+        sourceDocumentationType: true,
+        status: true,
+        deliveredOutputs: true,
+        issuesEncountered: true,
+        attachmentAuditNotes: true,
+        wrapUpNotes: true,
+        assignments: {
+          select: {
+            assignmentRole: true,
+            availabilityResponse: true,
+          },
+        },
+      },
+    }),
+    prisma.pmacEvent.findMany({
+      where: {
+        status: 'COMPLETED',
+        completedAt: {
+          gte: recent,
+        },
+      },
+      select: {
+        assignments: {
+          select: { id: true },
+        },
+        attendance: {
+          select: { id: true },
+        },
+      },
+    }),
+    prisma.pmacMember.findMany({
+      where: {
+        status: 'ACTIVE',
+        account: {
+          is: {
+            isActive: true,
+          },
+        },
+      },
+      select: {
+        eventAssignments: {
+          where: {
+            event: {
+              status: {
+                in: ['APPROVED', 'COMPLETED'],
+              },
+              startDateTime: {
+                gte: attendanceWindow,
+                lte: soon,
+              },
+            },
+          },
+          select: {
+            event: {
+              select: {
+                startDateTime: true,
+              },
+            },
+          },
+        },
+        attendanceRecords: {
+          where: {
+            recordedAt: {
+              gte: attendanceWindow,
+            },
+          },
+          select: {
+            status: true,
+          },
+        },
+      },
+    }),
+    prisma.pmacEvent.count({
+      where: {
+        status: 'COMPLETED',
+        OR: [
+          { deliveredOutputs: null },
+          { issuesEncountered: null },
+          { attachmentAuditNotes: null },
+          { wrapUpNotes: null },
+        ],
+      },
+    }),
+  ])
+
+  const understaffedUpcoming = upcomingEvents.filter((event) => {
+    if (event.assignments.length === 0) {
+      return true
+    }
+
+    if (!event.sourceDocumentationType) {
+      return false
+    }
+
+    const assignedRoles = new Set(event.assignments.map((assignment) => assignment.assignmentRole))
+    return getRecommendedAssignmentRoles(event.sourceDocumentationType).some((role) => !assignedRoles.has(role))
+  }).length
+
+  const attendanceGaps = recentCompletedEvents.filter((event) => event.assignments.length > 0 && event.attendance.length === 0).length
+  const averageReadinessScore = upcomingEvents.length
+    ? Math.round(upcomingEvents.reduce((total, event) => {
+        const wrapUpFilledCount = [
+          event.deliveredOutputs,
+          event.issuesEncountered,
+          event.attachmentAuditNotes,
+          event.wrapUpNotes,
+        ].filter((value) => !!value && value.trim().length > 0).length
+        const assignedRoles = event.assignments.map((assignment) => ({
+          assignmentRole: assignment.assignmentRole,
+          availabilityResponse: assignment.availabilityResponse,
+        }))
+        return total + calculatePmacReadinessScore({
+          sourceDocumentationType: event.sourceDocumentationType,
+          assignments: assignedRoles,
+          wrapUpFilledCount,
+          eventStatus: event.status,
+        })
+      }, 0) / upcomingEvents.length)
+    : 0
+  const reliableMembers = activeMemberPerformance.filter((member) => {
+    if (!member.attendanceRecords.length) {
+      return true
+    }
+    const reliableRate = member.attendanceRecords.filter((record) => record.status === 'PRESENT' || record.status === 'LATE').length / member.attendanceRecords.length
+    return reliableRate >= 0.85
+  }).length
+  const overloadedMembers = activeMemberPerformance.filter((member) => (
+    member.eventAssignments.filter((assignment) => assignment.event.startDateTime >= now).length >= 4
+  )).length
+
+  return {
+    members,
+    activeMembers,
+    events,
+    importedEvents,
+    openPolls,
+    pendingResponses,
+    understaffedUpcoming,
+    attendanceGaps,
+    attachments,
+    activity,
+    averageReadinessScore,
+    reliableMembers,
+    overloadedMembers,
+    wrapUpsPending: pendingWrapUps,
+  }
+}
+
 export async function buildPmacReportCsv(type: PmacReportType) {
   switch (type) {
     case 'members':
@@ -182,7 +645,11 @@ export async function buildPmacReportCsv(type: PmacReportType) {
       return buildPmacEventsCsv()
     case 'polls':
       return buildPmacPollsCsv()
+    case 'staffing':
+      return buildPmacStaffingCsv()
     case 'activity':
       return buildPmacActivityCsv()
+    case 'performance':
+      return buildPmacPerformanceCsv()
   }
 }

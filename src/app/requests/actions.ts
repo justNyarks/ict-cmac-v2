@@ -6,6 +6,8 @@ import { getServerSession } from "next-auth"
 
 import { authOptions } from "@/lib/auth"
 import { findRequestConflicts } from "@/lib/conflicts"
+import { revalidatePmacViews } from "@/lib/pmacRevalidation"
+import { syncPmacEventFromServiceRequest } from "@/lib/pmacRequestSync"
 import { prisma } from "@/lib/prisma"
 import { getCalendarWhere, getRequestListWhere, revalidateRequestViews } from "@/lib/requestWorkflow"
 import { assertActionAccess } from "@/lib/security"
@@ -25,8 +27,13 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
     fieldName: 'Actor name',
     maxLength: 191,
   }) || 'Unknown'
+  const syncActor = {
+    id: user.id,
+    name: user.name,
+    role: user.role,
+  }
 
-  await prisma.$transaction(async (tx) => {
+  const touchedPmacEvent = await prisma.$transaction(async (tx) => {
     const request = await tx.serviceRequest.findUnique({ where: { id } })
     if (!request) throw new Error('Request not found')
     if (request.deletedAt) throw new Error('Request has already been deleted')
@@ -52,7 +59,7 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
         },
       })
 
-      return
+      return false
     }
 
     if (user.role === 'ICT_DIRECTOR' && (request.status === 'COORDINATOR_APPROVED' || request.status === 'PENDING')) {
@@ -60,12 +67,25 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
         throw new Error('Service type is required for director approval')
       }
 
+      const conflictCheck = await findRequestConflicts({
+        startDate: request.eventDate.toISOString().slice(0, 10),
+        startTime: request.startTime ?? undefined,
+        endDate: request.endDate ? request.endDate.toISOString().slice(0, 10) : undefined,
+        endTime: request.endTime ?? undefined,
+        eventVenue: request.eventVenue,
+        currentRequestId: request.id,
+      })
+      if (conflictCheck.conflicts.length > 0) {
+        const [firstConflict] = conflictCheck.conflicts
+        throw new Error(`Cannot approve because "${firstConflict.title}" already conflicts with this schedule at ${firstConflict.venue}.`)
+      }
+
       const isDirectBypass = request.status === 'PENDING'
       if (isDirectBypass && !sanitizedNote) {
         throw new Error('A bypass reason is required when the director skips coordinator review')
       }
 
-      await tx.serviceRequest.update({
+      const updatedRequest = await tx.serviceRequest.update({
         where: { id },
         data: {
           status: 'DIRECTOR_APPROVED',
@@ -74,8 +94,10 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
           directorApprovedAt: new Date(),
           serviceType,
           coordinatorNote: isDirectBypass && !request.coordinatorNote ? 'Bypassed by Director' : undefined,
-        },
+          },
       })
+
+      const mirrored = await syncPmacEventFromServiceRequest(tx, updatedRequest, syncActor)
 
       await tx.auditLog.create({
         data: {
@@ -91,13 +113,38 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
         },
       })
 
-      return
+      return mirrored
     }
 
     throw new Error('Invalid action for this role or request status')
   })
 
   revalidateRequestViews(true)
+  if (touchedPmacEvent) {
+    revalidatePmacViews([`/pmac/events/${id}`])
+  }
+}
+
+export async function bulkApproveRequests(ids: string[], note: string, serviceType?: ServiceType) {
+  const results: Array<{ id: string; success: boolean; error?: string }> = []
+
+  for (const id of ids) {
+    try {
+      await approveRequest(id, note, serviceType)
+      results.push({ id, success: true })
+    } catch (error) {
+      results.push({
+        id,
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown approval error.',
+      })
+    }
+  }
+
+  return {
+    success: results.every((result) => result.success),
+    results,
+  }
 }
 
 export async function rejectRequest(id: string, note: string) {
@@ -114,18 +161,24 @@ export async function rejectRequest(id: string, note: string) {
     maxLength: 191,
   }) || 'Unknown'
 
-  await prisma.$transaction(async (tx) => {
+  const touchedPmacEvent = await prisma.$transaction(async (tx) => {
     const request = await tx.serviceRequest.findUnique({ where: { id } })
     if (!request) throw new Error('Request not found')
     if (request.deletedAt) throw new Error('Request has already been deleted')
 
-    await tx.serviceRequest.update({
+    const updatedRequest = await tx.serviceRequest.update({
       where: { id },
       data: {
         status: 'REJECTED',
         coordinatorNote: user.role === 'CMAC_COORDINATOR' ? sanitizedNote : undefined,
         directorNote: user.role === 'ICT_DIRECTOR' ? sanitizedNote : undefined,
       },
+    })
+
+    const mirrored = await syncPmacEventFromServiceRequest(tx, updatedRequest, {
+      id: user.id,
+      name: user.name,
+      role: user.role,
     })
 
     await tx.auditLog.create({
@@ -137,9 +190,35 @@ export async function rejectRequest(id: string, note: string) {
           details: `Rejected by ${user.role.replace('_', ' ')}. Note: ${sanitizedNote}`,
         },
       })
+    return mirrored || request.serviceType === 'PMAC'
   })
 
   revalidateRequestViews(true)
+  if (touchedPmacEvent) {
+    revalidatePmacViews([`/pmac/events/${id}`])
+  }
+}
+
+export async function bulkRejectRequests(ids: string[], note: string) {
+  const results: Array<{ id: string; success: boolean; error?: string }> = []
+
+  for (const id of ids) {
+    try {
+      await rejectRequest(id, note)
+      results.push({ id, success: true })
+    } catch (error) {
+      results.push({
+        id,
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown rejection error.',
+      })
+    }
+  }
+
+  return {
+    success: results.every((result) => result.success),
+    results,
+  }
 }
 
 export async function deleteRequest(id: string) {
@@ -151,19 +230,48 @@ export async function deleteRequest(id: string) {
     maxLength: 191,
   }) || 'Unknown'
 
-  await prisma.$transaction(async (tx) => {
+  const touchedPmacEvent = await prisma.$transaction(async (tx) => {
     const request = await tx.serviceRequest.findUnique({
       where: { id },
-      select: { eventTitle: true, deletedAt: true },
+      select: {
+        id: true,
+        createdAt: true,
+        eventTitle: true,
+        eventDate: true,
+        endDate: true,
+        startTime: true,
+        endTime: true,
+        eventVenue: true,
+        school: true,
+        serviceType: true,
+        documentationType: true,
+        campusType: true,
+        letterContent: true,
+        eventDetails: true,
+        status: true,
+        deletedAt: true,
+        secretaryId: true,
+        coordinatorApprovedAt: true,
+        directorId: true,
+        directorApprovedAt: true,
+        directorNote: true,
+        coordinatorNote: true,
+      },
     })
     if (!request) throw new Error('Request not found')
     if (request.deletedAt) throw new Error('Request has already been deleted')
 
-    await tx.serviceRequest.update({
+    const updatedRequest = await tx.serviceRequest.update({
       where: { id },
       data: {
         deletedAt: new Date(),
       },
+    })
+
+    const mirrored = await syncPmacEventFromServiceRequest(tx, updatedRequest, {
+      id: user.id,
+      name: user.name,
+      role: user.role,
     })
 
     await tx.auditLog.create({
@@ -175,9 +283,14 @@ export async function deleteRequest(id: string) {
           details: `Request for "${request.eventTitle || 'Unknown'}" was deleted from the system.`,
         },
     })
+
+    return mirrored || request.serviceType === 'PMAC'
   })
 
   revalidateRequestViews(true)
+  if (touchedPmacEvent) {
+    revalidatePmacViews([`/pmac/events/${id}`])
+  }
 }
 
 export async function getRequests() {
@@ -204,6 +317,11 @@ export async function getRequests() {
         secretary: { select: { name: true } },
         coordinator: { select: { name: true } },
         director: { select: { name: true } },
+        logs: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     })
@@ -221,6 +339,8 @@ export async function getRequests() {
 }
 
 export async function getCalendarRequests() {
+  noStore()
+
   const session = await getServerSession(authOptions)
   if (!session || !session.user) return []
   if (!isCoreWorkflowRole(session.user.role)) return []

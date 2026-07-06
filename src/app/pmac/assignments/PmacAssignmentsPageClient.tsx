@@ -77,7 +77,7 @@ export default function PmacAssignmentsPageClient({ role }: { role: string }) {
       <div className="space-y-2">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">PMAC Assignments</p>
         <h2 className="font-display text-3xl font-bold text-slate-800">
-          {canRespond ? 'My Coverage Requests' : 'Staffing Overview'}
+          {canRespond ? 'My Coverage Requests' : 'Assignments Overview'}
         </h2>
         <p className="text-sm text-slate-500">
           {canRespond
@@ -106,11 +106,20 @@ export default function PmacAssignmentsPageClient({ role }: { role: string }) {
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Member</p>
                   <p className="mt-2 text-sm font-semibold text-slate-800">{assignment.member.fullName}</p>
                   <p className="mt-1 text-xs text-slate-400">{PMAC_CLUB_ROLE_LABELS[assignment.member.clubRole]}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="status-badge bg-slate-100 text-slate-700 border-slate-200">
+                      {assignment.memberInsights.workloadTier} load
+                    </span>
+                    <span className="status-badge bg-emerald-50 text-emerald-700 border-emerald-200">
+                      {assignment.memberInsights.attendanceRate}% attendance
+                    </span>
+                  </div>
                 </div>
                 <div className="rounded-2xl bg-slate-50 px-4 py-4">
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Duty</p>
                   <p className="mt-2 text-sm font-semibold text-slate-800">{PMAC_EVENT_DUTY_ROLE_LABELS[assignment.assignmentRole]}</p>
                   <p className="mt-1 text-xs text-slate-400">Assigned by {assignment.assignedBy.name || 'Unknown'}</p>
+                  <p className="mt-1 text-xs text-slate-400">{assignment.memberInsights.upcomingLoad} other upcoming assignment(s)</p>
                 </div>
                 <div className="rounded-2xl bg-slate-50 px-4 py-4">
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Notes</p>

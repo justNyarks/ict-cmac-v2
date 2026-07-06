@@ -40,6 +40,10 @@ export default withAuth(
       return NextResponse.redirect(new URL(homePath, req.url));
     }
 
+    if (path.startsWith("/pmac/projects") && role === "CMAC_COORDINATOR") {
+      return NextResponse.next();
+    }
+
     if (path.startsWith("/pmac")) {
       if (!isPmacSystemRole(role)) {
         return NextResponse.redirect(new URL(homePath, req.url));

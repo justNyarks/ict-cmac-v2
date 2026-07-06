@@ -7,12 +7,14 @@ import {
   BarChart3,
   FilePlus2,
   Briefcase,
+  FolderKanban,
   ClipboardList,
   Settings,
   User,
   Aperture,
   History,
   CheckCircle,
+  Tags,
   Vote,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -33,8 +35,17 @@ export default function Sidebar() {
     ...(isPmacSystemRole(role)
       ? [
           { href: '/pmac/events', label: 'PMAC Events', icon: ClipboardList },
+          ...(role === 'PMAC_DIRECTOR' || role === 'PMAC_SECRETARY' || role === 'PMAC_EXECUTIVE'
+            ? [{ href: '/pmac/projects', label: 'Branch Projects', icon: FolderKanban }]
+            : []),
           { href: '/pmac/polls', label: 'PMAC Polls', icon: Vote },
           { href: '/pmac/calendar', label: 'PMAC Calendar', icon: CalendarDays },
+          ...(role === 'PMAC_DIRECTOR' || role === 'PMAC_SECRETARY'
+            ? [{ href: '/pmac/members', label: 'Members', icon: Settings }]
+            : []),
+          ...(role === 'PMAC_EXECUTIVE'
+            ? [{ href: '/pmac/tags', label: 'Tags', icon: Tags }]
+            : []),
           { href: '/pmac/assignments', label: 'Assignments', icon: Briefcase },
           { href: '/pmac/activity', label: 'Activity', icon: History },
           ...(role === 'PMAC_DIRECTOR' || role === 'PMAC_ASSISTANT_DIRECTOR' || role === 'PMAC_SECRETARY'
@@ -54,9 +65,10 @@ export default function Sidebar() {
         ]),
     ...(role === 'CMAC_COORDINATOR'
       ? [
-          { href: '/coordinator/pmac', label: 'PMAC Management', icon: Settings },
+          { href: '/coordinator/pmac', label: 'PMAC Directory', icon: Settings },
           { href: '/coordinator/pmac/officers', label: 'Officer Assignments', icon: Briefcase },
           { href: '/coordinator/pmac/events', label: 'PMAC Events', icon: ClipboardList },
+          { href: '/pmac/projects', label: 'Branch Projects', icon: FolderKanban },
           { href: '/coordinator/pmac/polls', label: 'PMAC Polls', icon: Vote },
           { href: '/coordinator/pmac/activity', label: 'PMAC Activity', icon: History },
           { href: '/coordinator/pmac/reports', label: 'PMAC Reports', icon: BarChart3 },

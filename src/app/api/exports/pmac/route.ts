@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma'
 import { assertActionAccess } from '@/lib/security'
 import { sanitizeSingleLineText } from '@/lib/sanitization'
 
-const ALLOWED_REPORT_TYPES = new Set<PmacReportType>(['members', 'events', 'polls', 'activity'])
+const ALLOWED_REPORT_TYPES = new Set<PmacReportType>(['members', 'events', 'staffing', 'performance', 'polls', 'activity'])
 
 function buildFilename(type: PmacReportType) {
   const dateStamp = new Date().toISOString().slice(0, 10)

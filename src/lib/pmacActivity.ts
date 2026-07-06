@@ -8,10 +8,11 @@ type SessionUser = Session['user']
 type PmacDbClient = Prisma.TransactionClient | typeof prisma
 
 export type PmacActivityInput = {
-  entityType: 'EVENT' | 'POLL' | 'MEMBER' | 'ACCOUNT' | 'ATTACHMENT' | 'REPORT'
+  entityType: 'EVENT' | 'POLL' | 'MEMBER' | 'ACCOUNT' | 'ATTACHMENT' | 'REPORT' | 'PROJECT'
   entityId: string
   eventId?: string | null
   pollId?: string | null
+  projectId?: string | null
   memberId?: string | null
   actorId?: string | null
   actorName: string
@@ -29,7 +30,7 @@ function buildPmacActivityWhere(user: SessionUser): Prisma.PmacActivityLogWhereI
   if (user.role === 'PMAC_EXECUTIVE' || user.role === 'PMAC_MEMBER') {
     return {
       entityType: {
-        in: ['EVENT', 'POLL', 'ATTACHMENT'],
+        in: ['EVENT', 'POLL', 'ATTACHMENT', 'PROJECT'],
       },
     }
   }
@@ -39,10 +40,13 @@ function buildPmacActivityWhere(user: SessionUser): Prisma.PmacActivityLogWhereI
   }
 }
 
-export function getPmacActivityHref(entry: {
+export function getPmacActivityHref(
+  user: SessionUser,
+  entry: {
   entityType: PmacActivityInput['entityType']
   eventId: string | null
   pollId: string | null
+  projectId?: string | null
   memberId: string | null
   entityId: string
 }) {
@@ -54,12 +58,28 @@ export function getPmacActivityHref(entry: {
     return `/pmac/polls/${entry.pollId}`
   }
 
+  if (entry.projectId || entry.entityType === 'PROJECT') {
+    return '/pmac/projects'
+  }
+
   if (entry.entityType === 'MEMBER' || entry.entityType === 'ACCOUNT') {
-    return '/coordinator/pmac'
+    if (user.role === 'CMAC_COORDINATOR') {
+      return '/coordinator/pmac'
+    }
+
+    if (user.role === 'PMAC_DIRECTOR' || user.role === 'PMAC_SECRETARY') {
+      return '/pmac/members'
+    }
+
+    if (user.role === 'PMAC_EXECUTIVE') {
+      return '/pmac/tags'
+    }
+
+    return '/pmac/activity'
   }
 
   if (entry.entityType === 'REPORT') {
-    return '/coordinator/pmac/reports'
+    return user.role === 'CMAC_COORDINATOR' ? '/coordinator/pmac/reports' : '/pmac/reports'
   }
 
   return '/pmac/events'
@@ -73,6 +93,7 @@ export async function recordPmacActivity(db: PmacDbClient, input: PmacActivityIn
         entityId: string
         eventId: string | null
         pollId: string | null
+        projectId: string | null
         memberId: string | null
         actorId: string | null
         actorName: string
@@ -94,6 +115,7 @@ export async function recordPmacActivity(db: PmacDbClient, input: PmacActivityIn
       entityId: input.entityId,
       eventId: input.eventId ?? null,
       pollId: input.pollId ?? null,
+      projectId: input.projectId ?? null,
       memberId: input.memberId ?? null,
       actorId: input.actorId ?? null,
       actorName: input.actorName,
@@ -122,6 +144,7 @@ export async function getPmacActivityFeed(user: SessionUser, limit = 60) {
       entityId: true,
       eventId: true,
       pollId: true,
+      projectId: true,
       memberId: true,
       actorName: true,
       actorRole: true,
@@ -135,6 +158,6 @@ export async function getPmacActivityFeed(user: SessionUser, limit = 60) {
   return entries.map((entry) => ({
     ...entry,
     actorRoleLabel: getRoleLabel(entry.actorRole),
-    href: getPmacActivityHref(entry),
+    href: getPmacActivityHref(user, entry),
   }))
 }

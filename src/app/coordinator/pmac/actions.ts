@@ -3,12 +3,13 @@
 import bcrypt from 'bcryptjs'
 import { revalidatePath } from 'next/cache'
 
+import { PMAC_EXECUTIVE_TITLES, PMAC_SPECIALTIES } from '@/lib/pmac'
 import { recordPmacActivity } from '@/lib/pmacActivity'
 import { hasUserSecurityFields, prisma } from '@/lib/prisma'
 import { PMAC_SYSTEM_ROLES } from '@/lib/roles'
 import { assertActionAccess } from '@/lib/security'
 import { sanitizeEmailAddress, sanitizeMultilineText, sanitizePasswordInput, sanitizeSingleLineText } from '@/lib/sanitization'
-import type { PmacClubRole, PmacMemberStatus, Role } from '@/types'
+import type { PmacClubRole, PmacExecutiveTitle, PmacMemberStatus, PmacSpecialty, Role } from '@/types'
 
 type PmacSystemRole = Extract<Role, 'PMAC_DIRECTOR' | 'PMAC_ASSISTANT_DIRECTOR' | 'PMAC_SECRETARY' | 'PMAC_EXECUTIVE' | 'PMAC_MEMBER'>
 
@@ -22,6 +23,8 @@ type PmacMemberPayload = {
   joinedAt?: string | null
   clubRole: PmacClubRole
   status: PmacMemberStatus
+  executiveTitle?: PmacExecutiveTitle | null
+  specialties: PmacSpecialty[]
   systemRole: PmacSystemRole
   password?: string
 }
@@ -30,16 +33,34 @@ type PmacOfficerAssignmentPayload = {
   memberId: string
   clubRole: PmacClubRole
   status: PmacMemberStatus
+  executiveTitle?: PmacExecutiveTitle | null
   systemRole: PmacSystemRole
 }
 
 function revalidatePmacViews() {
   revalidatePath('/coordinator/pmac')
   revalidatePath('/coordinator/pmac/officers')
+  revalidatePath('/pmac/members')
+  revalidatePath('/pmac/director')
+  revalidatePath('/pmac/assistant-director')
+  revalidatePath('/pmac/secretary')
+  revalidatePath('/pmac/executive')
+  revalidatePath('/pmac/member')
+  revalidatePath('/pmac/tags')
+  revalidatePath('/pmac/activity')
+  revalidatePath('/pmac/reports')
 }
 
 function isPmacSystemRole(role: string): role is PmacSystemRole {
   return PMAC_SYSTEM_ROLES.includes(role as PmacSystemRole)
+}
+
+function isPmacExecutiveTitle(value: string): value is PmacExecutiveTitle {
+  return PMAC_EXECUTIVE_TITLES.includes(value as PmacExecutiveTitle)
+}
+
+function isPmacSpecialty(value: string): value is PmacSpecialty {
+  return PMAC_SPECIALTIES.includes(value as PmacSpecialty)
 }
 
 function normalizeJoinedAt(value?: string | null) {
@@ -76,8 +97,34 @@ async function ensureUniquePmacIdentity(memberId: string | undefined, email: str
   }
 }
 
+async function ensureExecutiveTitleAvailability(memberId: string | undefined, executiveTitle: PmacExecutiveTitle | null) {
+  if (!executiveTitle) {
+    return
+  }
+
+  const existingExecutive = await prisma.pmacMember.findFirst({
+    where: {
+      executiveTitle,
+      ...(memberId
+        ? {
+            id: {
+              not: memberId,
+            },
+          }
+        : {}),
+    },
+    select: {
+      fullName: true,
+    },
+  })
+
+  if (existingExecutive) {
+    throw new Error(`${executiveTitle.replaceAll('_', ' ')} is already assigned to ${existingExecutive.fullName}.`)
+  }
+}
+
 export async function getPmacMembers() {
-  await assertActionAccess(['CMAC_COORDINATOR'])
+  await assertActionAccess(['CMAC_COORDINATOR', 'PMAC_DIRECTOR', 'PMAC_SECRETARY'])
 
   return prisma.pmacMember.findMany({
     include: {
@@ -90,19 +137,43 @@ export async function getPmacMembers() {
           ...(hasUserSecurityFields() ? { mustChangePassword: true } : {}),
         },
       },
+      specialties: {
+        select: {
+          specialty: true,
+        },
+        orderBy: {
+          specialty: 'asc',
+        },
+      },
+      receivedTags: {
+        include: {
+          assignedByMember: {
+            select: {
+              id: true,
+              fullName: true,
+              executiveTitle: true,
+            },
+          },
+        },
+        orderBy: [
+          { label: 'asc' },
+          { createdAt: 'asc' },
+        ],
+      },
     },
     orderBy: [
       { clubRole: 'asc' },
+      { executiveTitle: 'asc' },
       { fullName: 'asc' },
     ],
   })
 }
 
 export async function savePmacMember(payload: PmacMemberPayload) {
-  let session
+  let session: Awaited<ReturnType<typeof assertActionAccess>> | undefined
 
   try {
-    session = await assertActionAccess(['CMAC_COORDINATOR'], { zeroTrust: true })
+    session = await assertActionAccess(['PMAC_DIRECTOR', 'PMAC_SECRETARY'], { zeroTrust: true })
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' }
   }
@@ -125,6 +196,31 @@ export async function savePmacMember(payload: PmacMemberPayload) {
     fieldName: 'Notes',
     maxLength: 2000,
   })
+  const specialties = Array.from(new Set((payload.specialties ?? []).map((specialty) => String(specialty).trim()).filter(Boolean)))
+  if (specialties.some((specialty) => !isPmacSpecialty(specialty))) {
+    return { success: false, error: 'Please choose valid PMAC specialties.' }
+  }
+  const executiveTitleValue = sanitizeSingleLineText(payload.executiveTitle, {
+    fieldName: 'Executive title',
+    maxLength: 64,
+  })
+  if (executiveTitleValue && !isPmacExecutiveTitle(executiveTitleValue)) {
+    return { success: false, error: 'Please choose a valid executive title.' }
+  }
+  const executiveTitle = executiveTitleValue ? executiveTitleValue as PmacExecutiveTitle : null
+  const needsExecutiveTitle = payload.clubRole === 'EXECUTIVE' || payload.systemRole === 'PMAC_EXECUTIVE'
+
+  if ((payload.clubRole === 'EXECUTIVE') !== (payload.systemRole === 'PMAC_EXECUTIVE')) {
+    return { success: false, error: 'Executive members must use both the Executive club role and the PMAC Executive system role.' }
+  }
+
+  if (needsExecutiveTitle && !executiveTitle) {
+    return { success: false, error: 'Executive accounts must have a branch head title.' }
+  }
+
+  if (!needsExecutiveTitle && executiveTitle) {
+    return { success: false, error: 'Executive titles can only be used for executive members.' }
+  }
 
   if (!isPmacSystemRole(payload.systemRole)) {
     return { success: false, error: 'Please choose a valid PMAC system role.' }
@@ -169,6 +265,7 @@ export async function savePmacMember(payload: PmacMemberPayload) {
     }
 
     await ensureUniquePmacIdentity(payload.id, email, existing?.account?.id)
+    await ensureExecutiveTitleAvailability(payload.id, executiveTitle)
     const supportsUserSecurityFields = hasUserSecurityFields()
 
     await prisma.$transaction(async (tx) => {
@@ -184,6 +281,7 @@ export async function savePmacMember(payload: PmacMemberPayload) {
               joinedAt,
               clubRole: payload.clubRole,
               status: payload.status,
+              executiveTitle,
             },
           })
         : await tx.pmacMember.create({
@@ -196,8 +294,24 @@ export async function savePmacMember(payload: PmacMemberPayload) {
               joinedAt,
               clubRole: payload.clubRole,
               status: payload.status,
+              executiveTitle,
             },
           })
+
+      await tx.pmacMemberSpecialty.deleteMany({
+        where: {
+          memberId: member.id,
+        },
+      })
+
+      if (specialties.length) {
+        await tx.pmacMemberSpecialty.createMany({
+          data: specialties.map((specialty) => ({
+            memberId: member.id,
+            specialty: specialty as PmacSpecialty,
+          })),
+        })
+      }
 
       const hashedPassword = password ? await bcrypt.hash(password, 10) : null
 
@@ -249,15 +363,17 @@ export async function savePmacMember(payload: PmacMemberPayload) {
         entityId: member.id,
         memberId: member.id,
         actorId: session.user.id,
-        actorName: session.user.name || 'CMAC Coordinator',
+        actorName: session.user.name || 'PMAC Officer',
         actorRole: session.user.role,
         action: existing ? 'MEMBER_UPDATED' : 'MEMBER_CREATED',
         summary: existing
           ? `Updated PMAC member record for ${fullName}.`
           : `Created PMAC member record for ${fullName}.`,
-        details: password
-          ? 'Credentials were issued or reset and the account will be asked to change its password.'
-          : null,
+        details: [
+          executiveTitle ? `Executive title: ${executiveTitle}.` : null,
+          specialties.length ? `Specialties: ${specialties.join(', ')}.` : null,
+          password ? 'Credentials were issued or reset and the account will be asked to change its password.' : null,
+        ].filter(Boolean).join(' ') || null,
       })
     })
 
@@ -269,7 +385,7 @@ export async function savePmacMember(payload: PmacMemberPayload) {
 }
 
 export async function assignPmacOfficerRole(payload: PmacOfficerAssignmentPayload) {
-  let session
+  let session: Awaited<ReturnType<typeof assertActionAccess>> | undefined
 
   try {
     session = await assertActionAccess(['CMAC_COORDINATOR'], { zeroTrust: true })
@@ -281,7 +397,28 @@ export async function assignPmacOfficerRole(payload: PmacOfficerAssignmentPayloa
     return { success: false, error: 'Please choose a valid PMAC system role.' }
   }
 
+  const executiveTitleValue = sanitizeSingleLineText(payload.executiveTitle, {
+    fieldName: 'Executive title',
+    maxLength: 64,
+  })
+  if (executiveTitleValue && !isPmacExecutiveTitle(executiveTitleValue)) {
+    return { success: false, error: 'Please choose a valid executive title.' }
+  }
+  const executiveTitle = executiveTitleValue ? executiveTitleValue as PmacExecutiveTitle : null
+  const needsExecutiveTitle = payload.clubRole === 'EXECUTIVE' || payload.systemRole === 'PMAC_EXECUTIVE'
+  if ((payload.clubRole === 'EXECUTIVE') !== (payload.systemRole === 'PMAC_EXECUTIVE')) {
+    return { success: false, error: 'Executive assignments must keep the Executive club role and PMAC Executive system role aligned.' }
+  }
+  if (needsExecutiveTitle && !executiveTitle) {
+    return { success: false, error: 'Executive assignments must include a branch head title.' }
+  }
+  if (!needsExecutiveTitle && executiveTitle) {
+    return { success: false, error: 'Only executive assignments can keep an executive title.' }
+  }
+
   try {
+    await ensureExecutiveTitleAvailability(payload.memberId, executiveTitle)
+
     const member = await prisma.pmacMember.findUnique({
       where: { id: payload.memberId },
       include: {
@@ -305,6 +442,7 @@ export async function assignPmacOfficerRole(payload: PmacOfficerAssignmentPayloa
         data: {
           clubRole: payload.clubRole,
           status: payload.status,
+          executiveTitle,
         },
       })
       await tx.user.update({
@@ -323,7 +461,7 @@ export async function assignPmacOfficerRole(payload: PmacOfficerAssignmentPayloa
         actorRole: session.user.role,
         action: 'OFFICER_ASSIGNMENT_UPDATED',
         summary: `Updated PMAC leadership assignment to ${payload.clubRole}.`,
-        details: `System role set to ${payload.systemRole} and status set to ${payload.status}.`,
+        details: `System role set to ${payload.systemRole}, status set to ${payload.status}, executive title set to ${executiveTitle ?? 'none'}.`,
       })
     })
 

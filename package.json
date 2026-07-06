@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 0.0.0.0",
+    "dev": "next dev -H localhost",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
@@ -32,10 +32,11 @@
     "postcss": "^8",
     "prisma": "^5.12.1",
     "tailwindcss": "^3.4.1",
+    "tsx": "^4.22.5",
     "typescript": "^5",
     "vitest": "^3.2.4"
   },
   "prisma": {
-    "seed": "node prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts"
   }
 }

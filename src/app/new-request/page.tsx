@@ -3,18 +3,11 @@ import { useState, useEffect } from 'react'
 import type { School, ServiceType, DocumentationType } from '@/types'
 import { CheckCircle2, Upload, ChevronRight } from 'lucide-react'
 import clsx from 'clsx'
+import { useSession } from 'next-auth/react'
 
-const SCHOOLS: School[] = ['SNAHS','SBAHM','SITE','SASTE','MEDICINE','BEU','UNIVERSITY','HR']
-const SCHOOL_LABELS: Record<School, string> = {
-  SNAHS: 'SNAHS',
-  SBAHM: 'SBAHM',
-  SITE: 'SITE',
-  SASTE: 'SASTE',
-  MEDICINE: 'SOM',
-  BEU: 'BEU',
-  UNIVERSITY: 'UNIVERSITY',
-  HR: 'HR',
-}
+import { SCHOOL_LABELS, SCHOOLS } from '@/lib/schools'
+import { buildRequestQualityAssessment, getMinimumAdvanceRequestDate, getRequestBlockingError } from '@/lib/requestValidation'
+
 const SERVICES: ServiceType[] = ['CMAC','PMAC']
 const DOC_TYPES: DocumentationType[] = ['PHOTO','VIDEO','BOTH']
 const VENUES = [
@@ -28,23 +21,48 @@ const VENUES = [
   'SNAHS Highflex'
 ]
 
+const REQUEST_TEMPLATES = [
+  {
+    id: 'ASSEMBLY',
+    label: 'Assembly',
+    eventTitle: 'School Assembly',
+    documentationType: 'PHOTO' as DocumentationType,
+    needsSameDayEdit: false,
+    needsSameDayPhoto: true,
+  },
+  {
+    id: 'SEMINAR',
+    label: 'Seminar',
+    eventTitle: 'Department Seminar',
+    documentationType: 'BOTH' as DocumentationType,
+    needsSameDayEdit: false,
+    needsSameDayPhoto: false,
+  },
+  {
+    id: 'CEREMONY',
+    label: 'Ceremony',
+    eventTitle: 'Recognition Ceremony',
+    documentationType: 'BOTH' as DocumentationType,
+    needsSameDayEdit: true,
+    needsSameDayPhoto: true,
+  },
+  {
+    id: 'OUTREACH',
+    label: 'Outreach',
+    eventTitle: 'Community Outreach',
+    documentationType: 'PHOTO' as DocumentationType,
+    needsSameDayEdit: false,
+    needsSameDayPhoto: false,
+  },
+] as const
+
 type Step = 1 | 2 | 3 | 4
 
 import { createServiceRequest, checkConflict } from './actions'
-import { useSession } from 'next-auth/react'
 
 export default function NewRequestPage() {
-  const minDate = new Date();
-  minDate.setHours(0, 0, 0, 0); // Start of today
-  minDate.setDate(minDate.getDate() + 3);
-  
-  // Format as YYYY-MM-DD in local time
-  const y = minDate.getFullYear();
-  const m = String(minDate.getMonth() + 1).padStart(2, '0');
-  const d = String(minDate.getDate()).padStart(2, '0');
-  const minDateStr = `${y}-${m}-${d}`;
-
   const { data: session } = useSession()
+  const minDateStr = getMinimumAdvanceRequestDate()
   const buildInitialForm = () => ({
     school: ((session?.user as any)?.role === 'ICT_DIRECTOR' ? '' : ((session?.user as any)?.school || '')) as School | '',
     eventTitle: '',
@@ -68,56 +86,52 @@ export default function NewRequestPage() {
   const [form, setForm] = useState(buildInitialForm)
   const [stepError, setStepError] = useState<string>('')
   const [submissionMethod, setSubmissionMethod] = useState<'upload' | 'generate'>('generate')
-
-  function validateStep1(): string {
-    if (!form.school) return 'Department/School is required.'
-    if (!form.campusType) return 'Please select whether the event is In-Campus or Off-Campus.'
-    if (!form.eventTitle.trim()) return 'Event title is required.'
-    if (!form.eventDate) return 'Start date is required.'
-    if (!form.endDate) return 'End date is required (select same day if one-day event).'
-    if (!form.startTime) return 'Start time is required.'
-    if (!form.endTime) return 'End time is required.'
-    const isSameDay = !form.endDate || form.eventDate === form.endDate;
-    if (isSameDay && form.startTime && form.endTime && form.startTime >= form.endTime) {
-      return 'End time must be after start time for single-day events.'
-    }
-    
-    if (form.endDate && form.endDate < form.eventDate) return 'End date cannot be before start date.'
-    
-    const today = new Date();
-    const eventDate = new Date(form.eventDate);
-    const diffTime = eventDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays < 0) return 'Event date cannot be in the past.'
-    if (diffDays < 3 && (session?.user as any)?.role !== 'ICT_DIRECTOR') {
-      return 'Service requests must be submitted at least 3 days in advance.'
-    }
-    
-    if (!form.eventVenue) return 'Venue is required.'
-    return ''
-  }
-
-  function validateStep3(): string {
-    if ((session?.user as any)?.role === 'ICT_DIRECTOR' && !form.serviceType) {
-      return 'Please assign a service type before directly approving the event.'
-    }
-
-    if (!form.documentationType) return 'Please select a documentation type.'
-    return ''
-  }
-
-  function validateDirectorBypassReason(): string {
-    if ((session?.user as any)?.role === 'ICT_DIRECTOR' && !form.directorBypassReason.trim()) {
-      return 'Please record a bypass reason before adding this event directly to the calendar.'
-    }
-
-    return ''
-  }
   const [submitted, setSubmitted] = useState(false)
   const [conflicts, setConflicts] = useState<{title: string, startTime: string | null, endTime: string | null}[]>([])
   const [step1Conflicts, setStep1Conflicts] = useState<{title: string, startTime: string | null, endTime: string | null, status: string}[]>([])
   const [sameDayEvents, setSameDayEvents] = useState<{title: string, startTime: string | null, endTime: string | null, status: string}[]>([])
+  const [qualityReferenceTime] = useState(() => Date.now())
+  const isDirector = (session?.user as any)?.role === 'ICT_DIRECTOR'
+
+  const buildSharedQualityAssessment = (maxStep: Step) => buildRequestQualityAssessment(form, {
+    role: (session?.user as any)?.role,
+    submissionMethod,
+    maxStep,
+    now: new Date(qualityReferenceTime),
+    hasUploadedLetter: !!form.letterFile,
+  })
+
+  function getBlockingErrorForStep(maxStep: Step) {
+    return getRequestBlockingError(form, {
+      role: (session?.user as any)?.role,
+      submissionMethod,
+      maxStep,
+      now: new Date(qualityReferenceTime),
+      hasUploadedLetter: !!form.letterFile,
+    })
+  }
+
+  const stepQuality = buildSharedQualityAssessment(step)
+  const submissionQuality = buildSharedQualityAssessment(4)
+  const isStepOnePristine = !form.campusType
+    && !form.school
+    && !form.eventTitle.trim()
+    && !form.eventDate
+    && !form.endDate
+    && !form.eventVenue.trim()
+
+  function applyRequestTemplate(templateId: (typeof REQUEST_TEMPLATES)[number]['id']) {
+    const template = REQUEST_TEMPLATES.find((item) => item.id === templateId)
+    if (!template) return
+
+    setForm((previous) => ({
+      ...previous,
+      eventTitle: previous.eventTitle || template.eventTitle,
+      documentationType: previous.documentationType || template.documentationType,
+      needsSameDayEdit: template.needsSameDayEdit,
+      needsSameDayPhoto: template.needsSameDayPhoto,
+    }))
+  }
 
   // Real-time conflict check on Step 1 date/time change
   useEffect(() => {
@@ -214,12 +228,14 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
   }
 
   async function submit() {
-    const e1 = validateStep1()
-    const e2 = validateStep3()
-    const e3 = validateDirectorBypassReason()
+    const e1 = getBlockingErrorForStep(1)
+    const e2 = getBlockingErrorForStep(2)
+    const e3 = getBlockingErrorForStep(3)
+    const e4 = isDirector ? getBlockingErrorForStep(4) : ''
     if (e1) { setStep(1); setStepError(e1); return }
     if (e2) { setStep(2); setStepError(e2); return }
-    if (e3) { setStep(4); setStepError(e3); return }
+    if (e3) { setStep(3); setStepError(e3); return }
+    if (e4) { setStep(4); setStepError(e4); return }
     setStepError('')
 
     if (loading) return
@@ -323,6 +339,22 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
         {/* STEP 1 */}
         {step === 1 && (
           <div className="space-y-5 animate-fade-in">
+            <div className="space-y-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Quick Templates</p>
+              <div className="flex flex-wrap gap-2">
+                {REQUEST_TEMPLATES.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => applyRequestTemplate(template.id)}
+                    className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-emerald-700 hover:bg-emerald-100"
+                  >
+                    {template.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Notice */}
             <div className="mb-6 flex items-center gap-4 bg-[#fff7ed] border border-[#ffedd5] rounded-3xl px-6 py-4 shadow-sm shadow-orange-900/5 animate-slide-down">
               <div className="w-10 h-10 rounded-2xl bg-orange-500 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-orange-500/20">
@@ -503,6 +535,48 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
                 </div>
               </div>
             )}
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Intake Quality Check</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-800">
+                    {isStepOnePristine ? 'Start filling step 1 to see readiness feedback.' : `Step 1 readiness score: ${stepQuality.score}/100`}
+                  </p>
+                </div>
+                <span className={clsx(
+                  'rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest',
+                  isStepOnePristine
+                    ? 'bg-slate-200 text-slate-600'
+                    : stepQuality.score >= 85
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : stepQuality.score >= 65
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-red-100 text-red-700'
+                )}>
+                  {isStepOnePristine ? 'Not started' : stepQuality.errors.length ? 'Needs fixes' : stepQuality.warnings.length ? 'Needs polish' : 'Ready'}
+                </span>
+              </div>
+              {isStepOnePristine ? (
+                <div className="mt-3 space-y-1">
+                  <p className="text-xs text-slate-500">Required fields in this step: location type, school, title, dates, time, and venue.</p>
+                  <p className="text-xs text-slate-400">The checklist will become more specific after you begin entering details.</p>
+                </div>
+              ) : stepQuality.errors.length ? (
+                <div className="mt-3 space-y-1">
+                  {stepQuality.errors.map((item) => (
+                    <p key={item} className="text-xs font-bold text-red-600">{item}</p>
+                  ))}
+                </div>
+              ) : null}
+              {stepQuality.warnings.length ? (
+                <div className="mt-3 space-y-1">
+                  {stepQuality.warnings.map((item) => (
+                    <p key={item} className="text-xs font-medium text-amber-700">{item}</p>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
         )}
 
@@ -643,6 +717,35 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
           <div className="space-y-6">
             <h2 className="font-display text-2xl text-slate-800 font-bold">Review Request</h2>
 
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Submission Quality</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-800">Readiness score: {submissionQuality.score}/100</p>
+                </div>
+                <span className={clsx(
+                  'rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest',
+                  submissionQuality.score >= 85 ? 'bg-emerald-100 text-emerald-700' : submissionQuality.score >= 65 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                )}>
+                  {submissionQuality.errors.length ? 'Fix issues' : submissionQuality.warnings.length ? 'Review warnings' : 'Queue ready'}
+                </span>
+              </div>
+              {submissionQuality.errors.length ? (
+                <div className="mt-3 space-y-1">
+                  {submissionQuality.errors.map((item) => (
+                    <p key={item} className="text-xs font-bold text-red-600">{item}</p>
+                  ))}
+                </div>
+              ) : null}
+              {submissionQuality.warnings.length ? (
+                <div className="mt-3 space-y-1">
+                  {submissionQuality.warnings.map((item) => (
+                    <p key={item} className="text-xs font-medium text-amber-700">{item}</p>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
             {(session?.user as any)?.role === 'ICT_DIRECTOR' && (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5 space-y-3">
                 <div>
@@ -730,11 +833,15 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
                   const nextStep = (step + 1) as Step;
                   // Run validation before advancing
                   if (step === 1) {
-                    const err = validateStep1()
+                    const err = getBlockingErrorForStep(1)
                     if (err) { setStepError(err); return }
                   }
                   if (step === 2) {
-                    const err = validateStep3()
+                    const err = getBlockingErrorForStep(2)
+                    if (err) { setStepError(err); return }
+                  }
+                  if (step === 3) {
+                    const err = getBlockingErrorForStep(3)
                     if (err) { setStepError(err); return }
                   }
                   setStepError('')

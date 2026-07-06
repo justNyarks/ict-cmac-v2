@@ -7,8 +7,15 @@ import clsx from 'clsx'
 
 import Portal from '@/components/Portal'
 import { filterPmacMembers } from '@/lib/pmacFilters'
+import {
+  PMAC_EXECUTIVE_TITLES,
+  PMAC_EXECUTIVE_TITLE_LABELS,
+  PMAC_SPECIALTIES,
+  PMAC_SPECIALTY_LABELS,
+} from '@/lib/pmac'
 import { runWithReverification } from '@/lib/reverificationClient'
 import {
+  getDefaultClubRoleForSystemRole,
   PMAC_CLUB_ROLES,
   PMAC_CLUB_ROLE_LABELS,
   PMAC_MEMBER_STATUSES,
@@ -18,7 +25,7 @@ import {
   getDefaultSystemRoleForClubRole,
 } from '@/lib/roles'
 import { getPmacMembers, savePmacMember } from './actions'
-import type { PmacClubRole, PmacMemberStatus, Role } from '@/types'
+import type { PmacClubRole, PmacExecutiveTitle, PmacMemberStatus, PmacSpecialty, Role } from '@/types'
 
 type PmacSystemRole = Extract<Role, 'PMAC_DIRECTOR' | 'PMAC_ASSISTANT_DIRECTOR' | 'PMAC_SECRETARY' | 'PMAC_EXECUTIVE' | 'PMAC_MEMBER'>
 type PmacMemberRecord = Awaited<ReturnType<typeof getPmacMembers>>[number]
@@ -32,8 +39,14 @@ type MemberFormState = {
   joinedAt: string
   clubRole: PmacClubRole
   status: PmacMemberStatus
+  executiveTitle: PmacExecutiveTitle | ''
+  specialties: PmacSpecialty[]
   systemRole: PmacSystemRole
   password: string
+}
+
+type PmacManagementPageClientProps = {
+  canManageMembers?: boolean
 }
 
 const EMPTY_FORM: MemberFormState = {
@@ -45,6 +58,8 @@ const EMPTY_FORM: MemberFormState = {
   joinedAt: '',
   clubRole: 'MEMBER',
   status: 'ACTIVE',
+  executiveTitle: '',
+  specialties: [],
   systemRole: 'PMAC_MEMBER',
   password: '',
 }
@@ -72,12 +87,16 @@ function toFormState(member: PmacMemberRecord): MemberFormState {
     joinedAt: member.joinedAt ? new Date(member.joinedAt).toISOString().slice(0, 10) : '',
     clubRole: member.clubRole as PmacClubRole,
     status: member.status as PmacMemberStatus,
+    executiveTitle: (member.executiveTitle as PmacExecutiveTitle | null) ?? '',
+    specialties: member.specialties.map((entry) => entry.specialty as PmacSpecialty),
     systemRole: member.account?.role as PmacSystemRole,
     password: '',
   }
 }
 
-export default function PmacManagementPageClient() {
+export default function PmacManagementPageClient({
+  canManageMembers = true,
+}: PmacManagementPageClientProps) {
   const [members, setMembers] = useState<PmacMemberRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -118,9 +137,20 @@ export default function PmacManagementPageClient() {
   }, [members])
 
   const filteredMembers = useMemo(
-    () => filterPmacMembers(members, query, statusFilter, clubRoleFilter),
+    () => filterPmacMembers(
+      members.map((member) => ({
+        ...member,
+        executiveTitleText: member.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle as PmacExecutiveTitle] : '',
+        specialtiesText: member.specialties.map((entry) => PMAC_SPECIALTY_LABELS[entry.specialty as PmacSpecialty]).join(' '),
+        tagsText: member.receivedTags.map((tag) => tag.label).join(' '),
+      })),
+      query,
+      statusFilter,
+      clubRoleFilter
+    ),
     [clubRoleFilter, members, query, statusFilter]
   )
+  const shouldShowExecutiveTitle = form.clubRole === 'EXECUTIVE' || form.systemRole === 'PMAC_EXECUTIVE'
 
   const openCreate = () => {
     setForm(EMPTY_FORM)
@@ -144,8 +174,12 @@ export default function PmacManagementPageClient() {
   const handleSave = async () => {
     setSaving(true)
     try {
+      const payload = {
+        ...form,
+        executiveTitle: form.executiveTitle || null,
+      }
       const result = await runWithReverification(
-        () => savePmacMember(form),
+        () => savePmacMember(payload),
         response => response.success ? null : response.error
       )
       if (!result.success) {
@@ -164,7 +198,7 @@ export default function PmacManagementPageClient() {
   }
 
   if (loading) {
-    return <div className="p-10 text-center text-slate-400">Loading PMAC management...</div>
+    return <div className="p-10 text-center text-slate-400">Loading PMAC members...</div>
   }
 
   return (
@@ -218,22 +252,30 @@ export default function PmacManagementPageClient() {
         <div className="flex flex-col gap-3 border-b border-slate-100 px-6 py-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h3 className="font-semibold text-slate-800">PMAC Member Directory</h3>
-            <p className="text-xs text-slate-400 mt-1">Manage member identity, club role, system access role, and account status.</p>
+            <p className="mt-1 text-xs text-slate-400">
+              {canManageMembers
+                ? 'Manage member identity, club role, system access role, and account status.'
+                : 'Coordinator view for PMAC roster visibility while member creation stays with PMAC director and secretary.'}
+            </p>
           </div>
           <div className="flex gap-3">
-            <Link
-              href="/coordinator/pmac/officers"
-              className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-white px-4 py-2 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-50"
-            >
-              Officer Assignment Flow
-            </Link>
-            <button
-              onClick={openCreate}
-              className="inline-flex items-center gap-2 rounded-xl bg-[#064e3b] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#065f46]"
-            >
-              <UserPlus size={14} />
-              Add PMAC Member
-            </button>
+            {!canManageMembers ? (
+              <Link
+                href="/coordinator/pmac/officers"
+                className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-white px-4 py-2 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-50"
+              >
+                Officer Assignment Flow
+              </Link>
+            ) : null}
+            {canManageMembers ? (
+              <button
+                onClick={openCreate}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#064e3b] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#065f46]"
+              >
+                <UserPlus size={14} />
+                Add PMAC Member
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -274,45 +316,75 @@ export default function PmacManagementPageClient() {
         </div>
 
         <div className="divide-y divide-slate-50">
-          {filteredMembers.map(member => (
-            <button
-              key={member.id}
-              onClick={() => openEdit(member)}
-              className="flex w-full flex-col gap-4 px-6 py-5 text-left transition-colors hover:bg-slate-50/70 md:flex-row md:items-center md:justify-between"
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold text-slate-800">{member.fullName}</p>
-                  <span className={clsx(
-                    'status-badge',
-                    member.status === 'ACTIVE'
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : 'bg-slate-100 text-slate-500 border-slate-200'
-                  )}>
-                    {PMAC_MEMBER_STATUS_LABELS[member.status as PmacMemberStatus]}
-                  </span>
+          {filteredMembers.map(member => {
+            const content = (
+              <>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-slate-800">{member.fullName}</p>
+                    <span className={clsx(
+                      'status-badge',
+                      member.status === 'ACTIVE'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : 'bg-slate-100 text-slate-500 border-slate-200'
+                    )}>
+                      {PMAC_MEMBER_STATUS_LABELS[member.status as PmacMemberStatus]}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-400">{member.email}</p>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    {member.courseOrDepartment || 'No course or department yet'} · Joined {formatDate(member.joinedAt)}
+                  </p>
+                  {member.receivedTags.length ? (
+                    <p className="mt-2 text-[11px] text-slate-500">
+                      Tags: {member.receivedTags.map((tag) => `${tag.label} (${tag.assignedByMember.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[tag.assignedByMember.executiveTitle as PmacExecutiveTitle] : tag.assignedByMember.fullName})`).join(' · ')}
+                    </p>
+                  ) : null}
                 </div>
-                <p className="mt-1 text-xs text-slate-400">{member.email}</p>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  {member.courseOrDepartment || 'No course or department yet'} · Joined {formatDate(member.joinedAt)}
-                </p>
-              </div>
 
-              <div className="flex flex-wrap items-center gap-2 md:justify-end">
-                <span className="status-badge bg-sky-50 text-sky-700 border-sky-200">
-                  Club: {PMAC_CLUB_ROLE_LABELS[member.clubRole as PmacClubRole]}
-                </span>
-                <span className="status-badge bg-indigo-50 text-indigo-700 border-indigo-200">
-                  Access: {ROLE_LABELS[member.account?.role as PmacSystemRole]}
-                </span>
-                {member.account?.mustChangePassword ? (
-                  <span className="status-badge bg-amber-50 text-amber-700 border-amber-200">
-                    Password reset pending
+                <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                  <span className="status-badge bg-sky-50 text-sky-700 border-sky-200">
+                    Club: {PMAC_CLUB_ROLE_LABELS[member.clubRole as PmacClubRole]}
                   </span>
-                ) : null}
+                  {member.executiveTitle ? (
+                    <span className="status-badge bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200">
+                      {PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle as PmacExecutiveTitle]}
+                    </span>
+                  ) : null}
+                  {member.specialties.map((entry) => (
+                    <span key={`${member.id}-${entry.specialty}`} className="status-badge bg-amber-50 text-amber-700 border-amber-200">
+                      {PMAC_SPECIALTY_LABELS[entry.specialty as PmacSpecialty]}
+                    </span>
+                  ))}
+                  <span className="status-badge bg-indigo-50 text-indigo-700 border-indigo-200">
+                    Access: {ROLE_LABELS[member.account?.role as PmacSystemRole]}
+                  </span>
+                  {member.account?.mustChangePassword ? (
+                    <span className="status-badge bg-amber-50 text-amber-700 border-amber-200">
+                      Password reset pending
+                    </span>
+                  ) : null}
+                </div>
+              </>
+            )
+
+            return canManageMembers ? (
+              <button
+                key={member.id}
+                onClick={() => openEdit(member)}
+                className="flex w-full flex-col gap-4 px-6 py-5 text-left transition-colors hover:bg-slate-50/70 md:flex-row md:items-center md:justify-between"
+              >
+                {content}
+              </button>
+            ) : (
+              <div
+                key={member.id}
+                className="flex w-full flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between"
+              >
+                {content}
               </div>
-            </button>
-          ))}
+            )
+          })}
         </div>
       </div>
 
@@ -328,7 +400,7 @@ export default function PmacManagementPageClient() {
         </div>
       </div>
 
-      {showModal && (
+      {canManageMembers && showModal && (
         <Portal>
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 print:hidden" onClick={closeModal}>
             <div className="w-full max-w-2xl space-y-5 rounded-2xl bg-white p-7 shadow-2xl" onClick={event => event.stopPropagation()}>
@@ -385,10 +457,20 @@ export default function PmacManagementPageClient() {
                     onChange={event =>
                       setForm(previous => {
                         const clubRole = event.target.value as PmacClubRole
+                        const nextSystemRole = clubRole === 'EXECUTIVE'
+                          ? 'PMAC_EXECUTIVE'
+                          : previous.systemRole === 'PMAC_EXECUTIVE'
+                            ? getDefaultSystemRoleForClubRole(clubRole)
+                            : previous.id
+                              ? previous.systemRole
+                              : getDefaultSystemRoleForClubRole(clubRole)
                         return {
                           ...previous,
                           clubRole,
-                          systemRole: previous.id ? previous.systemRole : getDefaultSystemRoleForClubRole(clubRole),
+                          executiveTitle: clubRole === 'EXECUTIVE' || nextSystemRole === 'PMAC_EXECUTIVE'
+                            ? previous.executiveTitle
+                            : '',
+                          systemRole: nextSystemRole,
                         }
                       })
                     }
@@ -405,12 +487,43 @@ export default function PmacManagementPageClient() {
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">System Access Role</label>
                   <select
                     value={form.systemRole}
-                    onChange={event => setForm(previous => ({ ...previous, systemRole: event.target.value as PmacSystemRole }))}
+                    onChange={event => setForm(previous => {
+                      const systemRole = event.target.value as PmacSystemRole
+                      const nextClubRole = systemRole === 'PMAC_EXECUTIVE'
+                        ? 'EXECUTIVE'
+                        : previous.clubRole === 'EXECUTIVE'
+                          ? getDefaultClubRoleForSystemRole(systemRole)
+                          : previous.clubRole
+                      return {
+                        ...previous,
+                        clubRole: nextClubRole,
+                        systemRole,
+                        executiveTitle: systemRole === 'PMAC_EXECUTIVE' || nextClubRole === 'EXECUTIVE'
+                          ? previous.executiveTitle
+                          : '',
+                      }
+                    })}
                     className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
                   >
                     {PMAC_SYSTEM_ROLES.map(role => (
                       <option key={role} value={role}>
                         {ROLE_LABELS[role]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">Executive Title</label>
+                  <select
+                    value={form.executiveTitle}
+                    onChange={event => setForm(previous => ({ ...previous, executiveTitle: event.target.value as PmacExecutiveTitle | '' }))}
+                    disabled={!shouldShowExecutiveTitle}
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    <option value="">{shouldShowExecutiveTitle ? 'Select executive title' : 'Only for executive accounts'}</option>
+                    {PMAC_EXECUTIVE_TITLES.map(title => (
+                      <option key={title} value={title}>
+                        {PMAC_EXECUTIVE_TITLE_LABELS[title]}
                       </option>
                     ))}
                   </select>
@@ -441,6 +554,33 @@ export default function PmacManagementPageClient() {
                     className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">Specialties</label>
+                <div className="grid gap-2 md:grid-cols-2">
+                  {PMAC_SPECIALTIES.map((specialty) => {
+                    const checked = form.specialties.includes(specialty)
+
+                    return (
+                      <label key={specialty} className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => setForm(previous => ({
+                            ...previous,
+                            specialties: checked
+                              ? previous.specialties.filter((item) => item !== specialty)
+                              : [...previous.specialties, specialty],
+                          }))}
+                          className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-200"
+                        />
+                        <span>{PMAC_SPECIALTY_LABELS[specialty]}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+                <p className="mt-2 text-xs text-slate-400">Specialties stay separate from club role, executive title, and access role.</p>
               </div>
 
               <div>

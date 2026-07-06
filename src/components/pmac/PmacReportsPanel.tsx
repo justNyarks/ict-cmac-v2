@@ -2,14 +2,24 @@ type ReportStats = {
   members: number
   activeMembers: number
   events: number
+  importedEvents: number
   openPolls: number
+  pendingResponses: number
+  understaffedUpcoming: number
+  attendanceGaps: number
   attachments: number
   activity: number
+  averageReadinessScore: number
+  reliableMembers: number
+  overloadedMembers: number
+  wrapUpsPending: number
 }
 
 const REPORT_LINKS = [
   { type: 'members', label: 'Member Directory Export', description: 'Roster, account role, active status, and password-reset flags.' },
-  { type: 'events', label: 'Event Operations Export', description: 'Event lifecycle, staffing counts, attendance, and attachments.' },
+  { type: 'events', label: 'Event Operations Export', description: 'Event lifecycle, source metadata, staffing counts, attendance, and attachments.' },
+  { type: 'staffing', label: 'Duty Assignment Export', description: 'Upcoming event coverage gaps, pending responses, and member workload snapshots.' },
+  { type: 'performance', label: 'Member Performance Export', description: 'Attendance reliability, recent workload, and duty history for PMAC staffing decisions.' },
   { type: 'polls', label: 'Poll Governance Export', description: 'Poll status, linked events, votes cast, and attachment totals.' },
   { type: 'activity', label: 'Activity Audit Export', description: 'Recent PMAC actions for oversight, governance, and reliability tracking.' },
 ] as const
@@ -31,26 +41,31 @@ export default function PmacReportsPanel({
         <p className="text-sm text-slate-500">{description}</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-4 xl:grid-cols-5">
         <div className="card p-5">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Members</p>
           <p className="mt-3 text-3xl font-bold text-slate-800">{stats.members}</p>
-          <p className="mt-1 text-xs text-slate-500">{stats.activeMembers} active accounts</p>
+          <p className="mt-1 text-xs text-slate-500">{stats.activeMembers} active accounts · {stats.reliableMembers} reliable</p>
         </div>
         <div className="card p-5">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Events</p>
           <p className="mt-3 text-3xl font-bold text-slate-800">{stats.events}</p>
-          <p className="mt-1 text-xs text-slate-500">Operational records available</p>
+          <p className="mt-1 text-xs text-slate-500">{stats.importedEvents} imported from CMAC · {stats.wrapUpsPending} wrap-ups pending</p>
         </div>
         <div className="card p-5">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Open Polls</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Readiness</p>
+          <p className="mt-3 text-3xl font-bold text-slate-800">{stats.averageReadinessScore}%</p>
+          <p className="mt-1 text-xs text-slate-500">{stats.understaffedUpcoming} upcoming events need staffing attention</p>
+        </div>
+        <div className="card p-5">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Operations</p>
           <p className="mt-3 text-3xl font-bold text-slate-800">{stats.openPolls}</p>
-          <p className="mt-1 text-xs text-slate-500">Governance votes in flight</p>
+          <p className="mt-1 text-xs text-slate-500">{stats.pendingResponses} pending replies · {stats.overloadedMembers} high-load members</p>
         </div>
         <div className="card p-5">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Attachments</p>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Audit Trail</p>
           <p className="mt-3 text-3xl font-bold text-slate-800">{stats.attachments}</p>
-          <p className="mt-1 text-xs text-slate-500">{stats.activity} activity log entries</p>
+          <p className="mt-1 text-xs text-slate-500">{stats.activity} activity entries · {stats.attendanceGaps} attendance gaps</p>
         </div>
       </div>
 

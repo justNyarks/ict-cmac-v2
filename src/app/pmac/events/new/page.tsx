@@ -3,7 +3,7 @@ import { requireRoleAccess } from '@/lib/security'
 import PmacNewEventClient from './PmacNewEventClient'
 
 export default async function PmacNewEventPage() {
-  await requireRoleAccess(['PMAC_DIRECTOR'], {
+  await requireRoleAccess(['PMAC_DIRECTOR', 'PMAC_ASSISTANT_DIRECTOR'], {
     nextPath: '/pmac/events/new',
   })
 

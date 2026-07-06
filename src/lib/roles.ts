@@ -8,7 +8,7 @@ export const PMAC_SYSTEM_ROLES = [
   'PMAC_EXECUTIVE',
   'PMAC_MEMBER',
 ] as const satisfies readonly Role[]
-export const PMAC_MANAGEMENT_ROLES = ['CMAC_COORDINATOR'] as const satisfies readonly Role[]
+export const PMAC_MANAGEMENT_ROLES = ['PMAC_DIRECTOR', 'PMAC_SECRETARY'] as const satisfies readonly Role[]
 export const PMAC_CLUB_ROLES = ['DIRECTOR', 'ASSISTANT_DIRECTOR', 'SECRETARY', 'EXECUTIVE', 'MEMBER'] as const satisfies readonly PmacClubRole[]
 export const PMAC_MEMBER_STATUSES = ['ACTIVE', 'INACTIVE'] as const satisfies readonly PmacMemberStatus[]
 
@@ -85,5 +85,21 @@ export function getDefaultSystemRoleForClubRole(clubRole: PmacClubRole): (typeof
     case 'MEMBER':
     default:
       return 'PMAC_MEMBER'
+  }
+}
+
+export function getDefaultClubRoleForSystemRole(role: (typeof PMAC_SYSTEM_ROLES)[number]): PmacClubRole {
+  switch (role) {
+    case 'PMAC_DIRECTOR':
+      return 'DIRECTOR'
+    case 'PMAC_ASSISTANT_DIRECTOR':
+      return 'ASSISTANT_DIRECTOR'
+    case 'PMAC_SECRETARY':
+      return 'SECRETARY'
+    case 'PMAC_EXECUTIVE':
+      return 'EXECUTIVE'
+    case 'PMAC_MEMBER':
+    default:
+      return 'MEMBER'
   }
 }

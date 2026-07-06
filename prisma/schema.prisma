@@ -34,12 +34,34 @@ enum PmacMemberStatus {
   INACTIVE
 }
 
+enum PmacExecutiveTitle {
+  HEAD_PHOTOGRAPHER
+  HEAD_VIDEOGRAPHER
+  HEAD_GRAPHIC_DESIGNER
+  HEAD_JOURNALIST
+  TECHNICAL_HEAD
+}
+
+enum PmacSpecialty {
+  PHOTOGRAPHY
+  VIDEOGRAPHY
+  GRAPHIC_DESIGN
+  JOURNALISM
+  TECHNICAL_SUPPORT
+  ALL_AROUND
+}
+
 enum PmacEventStatus {
   DRAFT
   PENDING_APPROVAL
   APPROVED
   REJECTED
   COMPLETED
+}
+
+enum PmacEventSourceType {
+  MANUAL
+  CMAC_REQUEST
 }
 
 enum PmacEventDutyRole {
@@ -77,6 +99,26 @@ enum PmacPollStatus {
   ARCHIVED
 }
 
+enum PmacProjectStatus {
+  PLANNED
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+enum PmacProjectMilestoneStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  BLOCKED
+}
+
+enum PmacProjectLinkType {
+  REFERENCE
+  SUBMISSION
+}
+
 enum PmacPollResultsVisibility {
   IMMEDIATE
   AFTER_CLOSE
@@ -95,6 +137,7 @@ enum PmacActivityEntityType {
   ACCOUNT
   ATTACHMENT
   REPORT
+  PROJECT
 }
 
 enum School {
@@ -155,9 +198,13 @@ model User {
   assignedPmacEventDuties PmacEventAssignment[] @relation("PmacEventAssignmentAssignedBy")
   recordedPmacAttendance  PmacAttendance[]      @relation("PmacAttendanceRecordedBy")
   createdPmacPolls        PmacPoll[]            @relation("PmacPollCreatedBy")
+  launchedPmacProjects    PmacProject[]         @relation("PmacProjectLaunchedBy")
+  addedPmacProjectLinks    PmacProjectLink[]     @relation("PmacProjectLinkAddedBy")
+  assignedPmacProjectMembers PmacProjectAssignment[] @relation("PmacProjectAssignmentAssignedBy")
   castPmacVotes           PmacVote[]            @relation("PmacVoteCastBy")
   pmacActivityLogs        PmacActivityLog[]     @relation("PmacActivityActor")
   uploadedPmacAttachments PmacAttachment[]      @relation("PmacAttachmentUploadedBy")
+  notificationReceipts    NotificationReceipt[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -168,13 +215,19 @@ model PmacMember {
   fullName           String
   clubRole           PmacClubRole          @default(MEMBER)
   status             PmacMemberStatus      @default(ACTIVE)
+  executiveTitle     PmacExecutiveTitle?   @unique
   email              String                @unique
   phone              String?
   courseOrDepartment String?
   notes              String?               @db.Text
   joinedAt           DateTime?
   account            User?
+  specialties        PmacMemberSpecialty[]
+  assignedTags       PmacMemberTag[]       @relation("PmacMemberAssignedTags")
+  receivedTags       PmacMemberTag[]       @relation("PmacMemberReceivedTags")
   eventAssignments   PmacEventAssignment[]
+  headedPmacProjects PmacProject[]           @relation("PmacProjectHead")
+  projectAssignments PmacProjectAssignment[]
   attendanceRecords  PmacAttendance[]
   votes              PmacVote[]
   attachments        PmacAttachment[]
@@ -183,35 +236,149 @@ model PmacMember {
   updatedAt          DateTime              @updatedAt
 
   @@index([clubRole, status])
+  @@index([executiveTitle, status])
+}
+
+model PmacMemberSpecialty {
+  memberId    String
+  member      PmacMember    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  specialty   PmacSpecialty
+  createdAt   DateTime      @default(now())
+
+  @@id([memberId, specialty])
+  @@index([specialty])
+}
+
+model PmacMemberTag {
+  id                 String      @id @default(cuid())
+  memberId           String
+  member             PmacMember  @relation("PmacMemberReceivedTags", fields: [memberId], references: [id], onDelete: Cascade)
+  assignedByMemberId String
+  assignedByMember   PmacMember  @relation("PmacMemberAssignedTags", fields: [assignedByMemberId], references: [id], onDelete: Cascade)
+  label              String
+  notes              String?     @db.Text
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@unique([memberId, assignedByMemberId, label])
+  @@index([memberId, createdAt])
+  @@index([assignedByMemberId, createdAt])
+}
+
+model PmacProject {
+  id          String                   @id @default(cuid())
+  title       String
+  summary     String?                  @db.Text
+  branch      PmacExecutiveTitle
+  status      PmacProjectStatus        @default(ACTIVE)
+  startDate   DateTime
+  targetDate  DateTime
+  outputSummary String?                 @db.Text
+  outputSubmittedAt DateTime?
+  completedAt DateTime?
+  launchedById String
+  launchedBy   User                    @relation("PmacProjectLaunchedBy", fields: [launchedById], references: [id])
+  headMemberId String?
+  headMember   PmacMember?             @relation("PmacProjectHead", fields: [headMemberId], references: [id], onDelete: SetNull)
+  milestones  PmacProjectMilestone[]
+  links       PmacProjectLink[]
+  memberAssignments PmacProjectAssignment[]
+  activityLogs PmacActivityLog[]
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  @@index([branch, status])
+  @@index([headMemberId, status])
+  @@index([startDate, targetDate])
+  @@index([launchedById, createdAt])
+}
+
+model PmacProjectAssignment {
+  id           String      @id @default(cuid())
+  projectId    String
+  project      PmacProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  memberId     String
+  member       PmacMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  assignedById String
+  assignedBy   User        @relation("PmacProjectAssignmentAssignedBy", fields: [assignedById], references: [id])
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@unique([projectId, memberId])
+  @@index([memberId, createdAt])
+  @@index([assignedById, createdAt])
+}
+
+model PmacProjectMilestone {
+  id        String                     @id @default(cuid())
+  projectId String
+  project   PmacProject                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title     String
+  dueDate   DateTime
+  status    PmacProjectMilestoneStatus @default(TODO)
+  notes     String?                    @db.Text
+  createdAt DateTime                   @default(now())
+  updatedAt DateTime                   @updatedAt
+
+  @@index([projectId, dueDate])
+  @@index([status, dueDate])
+}
+
+model PmacProjectLink {
+  id        String              @id @default(cuid())
+  projectId String
+  project   PmacProject         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type      PmacProjectLinkType @default(REFERENCE)
+  label     String
+  url       String              @db.Text
+  addedById String
+  addedBy   User                @relation("PmacProjectLinkAddedBy", fields: [addedById], references: [id])
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@index([projectId, type])
+  @@index([addedById, createdAt])
 }
 
 model PmacEvent {
-  id              String                @id @default(cuid())
-  title           String
-  description     String?               @db.Text
-  venue           String
-  startDateTime   DateTime
-  endDateTime     DateTime
-  status          PmacEventStatus       @default(DRAFT)
-  createdById     String
-  createdBy       User                  @relation("PmacEventCreatedBy", fields: [createdById], references: [id])
-  approvedById    String?
-  approvedBy      User?                 @relation("PmacEventApprovedBy", fields: [approvedById], references: [id])
-  approvalRemarks String?               @db.Text
-  submittedAt     DateTime?
-  approvedAt      DateTime?
-  rejectedAt      DateTime?
-  completedAt     DateTime?
-  assignments     PmacEventAssignment[]
-  attendance      PmacAttendance[]
-  polls           PmacPoll[]
-  attachments     PmacAttachment[]
-  activityLogs    PmacActivityLog[]
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
+  id                      String                @id @default(cuid())
+  title                   String
+  description             String?               @db.Text
+  venue                   String
+  startDateTime           DateTime
+  endDateTime             DateTime
+  status                  PmacEventStatus       @default(DRAFT)
+  sourceType              PmacEventSourceType   @default(MANUAL)
+  sourceRequestId         String?               @unique
+  sourceLabel             String?
+  sourceSchool            School?
+  sourceDocumentationType DocumentationType?
+  sourceCampusType        CampusType?
+  createdById             String
+  createdBy               User                  @relation("PmacEventCreatedBy", fields: [createdById], references: [id])
+  approvedById            String?
+  approvedBy              User?                 @relation("PmacEventApprovedBy", fields: [approvedById], references: [id])
+  approvalRemarks         String?               @db.Text
+  submittedAt             DateTime?
+  approvedAt              DateTime?
+  rejectedAt              DateTime?
+  completedAt             DateTime?
+  deliveredOutputs        String?               @db.Text
+  issuesEncountered       String?               @db.Text
+  attachmentAuditNotes    String?               @db.Text
+  wrapUpNotes             String?               @db.Text
+  wrapUpUpdatedAt         DateTime?
+  assignments             PmacEventAssignment[]
+  attendance              PmacAttendance[]
+  polls                   PmacPoll[]
+  attachments             PmacAttachment[]
+  activityLogs            PmacActivityLog[]
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
 
   @@index([status, startDateTime])
   @@index([createdById, status])
+  @@index([sourceType, startDateTime])
 }
 
 model PmacEventAssignment {
@@ -327,6 +494,8 @@ model PmacActivityLog {
   event      PmacEvent?             @relation(fields: [eventId], references: [id], onDelete: Cascade)
   pollId     String?
   poll       PmacPoll?              @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  projectId  String?
+  project    PmacProject?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   memberId   String?
   member     PmacMember?            @relation(fields: [memberId], references: [id], onDelete: Cascade)
   actorId    String?
@@ -341,6 +510,7 @@ model PmacActivityLog {
   @@index([entityType, entityId, createdAt])
   @@index([eventId, createdAt])
   @@index([pollId, createdAt])
+  @@index([projectId, createdAt])
   @@index([memberId, createdAt])
   @@index([actorId, createdAt])
 }
@@ -398,4 +568,18 @@ model AuditLog {
   actorRole Role
   details   String?        @db.Text
   createdAt DateTime       @default(now())
+}
+
+model NotificationReceipt {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notificationId String
+  module         String
+  readAt         DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, notificationId])
+  @@index([userId, readAt])
 }

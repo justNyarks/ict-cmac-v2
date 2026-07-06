@@ -1,12 +1,13 @@
 'use server'
 
 import { unstable_noStore as noStore } from "next/cache"
-import { getServerSession } from "next-auth"
 
-import { authOptions } from "@/lib/auth"
 import { findRequestConflicts } from "@/lib/conflicts"
+import { revalidatePmacViews } from "@/lib/pmacRevalidation"
+import { syncPmacEventFromServiceRequest } from "@/lib/pmacRequestSync"
 import { prisma } from "@/lib/prisma"
 import { revalidateRequestViews } from "@/lib/requestWorkflow"
+import { assertActionAccess } from "@/lib/security"
 import { validateAndNormalizeRequestInput } from "@/lib/requestValidation"
 import { sanitizeSingleLineText } from "@/lib/sanitization"
 import type { DocumentationType, School, ServiceType } from "@/types"
@@ -31,24 +32,10 @@ export async function createServiceRequest(formData: {
   noStore()
 
   try {
-    const session = await getServerSession(authOptions)
-    if (!session || !session.user) {
-      return { success: false, error: 'Authentication required. Please log in again.' }
-    }
-
+    const session = await assertActionAccess(['SECRETARY', 'ICT_DIRECTOR'])
     const { user } = session
-    if (user.role !== 'SECRETARY' && user.role !== 'ICT_DIRECTOR') {
-      return { success: false, error: 'Only Secretaries and Directors can submit requests.' }
-    }
-
-    if (!user.id) {
-      return { success: false, error: 'Session error: User ID missing.' }
-    }
 
     const isDirector = user.role === 'ICT_DIRECTOR'
-    if (isDirector && !formData.serviceType) {
-      return { success: false, error: 'Directly approved events must have a service type.' }
-    }
 
     const bypassReason = sanitizeSingleLineText(formData.directorBypassReason, {
       fieldName: 'Bypass reason',
@@ -115,19 +102,30 @@ export async function createServiceRequest(formData: {
         },
       })
 
+      if (isDirector) {
+        await syncPmacEventFromServiceRequest(tx, createdRequest, {
+          id: user.id,
+          name: user.name,
+          role: user.role,
+        })
+      }
+
       return createdRequest
     })
 
     revalidateRequestViews()
+    if (isDirector && normalized.serviceType === 'PMAC') {
+      revalidatePmacViews([`/pmac/events/${request.id}`])
+    }
     return { success: true, data: { id: request.id } }
   } catch (error) {
     console.error('SERVER_ACTION_CRITICAL_ERROR:', error)
 
     if (error instanceof Error) {
-      return { success: false, error: `Server error: ${error.message}` }
+      return { success: false, error: error.message }
     }
 
-    return { success: false, error: 'Server error: Unknown error' }
+    return { success: false, error: 'Unknown server error.' }
   }
 }
 

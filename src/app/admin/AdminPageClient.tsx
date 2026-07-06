@@ -8,21 +8,9 @@ import clsx from 'clsx'
 
 import Portal from '@/components/Portal'
 import { runWithReverification } from '@/lib/reverificationClient'
+import { SCHOOL_LABELS, SCHOOLS } from '@/lib/schools'
 import type { Role } from '@/types'
 import { addUser, getUsers, removeUser, updateUserEmail } from './actions'
-
-const SCHOOLS = ['SNAHS', 'SBAHM', 'SITE', 'SASTE', 'MEDICINE', 'BEU', 'UNIVERSITY', 'HR'] as const
-
-const SCHOOL_LABELS: Record<(typeof SCHOOLS)[number], string> = {
-  SNAHS: 'SNAHS',
-  SBAHM: 'SBAHM',
-  SITE: 'SITE',
-  SASTE: 'SASTE',
-  MEDICINE: 'SOM',
-  BEU: 'BEU',
-  UNIVERSITY: 'UNIVERSITY',
-  HR: 'HR',
-}
 
 const ROLE_META: Record<Role, { label: string; color: string; icon: ElementType; desc: string }> = {
   SECRETARY: {
