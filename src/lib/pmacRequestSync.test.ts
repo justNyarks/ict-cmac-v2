@@ -80,7 +80,7 @@ describe('pmacRequestSync', () => {
       serviceType: 'PMAC',
       documentationType: 'PHOTO',
       campusType: 'IN_CAMPUS',
-      letterContent: null,
+      letterContent: 'Raw formal request letter should stay out of the PMAC operations brief.',
       eventDetails: 'Use the latest approved request data.',
       status: 'DIRECTOR_APPROVED',
       deletedAt: null,
@@ -104,9 +104,13 @@ describe('pmacRequestSync', () => {
       where: { id: 'existing-pmac-event' },
       data: expect.objectContaining({
         title: 'Current PMAC Coverage',
+        createdById: 'secretary-1',
         sourceRequestId: 'service-request-1',
       }),
     }))
+    expect(update.mock.calls[0][0].data.description).toContain('Approved CMAC request routed to PMAC')
+    expect(update.mock.calls[0][0].data.description).toContain('Request Notes: Use the latest approved request data.')
+    expect(update.mock.calls[0][0].data.description).not.toContain('Raw formal request letter')
     expect(tx.pmacEvent.create).not.toHaveBeenCalled()
   })
 })

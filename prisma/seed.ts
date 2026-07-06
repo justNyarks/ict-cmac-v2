@@ -95,15 +95,28 @@ function buildPmacEventScheduleFromRequest(request: Pick<SeedServiceRequest, 'ev
   }
 }
 
-function buildImportedEventDescription(request: Pick<SeedServiceRequest, 'school' | 'documentationType' | 'campusType' | 'eventDetails' | 'letterContent'>) {
-  const details = request.eventDetails || request.letterContent
+function formatDocumentationType(value: string) {
+  switch (value) {
+    case 'BOTH':
+      return 'Photo and Video'
+    case 'PHOTO':
+      return 'Photo'
+    case 'VIDEO':
+      return 'Video'
+    default:
+      return value
+  }
+}
+
+function buildImportedEventDescription(request: Pick<SeedServiceRequest, 'school' | 'documentationType' | 'campusType' | 'eventDetails'>) {
+  const details = request.eventDetails?.trim()
 
   return [
-    'Imported from an approved CMAC request assigned to PMAC.',
-    `School/Department: ${request.school}.`,
-    `Documentation: ${request.documentationType}.`,
-    `Location: ${request.campusType === 'OFF_CAMPUS' ? 'Off-Campus' : 'In-Campus'}.`,
-    details,
+    'Approved CMAC request routed to PMAC for event coverage.',
+    `School/Department: ${request.school}`,
+    `Documentation: ${formatDocumentationType(request.documentationType)}`,
+    `Campus Type: ${request.campusType === 'OFF_CAMPUS' ? 'Off-Campus' : 'In-Campus'}`,
+    details ? `Request Notes: ${details}` : null,
   ].filter(Boolean).join('\n\n')
 }
 
@@ -216,7 +229,7 @@ async function syncApprovedPmacRequestsFromCurrentData() {
       sourceSchool: request.school,
       sourceDocumentationType: request.documentationType,
       sourceCampusType: request.campusType,
-      createdById: request.directorId ?? request.secretaryId,
+      createdById: request.secretaryId,
       approvedById: request.directorId,
       approvalRemarks: buildApprovalRemarks(request),
       submittedAt: request.coordinatorApprovedAt ?? request.createdAt,

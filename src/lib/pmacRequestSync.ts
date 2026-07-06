@@ -68,15 +68,26 @@ export function buildPmacEventScheduleFromRequest(request: Pick<RequestMirrorInp
   }
 }
 
-function buildImportedEventDescription(request: Pick<RequestMirrorInput, 'school' | 'documentationType' | 'campusType' | 'eventDetails' | 'letterContent'>) {
-  const details = request.eventDetails || request.letterContent
+function formatDocumentationType(value: DocumentationType) {
+  switch (value) {
+    case 'BOTH':
+      return 'Photo and Video'
+    case 'PHOTO':
+      return 'Photo'
+    case 'VIDEO':
+      return 'Video'
+  }
+}
+
+function buildImportedEventDescription(request: Pick<RequestMirrorInput, 'school' | 'documentationType' | 'campusType' | 'eventDetails'>) {
+  const details = request.eventDetails?.trim()
 
   return [
-    'Imported from an approved CMAC request assigned to PMAC.',
-    `School/Department: ${request.school}.`,
-    `Documentation: ${request.documentationType}.`,
-    `Location: ${request.campusType === 'OFF_CAMPUS' ? 'Off-Campus' : 'In-Campus'}.`,
-    details,
+    'Approved CMAC request routed to PMAC for event coverage.',
+    `School/Department: ${request.school}`,
+    `Documentation: ${formatDocumentationType(request.documentationType)}`,
+    `Campus Type: ${request.campusType === 'OFF_CAMPUS' ? 'Off-Campus' : 'In-Campus'}`,
+    details ? `Request Notes: ${details}` : null,
   ].filter(Boolean).join('\n\n')
 }
 
@@ -145,7 +156,7 @@ export async function syncPmacEventFromServiceRequest(
   })
 
   const { startDateTime, endDateTime } = buildPmacEventScheduleFromRequest(request)
-  const createdById = request.directorId ?? request.secretaryId
+  const createdById = request.secretaryId
   const approvedById = request.directorId ?? null
   const approvalRemarks = buildApprovalRemarks(request)
 

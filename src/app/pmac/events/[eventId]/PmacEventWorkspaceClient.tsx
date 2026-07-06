@@ -230,6 +230,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
   }
 
   const { event, permissions, roster, viewerRole } = workspace
+  const isImportedCmacEvent = event.sourceType === 'CMAC_REQUEST'
   const canManageAttachments = permissions.canEdit || permissions.canManageAssignments || permissions.canApprove || permissions.canRecordAttendance
 
   const uploadAttachment = async () => {
@@ -332,14 +333,15 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                 <PmacEventStatusBadge status={event.status} />
                 {renderSourceBadge(event.sourceType)}
               </div>
-              <p className="text-sm text-emerald-100">{event.venue}</p>
+              <h3 className="font-display text-2xl font-bold leading-tight text-white">{event.title}</h3>
+              <p className="text-sm font-semibold text-emerald-100">{event.venue}</p>
               <p className="text-sm text-emerald-100">
                 {formatDateTime(event.startDateTime)} to {formatDateTime(event.endDateTime)}
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/10 px-5 py-4 text-sm backdrop-blur-sm">
-              <p>Created by: {event.createdBy.name || 'Unknown'}</p>
-              <p className="mt-1">Submitted: {formatDateTime(event.submittedAt)}</p>
+              <p>{isImportedCmacEvent ? 'Requested by' : 'Created by'}: {event.createdBy.name || 'Unknown'}</p>
+              <p className="mt-1">{isImportedCmacEvent ? 'Submitted to CMAC' : 'Submitted'}: {formatDateTime(event.submittedAt)}</p>
               <p className="mt-1">Approved by: {event.approvedBy?.name || 'Pending CMAC review'}</p>
             </div>
           </div>
@@ -348,7 +350,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
         <div className="grid gap-4 px-6 py-5 md:grid-cols-3">
           <div className="rounded-2xl bg-slate-50 px-4 py-4">
             <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Description</p>
-            <p className="mt-3 text-sm leading-6 text-slate-600">{event.description || 'No description yet.'}</p>
+            <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">{event.description || 'No description yet.'}</p>
           </div>
           <div className="rounded-2xl bg-slate-50 px-4 py-4">
             <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Assignments</p>
