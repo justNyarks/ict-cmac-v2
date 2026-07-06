@@ -27,10 +27,9 @@ import {
   PMAC_EVENT_SOURCE_LABELS,
   PMAC_EVENT_DUTY_ROLES,
   PMAC_EVENT_DUTY_ROLE_LABELS,
-  PMAC_SPECIALTY_LABELS,
 } from '@/lib/pmac'
 import { PMAC_CLUB_ROLE_LABELS } from '@/lib/roles'
-import type { PmacEventSourceType, PmacExecutiveTitle, PmacSpecialty } from '@/types'
+import type { PmacEventSourceType, PmacExecutiveTitle } from '@/types'
 
 type WorkspaceData = Awaited<ReturnType<typeof getPmacEventWorkspace>>
 
@@ -545,41 +544,32 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
               ) : null}
 
               {workspace.assignmentSuggestions.length ? (
-                <div className="space-y-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-4">
-                  <div className="space-y-1">
-                    <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">Suggested Members</p>
-                    <p className="text-sm text-emerald-900">Recommendations balance recent workload, attendance reliability, and role fit for this event.</p>
-                  </div>
-                  <div className="grid gap-3 xl:grid-cols-2">
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Suggested Members</p>
+                  <div className="mt-2 grid gap-2 lg:grid-cols-2">
                     {workspace.assignmentSuggestions.map((suggestion: any) => (
-                      <div key={suggestion.memberId} className="rounded-2xl border border-white/70 bg-white px-4 py-4">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-800">{suggestion.fullName}</p>
-                            <p className="mt-1 text-xs text-slate-500">
+                      <div key={suggestion.memberId} className="rounded-xl border border-white/80 bg-white px-3 py-2">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-slate-800">{suggestion.fullName}</p>
+                            <p className="mt-0.5 truncate text-[11px] text-slate-500">
                               {PMAC_CLUB_ROLE_LABELS[suggestion.clubRole as keyof typeof PMAC_CLUB_ROLE_LABELS]}
-                              {suggestion.executiveTitle ? ` · ${PMAC_EXECUTIVE_TITLE_LABELS[suggestion.executiveTitle as PmacExecutiveTitle]}` : ''}
+                              {suggestion.executiveTitle ? ` | ${PMAC_EXECUTIVE_TITLE_LABELS[suggestion.executiveTitle as PmacExecutiveTitle]}` : ''}
                             </p>
                           </div>
-                          <span className="status-badge bg-emerald-50 text-emerald-700 border-emerald-200">
+                          <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
                             Match {suggestion.score}%
                           </span>
                         </div>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <span className="status-badge bg-slate-100 text-slate-700 border-slate-200">{suggestion.workloadTier} load</span>
-                          <span className="status-badge bg-sky-50 text-sky-700 border-sky-200">{suggestion.attendanceRate}% attendance</span>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{suggestion.workloadTier} load</span>
+                          <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">{suggestion.attendanceRate}% attendance</span>
                           {suggestion.matchedRoles.length ? (
-                            <span className="status-badge bg-amber-50 text-amber-700 border-amber-200">
-                              {suggestion.matchedRoles.map((role: AssignmentRow['assignmentRole']) => PMAC_EVENT_DUTY_ROLE_LABELS[role]).join(', ')}
+                            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                              {PMAC_EVENT_DUTY_ROLE_LABELS[suggestion.matchedRoles[0] as AssignmentRow['assignmentRole']]}
                             </span>
                           ) : null}
-                          {suggestion.specialties?.map((specialty: PmacSpecialty) => (
-                            <span key={`${suggestion.memberId}-${specialty}`} className="status-badge bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200">
-                              {PMAC_SPECIALTY_LABELS[specialty]}
-                            </span>
-                          ))}
                         </div>
-                        <p className="mt-3 text-sm text-slate-600">{suggestion.fullName} {suggestion.reason}.</p>
                       </div>
                     ))}
                   </div>
