@@ -3262,6 +3262,55 @@ async function assertPmacProjectAccess(projectId: string, user: SessionUser) {
   throw new Error('Only the selected executive head or PMAC project launchers can manage this project.')
 }
 
+function canClosePmacProject(project: { headMemberId: string | null }, user: SessionUser) {
+  if (user.role === 'CMAC_COORDINATOR') {
+    return true
+  }
+
+  return user.role === 'PMAC_EXECUTIVE'
+    && !!user.pmacMemberId
+    && project.headMemberId === user.pmacMemberId
+}
+
+function isAssignedPmacProjectHead(project: { headMemberId: string | null }, user: SessionUser) {
+  return user.role === 'PMAC_EXECUTIVE'
+    && !!user.pmacMemberId
+    && project.headMemberId === user.pmacMemberId
+}
+
+async function hasPmacDirectorClosureCheck(projectId: string) {
+  const check = await prisma.pmacActivityLog.findFirst({
+    where: {
+      projectId,
+      action: 'PROJECT_DIRECTOR_CHECKED',
+      actorRole: 'PMAC_DIRECTOR',
+    },
+    select: {
+      id: true,
+    },
+  })
+
+  return !!check
+}
+
+function assertPmacProjectCloseAccess(project: { headMemberId: string | null }, user: SessionUser, directorChecked: boolean) {
+  if (user.role === 'CMAC_COORDINATOR') {
+    return
+  }
+
+  if (isAssignedPmacProjectHead(project, user) && directorChecked) {
+    return
+  }
+
+  if (isAssignedPmacProjectHead(project, user)) {
+    throw new Error('PMAC Director must check this project before the assigned head can close it.')
+  }
+
+  if (!canClosePmacProject(project, user)) {
+    throw new Error('Only the assigned executive head can close this project. CMAC coordinator may bypass when needed.')
+  }
+}
+
 export async function getPmacProjects() {
   noStore()
 
@@ -3351,6 +3400,20 @@ export async function getPmacProjects() {
           createdAt: 'desc',
         },
       },
+      activityLogs: {
+        where: {
+          action: 'PROJECT_DIRECTOR_CHECKED',
+          actorRole: 'PMAC_DIRECTOR',
+        },
+        select: {
+          actorName: true,
+          createdAt: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 1,
+      },
     },
     orderBy: [
       { status: 'asc' },
@@ -3359,15 +3422,28 @@ export async function getPmacProjects() {
     ],
   })
   const viewerBranch = await getExecutiveBranchForUser(session.user)
-  const mappedProjects = projects.map(project => ({
-    ...mapProjectForClient(project),
-    canManageProject: isPmacProjectLauncherRole(session.user.role)
-      || (session.user.role === 'PMAC_EXECUTIVE' && project.headMemberId === session.user.pmacMemberId)
-      || (session.user.role === 'PMAC_EXECUTIVE' && !project.headMemberId && project.branch === viewerBranch),
-    canManageMembers: isPmacProjectLauncherRole(session.user.role)
-      || (session.user.role === 'PMAC_EXECUTIVE' && project.headMemberId === session.user.pmacMemberId)
-      || (session.user.role === 'PMAC_EXECUTIVE' && !project.headMemberId && project.branch === viewerBranch),
-  }))
+  const mappedProjects = projects.map(project => {
+    const directorCheck = project.activityLogs[0] ?? null
+    const hasDirectorCheck = !!directorCheck
+    const hasLauncherAccess = isPmacProjectLauncherRole(session.user.role)
+    const hasAssignedHeadAccess = session.user.role === 'PMAC_EXECUTIVE' && project.headMemberId === session.user.pmacMemberId
+    const hasUnassignedBranchAccess = session.user.role === 'PMAC_EXECUTIVE' && !project.headMemberId && project.branch === viewerBranch
+
+    return {
+      ...mapProjectForClient(project),
+      directorCheck: directorCheck
+        ? {
+            checkedBy: directorCheck.actorName,
+            checkedAt: directorCheck.createdAt,
+          }
+        : null,
+      canManageProject: hasLauncherAccess || hasAssignedHeadAccess || hasUnassignedBranchAccess,
+      canManageMembers: hasLauncherAccess || hasAssignedHeadAccess || hasUnassignedBranchAccess,
+      canCloseProject: session.user.role === 'CMAC_COORDINATOR' || (hasAssignedHeadAccess && hasDirectorCheck),
+      isWaitingForDirectorCheck: hasAssignedHeadAccess && !hasDirectorCheck && project.status !== 'COMPLETED',
+      canDirectorCheckProject: session.user.role === 'PMAC_DIRECTOR' && !hasDirectorCheck && project.status !== 'COMPLETED',
+    }
+  })
   const peopleOptions = isPmacProjectLauncherRole(session.user.role) || session.user.role === 'PMAC_EXECUTIVE'
     ? await getPmacProjectPeopleOptions()
     : { executiveHeads: [], assignableMembers: [] }
@@ -3586,7 +3662,12 @@ export async function updatePmacProjectStatus(projectId: string, status: PmacPro
       throw new Error('Please select a valid project status.')
     }
 
-    await assertPmacProjectAccess(sanitizedProjectId, session.user)
+    const accessibleProject = await assertPmacProjectAccess(sanitizedProjectId, session.user)
+    if (status === 'COMPLETED') {
+      const directorChecked = await hasPmacDirectorClosureCheck(sanitizedProjectId)
+      assertPmacProjectCloseAccess(accessibleProject, session.user, directorChecked)
+    }
+
     await prisma.$transaction(async (tx) => {
       const project = await tx.pmacProject.findUnique({
         where: { id: sanitizedProjectId },
@@ -3623,6 +3704,65 @@ export async function updatePmacProjectStatus(projectId: string, status: PmacPro
   }
 }
 
+export async function checkPmacProjectForClosure(projectId: string) {
+  try {
+    const session = await assertPmacActionSession(['PMAC_DIRECTOR'])
+    const sanitizedProjectId = sanitizeSingleLineText(projectId, {
+      fieldName: 'Project ID',
+      maxLength: 191,
+      required: true,
+    })
+
+    await assertPmacProjectAccess(sanitizedProjectId, session.user)
+    await prisma.$transaction(async (tx) => {
+      const project = await tx.pmacProject.findUnique({
+        where: { id: sanitizedProjectId },
+        select: {
+          title: true,
+          status: true,
+        },
+      })
+
+      if (!project) {
+        throw new Error('Project not found.')
+      }
+
+      if (project.status === 'COMPLETED') {
+        throw new Error('Completed projects are already closed.')
+      }
+
+      const existingCheck = await tx.pmacActivityLog.findFirst({
+        where: {
+          projectId: sanitizedProjectId,
+          action: 'PROJECT_DIRECTOR_CHECKED',
+          actorRole: 'PMAC_DIRECTOR',
+        },
+        select: {
+          id: true,
+        },
+      })
+
+      if (existingCheck) {
+        return
+      }
+
+      await recordPmacActivity(tx, {
+        entityType: 'PROJECT',
+        entityId: sanitizedProjectId,
+        projectId: sanitizedProjectId,
+        ...getActivityActor(session.user),
+        action: 'PROJECT_DIRECTOR_CHECKED',
+        summary: `PMAC Director checked project "${project.title}" for closure.`,
+      })
+    })
+
+    revalidatePmacViews(['/pmac/projects/calendar'])
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to check project for closure.' }
+  }
+}
+
 export async function submitPmacProjectOutput(payload: PmacProjectOutputPayload) {
   try {
     const session = await assertPmacActionSession(['CMAC_COORDINATOR', 'PMAC_DIRECTOR', 'PMAC_SECRETARY', 'PMAC_EXECUTIVE'])
@@ -3637,7 +3777,10 @@ export async function submitPmacProjectOutput(payload: PmacProjectOutputPayload)
       required: true,
     })
 
-    await assertPmacProjectAccess(projectId, session.user)
+    const accessibleProject = await assertPmacProjectAccess(projectId, session.user)
+    const directorChecked = await hasPmacDirectorClosureCheck(projectId)
+    assertPmacProjectCloseAccess(accessibleProject, session.user, directorChecked)
+
     await prisma.$transaction(async (tx) => {
       const project = await tx.pmacProject.findUnique({
         where: { id: projectId },

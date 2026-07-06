@@ -7,6 +7,7 @@ import { CalendarDays, ExternalLink, FolderKanban, Link as LinkIcon, Plus, Refre
 import {
   assignPmacProjectMembers,
   attachPmacProjectLink,
+  checkPmacProjectForClosure,
   getPmacProjects,
   savePmacProject,
   savePmacProjectMilestone,
@@ -158,6 +159,19 @@ export default function PmacProjectsPageClient() {
         await loadProjects()
       } else {
         setMessage(result.error ?? 'Unable to update project status.')
+      }
+    })
+  }
+
+  function checkProjectForClosure(projectId: string) {
+    setMessage('')
+    startTransition(async () => {
+      const result = await checkPmacProjectForClosure(projectId)
+      if (result.success) {
+        await loadProjects()
+        setMessage('Project checked for closure.')
+      } else {
+        setMessage(result.error ?? 'Unable to check project for closure.')
       }
     })
   }
@@ -350,6 +364,10 @@ export default function PmacProjectsPageClient() {
           ))
           const teamOptionIds = new Set(teamOptions.map(member => member.id))
           const selectedTeamMemberIds = (teamForms[project.id] ?? assignedMemberIds).filter(memberId => teamOptionIds.has(memberId))
+          const statusOptions = project.canCloseProject
+            ? PMAC_PROJECT_STATUSES
+            : PMAC_PROJECT_STATUSES.filter(status => status !== 'COMPLETED')
+          const canChangeProjectStatus = project.canManageProject && (project.status !== 'COMPLETED' || project.canCloseProject)
           return (
             <div key={project.id} className="card p-6">
               <div className="flex flex-wrap items-start justify-between gap-4">
@@ -370,6 +388,15 @@ export default function PmacProjectsPageClient() {
                   <p className="mt-2 text-sm font-semibold text-slate-700">
                     Head: {project.headMember?.fullName ?? PMAC_EXECUTIVE_TITLE_LABELS[project.branch]}
                   </p>
+                  {project.directorCheck ? (
+                    <p className="mt-1 text-xs font-semibold text-emerald-700">
+                      Checked by {project.directorCheck.checkedBy} on {formatDate(project.directorCheck.checkedAt)}
+                    </p>
+                  ) : project.isWaitingForDirectorCheck ? (
+                    <p className="mt-1 text-xs font-semibold text-amber-700">
+                      Waiting for PMAC Director check before closure.
+                    </p>
+                  ) : null}
                   {project.summary ? <p className="mt-3 max-w-3xl text-sm text-slate-600">{project.summary}</p> : null}
                   {project.outputSummary ? (
                     <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
@@ -379,17 +406,29 @@ export default function PmacProjectsPageClient() {
                     </div>
                   ) : null}
                 </div>
-                {project.canManageProject ? (
-                  <select
-                    value={project.status}
-                    onChange={event => changeProjectStatus(project.id, event.target.value as PmacProjectStatus)}
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-200"
-                  >
-                    {PMAC_PROJECT_STATUSES.map(status => (
-                      <option key={status} value={status}>{PMAC_PROJECT_STATUS_LABELS[status]}</option>
-                    ))}
-                  </select>
-                ) : null}
+                <div className="flex flex-col items-start gap-2 sm:items-end">
+                  {project.canDirectorCheckProject ? (
+                    <button
+                      type="button"
+                      disabled={isPending}
+                      onClick={() => checkProjectForClosure(project.id)}
+                      className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-60"
+                    >
+                      Mark Checked
+                    </button>
+                  ) : null}
+                  {canChangeProjectStatus ? (
+                    <select
+                      value={project.status}
+                      onChange={event => changeProjectStatus(project.id, event.target.value as PmacProjectStatus)}
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-200"
+                    >
+                      {statusOptions.map(status => (
+                        <option key={status} value={status}>{PMAC_PROJECT_STATUS_LABELS[status]}</option>
+                      ))}
+                    </select>
+                  ) : null}
+                </div>
               </div>
 
               <div className="mt-5">
@@ -582,7 +621,7 @@ export default function PmacProjectsPageClient() {
                 ) : null}
               </div>
 
-              {project.canManageProject && project.status !== 'COMPLETED' ? (
+              {project.canCloseProject && project.status !== 'COMPLETED' ? (
                 <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50/60 p-4">
                   <p className="text-sm font-bold text-slate-800">Submit Project Output</p>
                   <textarea
