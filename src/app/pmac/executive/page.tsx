@@ -5,7 +5,7 @@ export default function PmacExecutivePage() {
     <PmacRolePage
       allowedRole="PMAC_EXECUTIVE"
       nextPath="/pmac/executive"
-      accessSummary="Executive access covers assigned PMAC events, availability responses, and branch-head tagging for members under the shared PMAC Executive role."
+      accessSummary="Manage assigned events, branch tags, and project teams for your specialty."
     />
   )
 }

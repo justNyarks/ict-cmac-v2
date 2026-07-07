@@ -5,7 +5,7 @@ import type { AppNotification } from '@/types/notifications'
 type SummaryItem = {
   label: string
   value: string | number
-  helper: string
+  helper?: string
 }
 
 type LinkCard = {
@@ -43,6 +43,10 @@ function ListSection({
   description: string
   items: LinkCard[]
 }) {
+  if (!items.length) {
+    return null
+  }
+
   return (
     <div className="card p-6">
       <div className="space-y-1">
@@ -50,29 +54,23 @@ function ListSection({
         <p className="text-sm text-slate-500">{description}</p>
       </div>
 
-      {items.length ? (
-        <div className="mt-4 space-y-3">
-          {items.map((item) => (
-            <a
-              key={item.id}
-              href={item.href}
-              className="flex flex-col gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 transition-colors hover:bg-slate-100"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-800">{item.title}</p>
-                {item.badge ? (
-                  <span className="status-badge bg-emerald-50 text-emerald-700 border-emerald-200">{item.badge}</span>
-                ) : null}
-              </div>
-              <p className="text-xs text-slate-500">{item.meta}</p>
-            </a>
-          ))}
-        </div>
-      ) : (
-        <div className="mt-4 rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500">
-          Nothing to show right now.
-        </div>
-      )}
+      <div className="mt-4 space-y-3">
+        {items.map((item) => (
+          <a
+            key={item.id}
+            href={item.href}
+            className="flex flex-col gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 transition-colors hover:bg-slate-100"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-slate-800">{item.title}</p>
+              {item.badge ? (
+                <span className="status-badge bg-emerald-50 text-emerald-700 border-emerald-200">{item.badge}</span>
+              ) : null}
+            </div>
+            <p className="text-xs text-slate-500">{item.meta}</p>
+          </a>
+        ))}
+      </div>
     </div>
   )
 }
@@ -118,16 +116,14 @@ export default function PmacDashboardPlaceholder({
         </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <div className="card p-5">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Access Scope</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Role Summary</p>
           <p className="mt-3 text-lg font-bold text-slate-800">{roleLabel}</p>
           <p className="mt-2 text-sm text-slate-500">{accessSummary}</p>
-        </div>
-        <div className="card p-5">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Club Assignment</p>
-          <div className="mt-3">{badge}</div>
-          <p className="mt-2 text-sm text-slate-500">Club leadership remains separate from sign-in permissions and event staffing duties.</p>
+          {badge ? (
+            <div className="mt-3 flex flex-wrap gap-2">{badge}</div>
+          ) : null}
         </div>
         <div className="card p-5">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Shortcuts</p>
@@ -148,14 +144,16 @@ export default function PmacDashboardPlaceholder({
       {stats.length ? (
         <div className="rounded-2xl border border-emerald-100 bg-white/80 px-4 py-3 shadow-sm">
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Quick Reminders</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((item) => (
             <div key={item.label} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-500">{item.label}</p>
                 <p className="text-lg font-bold text-slate-800">{item.value}</p>
               </div>
-              <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-500">{item.helper}</p>
+              {item.helper ? (
+                <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-slate-500">{item.helper}</p>
+              ) : null}
             </div>
           ))}
           </div>
@@ -181,34 +179,30 @@ export default function PmacDashboardPlaceholder({
           description="Live PMAC voting items and governance decisions that still need attention."
           items={openPolls}
         />
+        {notifications.length ? (
         <div className="card p-6">
           <div className="space-y-1">
             <h3 className="font-display text-xl font-bold text-slate-800">Notifications</h3>
             <p className="text-sm text-slate-500">Fresh reminders surfaced directly from active PMAC and CMAC workflow activity.</p>
           </div>
 
-          {notifications.length ? (
-            <div className="mt-4 space-y-3">
-              {notifications.map((notification) => (
-                <a
-                  key={notification.id}
-                  href={notification.href}
-                  className="block rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 transition-colors hover:bg-slate-100"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-800">{notification.title}</p>
-                    <span className="status-badge bg-slate-100 text-slate-700 border-slate-200">{notification.module}</span>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-500">{notification.description}</p>
-                </a>
-              ))}
-            </div>
-          ) : (
-            <div className="mt-4 rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500">
-              No new PMAC notifications right now.
-            </div>
-          )}
+          <div className="mt-4 space-y-3">
+            {notifications.map((notification) => (
+              <a
+                key={notification.id}
+                href={notification.href}
+                className="block rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4 transition-colors hover:bg-slate-100"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-slate-800">{notification.title}</p>
+                  <span className="status-badge bg-slate-100 text-slate-700 border-slate-200">{notification.module}</span>
+                </div>
+                <p className="mt-2 text-sm text-slate-500">{notification.description}</p>
+              </a>
+            ))}
+          </div>
         </div>
+        ) : null}
 
         <ListSection
           title="Recent Activity"

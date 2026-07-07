@@ -5,7 +5,7 @@ export default function PmacMemberPage() {
     <PmacRolePage
       allowedRole="PMAC_MEMBER"
       nextPath="/pmac/member"
-      accessSummary="Member access is focused on assigned PMAC events, individual coverage responses, protected PMAC visibility, and viewing branch tags assigned by executive heads."
+      accessSummary="View your assigned events, project work, responses, and PMAC updates."
     />
   )
 }

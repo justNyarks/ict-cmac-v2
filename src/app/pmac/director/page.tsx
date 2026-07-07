@@ -5,7 +5,7 @@ export default function PmacDirectorPage() {
     <PmacRolePage
       allowedRole="PMAC_DIRECTOR"
       nextPath="/pmac/director"
-      accessSummary="Director access includes draft event creation, submission for CMAC approval, staffing oversight, and PMAC workflow completion."
+      accessSummary="Review PMAC events, polls, members, reports, and branch projects."
     />
   )
 }

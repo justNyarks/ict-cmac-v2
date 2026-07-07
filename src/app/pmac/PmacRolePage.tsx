@@ -17,9 +17,9 @@ type PmacRolePageProps = {
 
 function getPmacRoleLinks(role: Role) {
   const links = [
-    { href: '/pmac/events', label: 'PMAC Events' },
-    { href: '/pmac/polls', label: 'PMAC Polls' },
-    { href: '/pmac/calendar', label: 'PMAC Calendar' },
+    { href: '/pmac/events', label: 'Events' },
+    { href: '/pmac/polls', label: 'Polls' },
+    { href: '/pmac/calendar', label: 'Calendar' },
     { href: '/pmac/assignments', label: 'Assignments' },
   ]
 
@@ -39,6 +39,10 @@ function getPmacRoleLinks(role: Role) {
     links.push({ href: '/pmac/attendance', label: 'Attendance' })
   }
 
+  if (role === 'PMAC_DIRECTOR' || role === 'PMAC_SECRETARY' || role === 'PMAC_EXECUTIVE' || role === 'PMAC_MEMBER') {
+    links.push({ href: '/pmac/projects', label: 'Projects' })
+  }
+
   if (role === 'PMAC_DIRECTOR' || role === 'PMAC_SECRETARY') {
     links.push({ href: '/pmac/members', label: 'Members' })
   }
@@ -54,6 +58,57 @@ function getPmacRoleLinks(role: Role) {
   }
 
   return links
+}
+
+function getPmacDashboardStats(params: {
+  role: Role
+  eventCount: number
+  importedNeedsStaffing: number
+  projectCount: number
+  activeProjectCount: number
+  openPollCount: number
+  pendingResponses: number
+}) {
+  const eventLabel = isPmacEventManagerRole(params.role) || params.role === 'PMAC_SECRETARY'
+    ? 'Events'
+    : 'Assigned Events'
+  const stats: Array<{ label: string; value: number; helper?: string }> = [
+    {
+      label: eventLabel,
+      value: params.eventCount,
+    },
+  ]
+
+  if (params.role === 'PMAC_DIRECTOR' || params.role === 'PMAC_ASSISTANT_DIRECTOR' || params.role === 'PMAC_SECRETARY') {
+    stats.push({
+      label: 'Duty Assignment',
+      value: params.importedNeedsStaffing,
+    })
+  }
+
+  if (isPmacAssignmentResponderRole(params.role)) {
+    stats.push({
+      label: 'Pending Responses',
+      value: params.pendingResponses,
+    })
+  }
+
+  if (params.projectCount > 0 || params.role === 'PMAC_DIRECTOR' || params.role === 'PMAC_SECRETARY') {
+    stats.push({
+      label: 'Projects',
+      value: params.projectCount,
+      helper: params.activeProjectCount ? `${params.activeProjectCount} active` : undefined,
+    })
+  }
+
+  if (params.openPollCount > 0 || params.role === 'PMAC_DIRECTOR' || params.role === 'PMAC_ASSISTANT_DIRECTOR') {
+    stats.push({
+      label: 'Open Polls',
+      value: params.openPollCount,
+    })
+  }
+
+  return stats
 }
 
 function getPmacProjectWhere(user: { role: Role; pmacMemberId: string | null }): Prisma.PmacProjectWhereInput {
@@ -124,20 +179,6 @@ export default async function PmacRolePage({ allowedRole, nextPath, accessSummar
             orderBy: {
               specialty: 'asc',
             },
-          },
-          receivedTags: {
-            include: {
-              assignedByMember: {
-                select: {
-                  fullName: true,
-                  executiveTitle: true,
-                },
-              },
-            },
-            orderBy: [
-              { label: 'asc' },
-              { createdAt: 'asc' },
-            ],
           },
         },
       })
@@ -244,7 +285,7 @@ export default async function PmacRolePage({ allowedRole, nextPath, accessSummar
       roleLabel={getRoleLabel(session.user.role)}
       accessSummary={accessSummary}
       badge={member ? (
-        <div className="space-y-2">
+        <div className="flex flex-wrap gap-2">
           <span className="status-badge bg-sky-50 text-sky-700 border-sky-200">
             Club: {PMAC_CLUB_ROLE_LABELS[member.clubRole]}
           </span>
@@ -258,11 +299,6 @@ export default async function PmacRolePage({ allowedRole, nextPath, accessSummar
               {PMAC_SPECIALTY_LABELS[entry.specialty as PmacSpecialty]}
             </span>
           ))}
-          {member.receivedTags.map((tag) => (
-            <span key={`${tag.assignedByMember.fullName}-${tag.label}`} className="status-badge bg-slate-100 text-slate-700 border-slate-200">
-              {tag.label} | {tag.assignedByMember.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[tag.assignedByMember.executiveTitle as PmacExecutiveTitle] : tag.assignedByMember.fullName}
-            </span>
-          ))}
           <span className="status-badge bg-emerald-50 text-emerald-700 border-emerald-200">
             Status: {PMAC_MEMBER_STATUS_LABELS[member.status]}
           </span>
@@ -272,33 +308,15 @@ export default async function PmacRolePage({ allowedRole, nextPath, accessSummar
           No PMAC member profile linked
         </span>
       )}
-      stats={[
-        {
-          label: 'Accessible Events',
-          value: eventCount,
-          helper: 'Role-aware PMAC events currently available to your account.',
-        },
-        {
-          label: 'Open Polls',
-          value: openPollCount,
-          helper: 'Active PMAC governance polls that are currently live.',
-        },
-        {
-          label: 'Pending Responses',
-          value: pendingResponses,
-          helper: 'Assignments still waiting on your availability response.',
-        },
-        {
-          label: 'CMAC Imports',
-          value: importedNeedsStaffing,
-          helper: 'Approved CMAC requests in PMAC that still need duty assignment.',
-        },
-        {
-          label: 'Branch Projects',
-          value: projectCount,
-          helper: `${activeProjectCount} active project(s) currently visible to this role.`,
-        },
-      ]}
+      stats={getPmacDashboardStats({
+        role: session.user.role,
+        eventCount,
+        importedNeedsStaffing,
+        projectCount,
+        activeProjectCount,
+        openPollCount,
+        pendingResponses,
+      })}
       upcomingEvents={upcomingEvents.map((event) => ({
         id: event.id,
         title: event.title,

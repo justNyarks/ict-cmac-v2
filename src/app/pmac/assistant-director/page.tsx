@@ -5,7 +5,7 @@ export default function PmacAssistantDirectorPage() {
     <PmacRolePage
       allowedRole="PMAC_ASSISTANT_DIRECTOR"
       nextPath="/pmac/assistant-director"
-      accessSummary="Assistant director access supports PMAC event creation, staffing coordination, and full visibility into PMAC operational workflows."
+      accessSummary="Create events and polls, coordinate staffing, and monitor PMAC activity."
     />
   )
 }

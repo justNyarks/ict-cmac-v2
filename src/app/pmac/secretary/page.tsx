@@ -5,7 +5,7 @@ export default function PmacSecretaryPage() {
     <PmacRolePage
       allowedRole="PMAC_SECRETARY"
       nextPath="/pmac/secretary"
-      accessSummary="Secretary access includes PMAC event visibility, staffing support, and attendance recording after events are approved."
+      accessSummary="Track approved events, duty assignment, attendance, members, and projects."
     />
   )
 }
