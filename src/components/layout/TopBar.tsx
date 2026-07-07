@@ -8,7 +8,7 @@ import type { MouseEvent as ReactMouseEvent } from 'react'
 import { Bell, CheckCircle2, Clock, Info, X, XCircle } from 'lucide-react'
 import clsx from 'clsx'
 
-import { getNotifications } from '@/app/notificationsActions'
+import { getNotifications, markAllNotificationsAsRead, markNotificationAsRead } from '@/app/notificationsActions'
 import { getRoleLabel } from '@/lib/roles'
 import type { AppNotification } from '@/types/notifications'
 
@@ -70,15 +70,35 @@ export default function TopBar() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [dismissedNotifs, setDismissedNotifs] = useState<string[]>([])
   const [showNotifs, setShowNotifs] = useState(false)
+  const [popNotification, setPopNotification] = useState<AppNotification | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const dismissedRef = useRef<string[]>([])
+  const seenNotificationIdsRef = useRef<Set<string>>(new Set())
+  const initializedNotificationsRef = useRef(false)
 
   useEffect(() => {
     const dismissed = JSON.parse(localStorage.getItem(DISMISSED_NOTIFICATIONS_KEY) || '[]') as string[]
     setDismissedNotifs(dismissed)
+    dismissedRef.current = dismissed
 
     const fetchNotifs = () =>
       getNotifications()
-        .then(setNotifications)
+        .then((nextNotifications) => {
+          const visibleUnread = nextNotifications.filter((notification) => (
+            !notification.isRead && !dismissedRef.current.includes(notification.id)
+          ))
+
+          if (initializedNotificationsRef.current) {
+            const newNotification = visibleUnread.find((notification) => !seenNotificationIdsRef.current.has(notification.id))
+            if (newNotification && !showNotifs) {
+              setPopNotification(newNotification)
+            }
+          }
+
+          seenNotificationIdsRef.current = new Set(nextNotifications.map((notification) => notification.id))
+          initializedNotificationsRef.current = true
+          setNotifications(nextNotifications)
+        })
         .catch((error) => {
           console.error('TOPBAR_NOTIFICATIONS_ERROR:', error)
           setNotifications([])
@@ -112,23 +132,43 @@ export default function TopBar() {
       window.removeEventListener('focus', handleWindowFocus)
       document.removeEventListener('mousedown', handleClickOutside)
     }
-  }, [])
+  }, [showNotifs])
 
-  const visibleNotifs = notifications.filter((notification) => !dismissedNotifs.includes(notification.id))
+  useEffect(() => {
+    if (!popNotification) {
+      return
+    }
+
+    const timeout = window.setTimeout(() => setPopNotification(null), 5000)
+    return () => window.clearTimeout(timeout)
+  }, [popNotification])
+
+  const visibleNotifs = notifications.filter((notification) => !notification.isRead && !dismissedNotifs.includes(notification.id))
+  const hasHighPriorityNotification = visibleNotifs.some((notification) => (
+    notification.priority === 'critical' || notification.priority === 'high'
+  ))
 
   const handleDismiss = (event: ReactMouseEvent, id: string) => {
     event.preventDefault()
     event.stopPropagation()
     const updated = Array.from(new Set([...dismissedNotifs, id]))
     setDismissedNotifs(updated)
+    dismissedRef.current = updated
     localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(updated))
+    setPopNotification((current) => current?.id === id ? null : current)
   }
 
-  const handleNotifClick = (notification: AppNotification) => {
+  const handleNotifClick = async (notification: AppNotification) => {
     const updated = Array.from(new Set([...dismissedNotifs, notification.id]))
     setDismissedNotifs(updated)
+    dismissedRef.current = updated
     localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(updated))
+    setNotifications((previous) => previous.map((item) => (
+      item.id === notification.id ? { ...item, isRead: true } : item
+    )))
+    setPopNotification(null)
     setShowNotifs(false)
+    await markNotificationAsRead(notification.id, notification.module)
     router.push(notification.href)
   }
 
@@ -149,14 +189,19 @@ export default function TopBar() {
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setShowNotifs(!showNotifs)}
+            aria-label={visibleNotifs.length ? `${visibleNotifs.length} unread notification${visibleNotifs.length === 1 ? '' : 's'}` : 'Notifications'}
             className={clsx(
               'relative p-2.5 rounded-2xl transition-all duration-300',
-              showNotifs ? 'bg-emerald-50 text-emerald-600' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+              showNotifs ? 'bg-emerald-50 text-emerald-600' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50',
+              visibleNotifs.length ? 'shadow-sm ring-1 ring-emerald-100' : '',
+              hasHighPriorityNotification ? 'text-amber-600 ring-amber-200 animate-pulse' : ''
             )}
           >
             <Bell size={22} />
             {visibleNotifs.length > 0 && (
-              <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full shadow-sm animate-pulse"></span>
+              <span className="absolute -right-1 -top-1 flex min-w-5 items-center justify-center rounded-full border-2 border-white bg-emerald-600 px-1 text-[10px] font-black text-white shadow-sm">
+                {visibleNotifs.length > 9 ? '9+' : visibleNotifs.length}
+              </span>
             )}
           </button>
 
@@ -166,10 +211,17 @@ export default function TopBar() {
                 <h3 className="font-black text-[10px] text-emerald-800 uppercase tracking-[0.2em]">Notifications</h3>
                 {visibleNotifs.length > 0 && (
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       const updated = Array.from(new Set([...dismissedNotifs, ...visibleNotifs.map((notification) => notification.id)]))
                       setDismissedNotifs(updated)
+                      dismissedRef.current = updated
                       localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(updated))
+                      setNotifications((previous) => previous.map((notification) => ({ ...notification, isRead: true })))
+                      setPopNotification(null)
+                      await markAllNotificationsAsRead(visibleNotifs.map((notification) => ({
+                        id: notification.id,
+                        module: notification.module,
+                      })))
                     }}
                     className="text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
                   >
@@ -182,8 +234,16 @@ export default function TopBar() {
                   visibleNotifs.map((notification) => (
                     <div
                       key={notification.id}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => handleNotifClick(notification)}
-                      className="flex items-start gap-3 p-4 hover:bg-emerald-50/50 transition-colors border-b border-emerald-50/50 group cursor-pointer"
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          handleNotifClick(notification)
+                        }
+                      }}
+                      className="flex w-full cursor-pointer items-start gap-3 border-b border-emerald-50/50 p-4 text-left transition-colors hover:bg-emerald-50/50 group"
                     >
                       <div className={clsx(
                         'w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5',
@@ -221,6 +281,45 @@ export default function TopBar() {
               </Link>
             </div>
           )}
+
+          {popNotification && !showNotifs ? (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => handleNotifClick(popNotification)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  handleNotifClick(popNotification)
+                }
+              }}
+              className="absolute right-0 top-14 z-50 w-80 rounded-3xl border border-emerald-100 bg-white p-4 text-left shadow-2xl ring-1 ring-emerald-100 animate-fade-in"
+            >
+              <div className="flex items-start gap-3">
+                <div className={clsx(
+                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl',
+                  popNotification.tone === 'success' ? 'bg-emerald-100 text-emerald-600'
+                  : popNotification.tone === 'info' ? 'bg-sky-100 text-sky-600'
+                  : popNotification.tone === 'danger' ? 'bg-red-100 text-red-600'
+                  : 'bg-amber-100 text-amber-600'
+                )}>
+                  {getNotificationIcon(popNotification)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">New notification</p>
+                  <p className="mt-1 line-clamp-1 text-sm font-bold text-slate-800">{popNotification.title}</p>
+                  <p className="mt-1 line-clamp-2 text-xs text-slate-500">{popNotification.description}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={(event) => handleDismiss(event, popNotification.id)}
+                  className="rounded-lg p-1 text-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-500"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="h-10 w-[1px] bg-emerald-100/50"></div>
