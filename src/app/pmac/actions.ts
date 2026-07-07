@@ -3902,8 +3902,8 @@ export async function assignPmacProjectMembers(payload: PmacProjectMemberPayload
     const assignableMemberIds = memberIds.filter(memberId => memberId !== project.headMemberId)
     const requiredSpecialty = PMAC_EXECUTIVE_BRANCH_SPECIALTY[project.branch]
 
-    if (session.user.role === 'PMAC_EXECUTIVE' && assignableMemberIds.length === 0) {
-      throw new Error(`Please select at least one active ${PMAC_SPECIALTY_LABELS[requiredSpecialty]} member for this project.`)
+    if (session.user.role === 'PMAC_EXECUTIVE' && assignableMemberIds.length < 2) {
+      throw new Error(`Please select at least two active ${PMAC_SPECIALTY_LABELS[requiredSpecialty]} members who will work together on this project.`)
     }
 
     const members = assignableMemberIds.length

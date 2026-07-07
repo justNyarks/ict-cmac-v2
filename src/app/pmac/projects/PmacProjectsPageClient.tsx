@@ -368,7 +368,7 @@ export default function PmacProjectsPageClient() {
             ? PMAC_PROJECT_STATUSES
             : PMAC_PROJECT_STATUSES.filter(status => status !== 'COMPLETED')
           const canChangeProjectStatus = project.canManageProject && (project.status !== 'COMPLETED' || project.canCloseProject)
-          const needsMemberSelection = project.mustSelectProjectMembers && selectedTeamMemberIds.length === 0
+          const needsMemberSelection = project.mustSelectProjectMembers && selectedTeamMemberIds.length < 2
           return (
             <div key={project.id} className="card p-6">
               <div className="flex flex-wrap items-start justify-between gap-4">
@@ -478,7 +478,7 @@ export default function PmacProjectsPageClient() {
                       </p>
                       {needsMemberSelection ? (
                         <p className="mt-1 text-xs font-semibold text-amber-700">
-                          Select at least one eligible member before saving.
+                          Select at least two eligible members who will work together before saving.
                         </p>
                       ) : null}
                     </div>
