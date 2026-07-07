@@ -364,6 +364,7 @@ export default function PmacProjectsPageClient() {
           ))
           const teamOptionIds = new Set(teamOptions.map(member => member.id))
           const selectedTeamMemberIds = (teamForms[project.id] ?? assignedMemberIds).filter(memberId => teamOptionIds.has(memberId))
+          const selectedTeamMemberIdSet = new Set(selectedTeamMemberIds)
           const statusOptions = project.canCloseProject
             ? PMAC_PROJECT_STATUSES
             : PMAC_PROJECT_STATUSES.filter(status => status !== 'COMPLETED')
@@ -458,21 +459,47 @@ export default function PmacProjectsPageClient() {
                 {project.canManageMembers ? (
                   <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
                     <div>
-                      <select
-                        multiple
-                        value={selectedTeamMemberIds}
-                        onChange={event => setTeamForms(previous => ({
-                          ...previous,
-                          [project.id]: Array.from(event.target.selectedOptions, option => option.value),
-                        }))}
-                        className="min-h-32 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-200"
-                      >
-                        {teamOptions.map(member => (
-                          <option key={member.id} value={member.id}>
-                            {member.fullName}{member.executiveTitle ? ` - ${PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle]}` : ''}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {teamOptions.length ? teamOptions.map(member => {
+                          const isSelected = selectedTeamMemberIdSet.has(member.id)
+
+                          return (
+                            <button
+                              key={member.id}
+                              type="button"
+                              onClick={() => setTeamForms(previous => {
+                                const currentIds = new Set(previous[project.id] ?? assignedMemberIds)
+                                if (currentIds.has(member.id)) {
+                                  currentIds.delete(member.id)
+                                } else {
+                                  currentIds.add(member.id)
+                                }
+
+                                return {
+                                  ...previous,
+                                  [project.id]: Array.from(currentIds).filter(memberId => teamOptionIds.has(memberId)),
+                                }
+                              })}
+                              className={`rounded-xl border px-3 py-2 text-left text-sm font-semibold transition ${
+                                isSelected
+                                  ? 'border-emerald-300 bg-emerald-50 text-emerald-800 shadow-sm'
+                                  : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-200 hover:bg-emerald-50/50'
+                              }`}
+                            >
+                              <span className="block truncate">{member.fullName}</span>
+                              {member.executiveTitle ? (
+                                <span className="mt-0.5 block truncate text-[11px] font-medium text-slate-500">
+                                  {PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle]}
+                                </span>
+                              ) : null}
+                            </button>
+                          )
+                        }) : (
+                          <p className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-4 text-center text-sm text-slate-400 sm:col-span-2 lg:col-span-3">
+                            No eligible members available for this specialty.
+                          </p>
+                        )}
+                      </div>
                       <p className="mt-2 text-xs text-slate-500">
                         Showing active members with {PMAC_SPECIALTY_LABELS[requiredSpecialty]} specialty.
                       </p>
