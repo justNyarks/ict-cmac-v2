@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 import { recordPmacActivity } from '@/lib/pmacActivity'
 import { prisma } from '@/lib/prisma'
-import { assertActionAccess } from '@/lib/security'
+import { assertActionAccess, assertSameOriginMutation } from '@/lib/security'
 import { sanitizeMultilineText, sanitizeSingleLineText } from '@/lib/sanitization'
 
 const UPLOAD_ROOT = path.join(process.cwd(), 'public', 'uploads', 'pmac')
@@ -136,6 +136,7 @@ async function removeStoredFile(filePath: string) {
 
 export async function POST(request: NextRequest) {
   try {
+    assertSameOriginMutation(request)
     const session = await assertActionAccess(['CMAC_COORDINATOR', 'PMAC_DIRECTOR', 'PMAC_ASSISTANT_DIRECTOR', 'PMAC_SECRETARY'], {
     })
     const formData = await request.formData()
@@ -240,7 +241,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to upload PMAC attachment.'
     const status =
-      message === 'Not authenticated'
+      message === 'Invalid request origin'
+        ? 403
+        : message === 'Not authenticated'
         ? 401
         : message === 'Unauthorized'
           ? 403
@@ -254,6 +257,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    assertSameOriginMutation(request)
     const session = await assertActionAccess(['CMAC_COORDINATOR', 'PMAC_DIRECTOR', 'PMAC_ASSISTANT_DIRECTOR', 'PMAC_SECRETARY'], {
     })
     const body = await request.json()
@@ -315,7 +319,9 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to remove PMAC attachment.'
     const status =
-      message === 'Not authenticated'
+      message === 'Invalid request origin'
+        ? 403
+        : message === 'Not authenticated'
         ? 401
         : message === 'Unauthorized'
           ? 403

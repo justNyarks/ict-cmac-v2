@@ -11,6 +11,7 @@ import {
 } from '@/lib/zeroTrust'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import type { NextRequest } from 'next/server'
 import { getServerSession, type Session } from 'next-auth'
 
 type AccessOptions = {
@@ -20,6 +21,59 @@ type AccessOptions = {
 
 type AuthSession = Session & {
   user: NonNullable<Session['user']>
+}
+
+const SAFE_HTTP_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+function normalizeOrigin(value: string | null | undefined) {
+  if (!value) {
+    return null
+  }
+
+  try {
+    return new URL(value.includes('://') ? value : `https://${value}`).origin
+  } catch {
+    return null
+  }
+}
+
+function getRequestOriginFromReferer(value: string | null) {
+  if (!value) {
+    return null
+  }
+
+  try {
+    return new URL(value).origin
+  } catch {
+    return null
+  }
+}
+
+function getTrustedRequestOrigins(request: Pick<NextRequest, 'nextUrl'>) {
+  const origins = [
+    request.nextUrl.origin,
+    normalizeOrigin(process.env.NEXTAUTH_URL),
+    normalizeOrigin(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null),
+  ].filter(Boolean) as string[]
+
+  return new Set(origins)
+}
+
+export function assertSameOriginMutation(request: Pick<NextRequest, 'headers' | 'method' | 'nextUrl'>) {
+  if (SAFE_HTTP_METHODS.has(request.method.toUpperCase())) {
+    return
+  }
+
+  const requestOrigin = normalizeOrigin(request.headers.get('origin'))
+    ?? getRequestOriginFromReferer(request.headers.get('referer'))
+
+  if (!requestOrigin) {
+    throw new Error('Invalid request origin')
+  }
+
+  if (!getTrustedRequestOrigins(request).has(requestOrigin)) {
+    throw new Error('Invalid request origin')
+  }
 }
 
 async function resolveCurrentSession(session: Session | null): Promise<AuthSession | null> {
