@@ -121,6 +121,27 @@ export function sanitizeAttachmentReference(value: string | null | undefined) {
   return normalized
 }
 
+export function sanitizeExternalHttpUrl(value: string | null | undefined, fieldName = 'URL') {
+  const normalized = sanitizeAttachmentReference(value)
+
+  if (!normalized) {
+    return null
+  }
+
+  let parsedUrl: URL
+  try {
+    parsedUrl = new URL(normalized)
+  } catch {
+    throw new Error(`${fieldName} must be a valid http or https URL.`)
+  }
+
+  if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+    throw new Error(`${fieldName} must use http or https.`)
+  }
+
+  return parsedUrl.toString()
+}
+
 export function sanitizeCsvCell(value: unknown) {
   const normalized = normalizeText(value == null ? '' : String(value))
   const safeValue = SPREADSHEET_FORMULA_PATTERN.test(normalized) ? `'${normalized}` : normalized

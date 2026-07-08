@@ -43,7 +43,7 @@ import { recordPmacActivity } from '@/lib/pmacActivity'
 import { hasPmacV4Delegates, prisma } from '@/lib/prisma'
 import { revalidatePmacViews } from '@/lib/pmacRevalidation'
 import { assertActionAccess } from '@/lib/security'
-import { sanitizeAttachmentReference, sanitizeMultilineText, sanitizeSingleLineText } from '@/lib/sanitization'
+import { sanitizeAttachmentReference, sanitizeExternalHttpUrl, sanitizeMultilineText, sanitizeSingleLineText } from '@/lib/sanitization'
 import type { DocumentationType, PmacClubRole, PmacExecutiveTitle, PmacProjectLinkType, PmacProjectMilestoneStatus, PmacProjectStatus, PmacSpecialty, Role } from '@/types'
 
 type PmacEventDutyRole = (typeof PMAC_EVENT_DUTY_ROLES)[number]
@@ -3836,7 +3836,7 @@ export async function attachPmacProjectLink(payload: PmacProjectLinkPayload) {
       maxLength: 191,
       required: true,
     })
-    const url = sanitizeAttachmentReference(payload.url)
+    const url = sanitizeExternalHttpUrl(payload.url, 'Project link URL')
 
     if (!url) {
       throw new Error('Link URL is required.')
