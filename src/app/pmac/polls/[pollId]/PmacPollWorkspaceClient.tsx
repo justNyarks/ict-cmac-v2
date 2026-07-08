@@ -20,6 +20,7 @@ import {
   PMAC_VOTE_CHOICES,
   PMAC_VOTE_CHOICE_LABELS,
 } from '@/lib/pmac'
+import { runWithReverification } from '@/lib/reverificationClient'
 import { PMAC_CLUB_ROLE_LABELS } from '@/lib/roles'
 
 type WorkspaceData = Awaited<ReturnType<typeof getPmacPollWorkspace>>
@@ -164,22 +165,27 @@ export default function PmacPollWorkspaceClient({ pollId }: { pollId: string }) 
     setAttachmentBusy(true)
 
     try {
-      const response = await fetch('/api/pmac/attachments', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ attachmentId }),
-      })
-      const payload = await response.json()
+      await runWithReverification(async () => {
+        const response = await fetch('/api/pmac/attachments', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ attachmentId }),
+        })
+        const payload = await response.json()
 
-      if (!response.ok) {
-        showToast('error', payload.error || 'Failed to remove attachment.')
-        return
-      }
+        if (!response.ok) {
+          throw new Error(payload.error || 'Failed to remove attachment.')
+        }
+
+        return payload
+      })
 
       showToast('success', 'Attachment removed.')
       await refreshWorkspace()
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Failed to remove attachment.')
     } finally {
       setAttachmentBusy(false)
     }

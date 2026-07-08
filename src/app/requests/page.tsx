@@ -220,20 +220,24 @@ export default function RequestsPage() {
     setIsDownloadingPastEvents(true)
 
     try {
-      const response = await fetch('/api/exports/past-events', {
-        method: 'GET',
-        credentials: 'include',
-      })
+      const response = await runWithReverification(async () => {
+        const exportResponse = await fetch('/api/exports/past-events', {
+          method: 'GET',
+          credentials: 'include',
+        })
 
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null)
-        const message =
-          payload?.error ||
-          (response.status === 428
-            ? 'Zero trust verification required before downloading the monthly activity compilation.'
-            : 'Failed to download the monthly activity compilation.')
-        throw new Error(message)
-      }
+        if (!exportResponse.ok) {
+          const payload = await exportResponse.json().catch(() => null)
+          const message =
+            payload?.error ||
+            (exportResponse.status === 428
+              ? 'Zero trust verification required'
+              : 'Failed to download the monthly activity compilation.')
+          throw new Error(message)
+        }
+
+        return exportResponse
+      })
 
       const blob = await response.blob()
       const contentDisposition = response.headers.get('content-disposition')

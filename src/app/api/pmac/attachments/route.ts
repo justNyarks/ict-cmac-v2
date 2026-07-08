@@ -259,6 +259,7 @@ export async function DELETE(request: NextRequest) {
   try {
     assertSameOriginMutation(request)
     const session = await assertActionAccess(['CMAC_COORDINATOR', 'PMAC_DIRECTOR', 'PMAC_ASSISTANT_DIRECTOR', 'PMAC_SECRETARY'], {
+      zeroTrust: true,
     })
     const body = await request.json()
     const attachmentId = sanitizeSingleLineText(body?.attachmentId, {

@@ -10,7 +10,7 @@ function buildFilename() {
 
 export async function GET() {
   try {
-    const session = await assertActionAccess(['CMAC_COORDINATOR', 'ICT_DIRECTOR'])
+    const session = await assertActionAccess(['CMAC_COORDINATOR', 'ICT_DIRECTOR'], { zeroTrust: true })
     const requests = await getPastEventRequestsForExport(session.user)
     const csv = buildPastEventsCsv(requests)
 

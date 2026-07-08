@@ -5,7 +5,14 @@ export const ZERO_TRUST_PATH = '/zero-trust'
 export const ZERO_TRUST_TTL_SECONDS = 15 * 60
 
 const ZERO_TRUST_PROTECTED_PREFIXES = ['/admin', '/analytics', '/logs', '/requests'] as const
-const PRIVILEGED_ROLES: Role[] = ['CMAC_COORDINATOR', 'ICT_DIRECTOR']
+export const SENSITIVE_ACTION_ROLES: Role[] = [
+  'CMAC_COORDINATOR',
+  'ICT_DIRECTOR',
+  'PMAC_DIRECTOR',
+  'PMAC_ASSISTANT_DIRECTOR',
+  'PMAC_SECRETARY',
+]
+const PRIVILEGED_ROLES = SENSITIVE_ACTION_ROLES
 const textEncoder = new TextEncoder()
 
 type ZeroTrustPayload = {

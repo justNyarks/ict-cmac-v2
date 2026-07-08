@@ -16,6 +16,7 @@ function buildFilename(type: PmacReportType) {
 export async function GET(request: NextRequest) {
   try {
     const session = await assertActionAccess(['CMAC_COORDINATOR', 'PMAC_DIRECTOR', 'PMAC_ASSISTANT_DIRECTOR', 'PMAC_SECRETARY'], {
+      zeroTrust: true,
     })
 
     const typeParam = request.nextUrl.searchParams.get('type') ?? 'events'
