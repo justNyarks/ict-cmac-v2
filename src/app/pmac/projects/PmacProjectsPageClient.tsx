@@ -595,7 +595,7 @@ export default function PmacProjectsPageClient() {
                           key={link.id}
                           href={link.url}
                           target="_blank"
-                          rel="noreferrer"
+                          rel="noopener noreferrer"
                           className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm hover:bg-slate-100"
                         >
                           <span>

@@ -66,6 +66,23 @@ const allowedDevOrigins = [...new Set(allowedOrigins.map(origin => origin.split(
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   allowedDevOrigins,
+  async headers() {
+    return [
+      {
+        source: '/uploads/pmac/:path*',
+        headers: [
+          {
+            key: 'Content-Disposition',
+            value: 'attachment',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+        ],
+      },
+    ]
+  },
   experimental: {
     serverActions: {
       allowedOrigins,

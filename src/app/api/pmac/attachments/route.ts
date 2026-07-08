@@ -11,19 +11,62 @@ import { sanitizeMultilineText, sanitizeSingleLineText } from '@/lib/sanitizatio
 
 const UPLOAD_ROOT = path.join(process.cwd(), 'public', 'uploads', 'pmac')
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
-const ALLOWED_MIME_TYPES = new Set([
-  'application/pdf',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'text/plain',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-])
+const ALLOWED_UPLOAD_TYPES = {
+  'application/pdf': {
+    storedExtension: '.pdf',
+    acceptedExtensions: ['.pdf'],
+  },
+  'image/jpeg': {
+    storedExtension: '.jpg',
+    acceptedExtensions: ['.jpg', '.jpeg'],
+  },
+  'image/png': {
+    storedExtension: '.png',
+    acceptedExtensions: ['.png'],
+  },
+  'image/webp': {
+    storedExtension: '.webp',
+    acceptedExtensions: ['.webp'],
+  },
+  'application/msword': {
+    storedExtension: '.doc',
+    acceptedExtensions: ['.doc'],
+  },
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+    storedExtension: '.docx',
+    acceptedExtensions: ['.docx'],
+  },
+} as const
 
-function getExtension(fileName: string) {
-  const extension = path.extname(fileName).toLowerCase()
-  return extension || '.bin'
+type AllowedUploadMimeType = keyof typeof ALLOWED_UPLOAD_TYPES
+
+function getAllowedUploadType(mimeType: string) {
+  return ALLOWED_UPLOAD_TYPES[mimeType as AllowedUploadMimeType] ?? null
+}
+
+function hasBytesPrefix(bytes: Buffer, signature: readonly number[]) {
+  return signature.every((value, index) => bytes[index] === value)
+}
+
+function hasAllowedFileSignature(bytes: Buffer, mimeType: AllowedUploadMimeType) {
+  switch (mimeType) {
+    case 'application/pdf':
+      return hasBytesPrefix(bytes, [0x25, 0x50, 0x44, 0x46])
+    case 'image/jpeg':
+      return hasBytesPrefix(bytes, [0xff, 0xd8, 0xff])
+    case 'image/png':
+      return hasBytesPrefix(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    case 'image/webp':
+      return bytes.length >= 12
+        && bytes.subarray(0, 4).toString('ascii') === 'RIFF'
+        && bytes.subarray(8, 12).toString('ascii') === 'WEBP'
+    case 'application/msword':
+      return hasBytesPrefix(bytes, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])
+    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+      return hasBytesPrefix(bytes, [0x50, 0x4b, 0x03, 0x04])
+    default:
+      return false
+  }
 }
 
 async function ensureAttachmentAccess(
@@ -121,7 +164,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Attachment must be 5 MB or smaller.' }, { status: 400 })
     }
 
-    if (!ALLOWED_MIME_TYPES.has(file.type)) {
+    const allowedUploadType = getAllowedUploadType(file.type)
+    if (!allowedUploadType) {
       return NextResponse.json({ error: 'This file type is not supported for PMAC attachments.' }, { status: 400 })
     }
 
@@ -130,15 +174,24 @@ export async function POST(request: NextRequest) {
       maxLength: 191,
       required: true,
     })
+    const originalExtension = path.extname(sanitizedFileName).toLowerCase()
+    if (!allowedUploadType.acceptedExtensions.some(extension => extension === originalExtension)) {
+      return NextResponse.json({ error: 'The file extension does not match the uploaded file type.' }, { status: 400 })
+    }
+
     const target = await ensureAttachmentAccess(session.user.role, targetType, targetId)
 
     const monthFolder = new Date().toISOString().slice(0, 7)
-    const extension = getExtension(sanitizedFileName)
+    const extension = allowedUploadType.storedExtension
     const storedName = `${randomUUID()}${extension}`
     const directory = path.join(UPLOAD_ROOT, monthFolder)
     const absolutePath = path.join(directory, storedName)
     const filePath = `/uploads/pmac/${monthFolder}/${storedName}`
     const bytes = Buffer.from(await file.arrayBuffer())
+
+    if (!hasAllowedFileSignature(bytes, file.type as AllowedUploadMimeType)) {
+      return NextResponse.json({ error: 'The uploaded file contents do not match the declared file type.' }, { status: 400 })
+    }
 
     await mkdir(directory, { recursive: true })
     await writeFile(absolutePath, bytes)
