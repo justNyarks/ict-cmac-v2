@@ -353,80 +353,38 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
           </div>
         </div>
 
-        <div className="grid gap-4 px-6 py-5 md:grid-cols-3">
+        <div className="px-6 py-5">
           <div className="rounded-2xl bg-slate-50 px-4 py-4">
             <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Description</p>
             <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">{event.description || 'No description yet.'}</p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 px-4 py-4">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Assignments</p>
-            <p className="mt-3 text-2xl font-bold text-slate-800">{event.assignments.length}</p>
-            <p className="mt-1 text-sm text-slate-500">Member-duty records attached to this PMAC event.</p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 px-4 py-4">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Attendance</p>
-            <p className="mt-3 text-2xl font-bold text-slate-800">{event.attendance.length}</p>
-            <p className="mt-1 text-sm text-slate-500">Attendance records already logged for this event.</p>
-          </div>
-        </div>
-      </div>
-
-      {event.sourceType === 'CMAC_REQUEST' ? (
-        <div className="card p-6 space-y-4">
-          <div className="space-y-1">
-            <h3 className="font-display text-xl font-bold text-slate-800">Imported CMAC Context</h3>
-            <p className="text-sm text-slate-500">This PMAC event came from an ICT-approved CMAC request and should be staffed here by PMAC leadership.</p>
-          </div>
-          <div className="grid gap-4 md:grid-cols-4">
-            <div className="rounded-2xl bg-slate-50 px-4 py-4">
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Source</p>
-              <p className="mt-2 text-sm text-slate-700">{event.sourceLabel || 'Approved CMAC request'}</p>
-            </div>
-            <div className="rounded-2xl bg-slate-50 px-4 py-4">
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">School</p>
-              <p className="mt-2 text-sm text-slate-700">{event.sourceSchool || 'Not recorded'}</p>
-            </div>
-            <div className="rounded-2xl bg-slate-50 px-4 py-4">
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Documentation</p>
-              <p className="mt-2 text-sm text-slate-700">{event.sourceDocumentationType || 'Not recorded'}</p>
-            </div>
-            <div className="rounded-2xl bg-slate-50 px-4 py-4">
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Location</p>
-              <p className="mt-2 text-sm text-slate-700">
-                {event.sourceCampusType === 'OFF_CAMPUS' ? 'Off-Campus' : event.sourceCampusType === 'IN_CAMPUS' ? 'In-Campus' : 'Not recorded'}
-              </p>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <div className="card p-6 space-y-4">
-        <div className="space-y-1">
-          <h3 className="font-display text-xl font-bold text-slate-800">Operational Readiness</h3>
-          <p className="text-sm text-slate-500">A quick view of staffing coverage, confirmations, and post-event follow-through for this PMAC event.</p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-4">
-          <div className="rounded-2xl bg-slate-50 px-4 py-4">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Readiness</p>
-            <p className="mt-2 text-3xl font-bold text-slate-800">{workspace.staffingReadiness.readinessScore}%</p>
-            <p className="mt-1 text-xs text-slate-500">{workspace.staffingReadiness.readinessLabel}</p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 px-4 py-4">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Coverage</p>
-            <p className="mt-2 text-3xl font-bold text-slate-800">
-              {workspace.staffingReadiness.assignedRoleCount}/{workspace.staffingReadiness.recommendedRoleCount}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">Recommended coverage roles staffed</p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 px-4 py-4">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Responses</p>
-            <p className="mt-2 text-3xl font-bold text-slate-800">{workspace.staffingReadiness.confirmedAssignments}</p>
-            <p className="mt-1 text-xs text-slate-500">{workspace.staffingReadiness.pendingResponses} pending · {workspace.staffingReadiness.declinedAssignments} declined</p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 px-4 py-4">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Wrap-Up</p>
-            <p className="mt-2 text-3xl font-bold text-slate-800">{workspace.staffingReadiness.wrapUpFilledCount}/4</p>
-            <p className="mt-1 text-xs text-slate-500">{workspace.staffingReadiness.attendancePrepared} attendance record(s) logged</p>
+            {event.sourceType === 'CMAC_REQUEST' ? (
+              <div className="mt-4 border-t border-slate-200 pt-4">
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Imported CMAC Context</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  This PMAC event came from an ICT-approved CMAC request and should be staffed here by PMAC leadership.
+                </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Source</p>
+                    <p className="mt-1 text-sm font-medium text-slate-700">{event.sourceLabel || 'Approved CMAC request'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">School</p>
+                    <p className="mt-1 text-sm font-medium text-slate-700">{event.sourceSchool || 'Not recorded'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Documentation</p>
+                    <p className="mt-1 text-sm font-medium text-slate-700">{event.sourceDocumentationType || 'Not recorded'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Location</p>
+                    <p className="mt-1 text-sm font-medium text-slate-700">
+                      {event.sourceCampusType === 'OFF_CAMPUS' ? 'Off-Campus' : event.sourceCampusType === 'IN_CAMPUS' ? 'In-Campus' : 'Not recorded'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
