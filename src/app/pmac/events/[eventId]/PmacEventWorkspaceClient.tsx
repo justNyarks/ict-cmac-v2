@@ -313,78 +313,36 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">PMAC Operations</p>
-          <h2 className="mt-2 font-display text-3xl font-bold text-slate-800">{event.title}</h2>
-          <p className="mt-2 text-sm text-slate-500">Event workspace for approvals, staffing, availability responses, and attendance.</p>
-        </div>
-        <Link
-          href="/pmac/events"
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
-        >
-          <ArrowLeft size={14} />
-          Back to PMAC Events
-        </Link>
-      </div>
-
-      <div className="card overflow-hidden">
-        <div
-          className="px-6 py-7 text-white"
-          style={{ background: 'linear-gradient(135deg, #0f172a 0%, #0f766e 50%, #22c55e 100%)' }}
-        >
-          <div className="flex flex-wrap items-start justify-between gap-6">
-            <div className="space-y-2">
-              <div className="flex flex-wrap gap-2">
-                <PmacEventStatusBadge status={event.status} />
-                {renderSourceBadge(event.sourceType)}
-              </div>
-              <h3 className="font-display text-2xl font-bold leading-tight text-white">{event.title}</h3>
-              <p className="text-sm font-semibold text-emerald-100">{event.venue}</p>
-              <p className="text-sm text-emerald-100">
-                {formatDateTime(event.startDateTime)} to {formatDateTime(event.endDateTime)}
-              </p>
+      <div className="card p-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">PMAC Event Workspace</p>
+              <PmacEventStatusBadge status={event.status} />
+              {renderSourceBadge(event.sourceType)}
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/10 px-5 py-4 text-sm backdrop-blur-sm">
-              <p>{isImportedCmacEvent ? 'Requested by' : 'Created by'}: {event.createdBy.name || 'Unknown'}</p>
-              <p className="mt-1">{isImportedCmacEvent ? 'Submitted to CMAC' : 'Submitted'}: {formatDateTime(event.submittedAt)}</p>
-              <p className="mt-1">Approved by: {event.approvedBy?.name || 'Pending CMAC review'}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-6 py-5">
-          <div className="rounded-2xl bg-slate-50 px-4 py-4">
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Description</p>
-            <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">{event.description || 'No description yet.'}</p>
+            <h2 className="mt-2 font-display text-xl font-bold leading-tight text-slate-900">{event.title}</h2>
+            <p className="mt-1.5 text-sm font-semibold text-slate-700">{event.venue}</p>
+            <p className="mt-1 text-sm text-slate-500">
+              {formatDateTime(event.startDateTime)} to {formatDateTime(event.endDateTime)}
+            </p>
+            <p className="mt-3 max-h-28 overflow-y-auto whitespace-pre-line text-sm leading-6 text-slate-600">{event.description || 'No description yet.'}</p>
             {event.sourceType === 'CMAC_REQUEST' ? (
-              <div className="mt-4 border-t border-slate-200 pt-4">
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Imported CMAC Context</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  This PMAC event came from an ICT-approved CMAC request and should be staffed here by PMAC leadership.
-                </p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Source</p>
-                    <p className="mt-1 text-sm font-medium text-slate-700">{event.sourceLabel || 'Approved CMAC request'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">School</p>
-                    <p className="mt-1 text-sm font-medium text-slate-700">{event.sourceSchool || 'Not recorded'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Documentation</p>
-                    <p className="mt-1 text-sm font-medium text-slate-700">{event.sourceDocumentationType || 'Not recorded'}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Location</p>
-                    <p className="mt-1 text-sm font-medium text-slate-700">
-                      {event.sourceCampusType === 'OFF_CAMPUS' ? 'Off-Campus' : event.sourceCampusType === 'IN_CAMPUS' ? 'In-Campus' : 'Not recorded'}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <p className="mt-4 border-t border-slate-100 pt-3 text-xs font-medium text-slate-500">
+                CMAC: {event.sourceSchool || 'School not recorded'} · {event.sourceDocumentationType || 'Documentation not recorded'} · {event.sourceCampusType === 'OFF_CAMPUS' ? 'Off-Campus' : event.sourceCampusType === 'IN_CAMPUS' ? 'In-Campus' : 'Location not recorded'}
+              </p>
             ) : null}
+          </div>
+          <div className="flex flex-col items-start gap-2 text-xs text-slate-500 sm:items-end">
+            <Link
+              href="/pmac/events"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              <ArrowLeft size={14} />
+              Back
+            </Link>
+            <p>{isImportedCmacEvent ? 'Requested by' : 'Created by'} {event.createdBy.name || 'Unknown'}</p>
+            <p>Approved by {event.approvedBy?.name || 'Pending review'}</p>
           </div>
         </div>
       </div>
