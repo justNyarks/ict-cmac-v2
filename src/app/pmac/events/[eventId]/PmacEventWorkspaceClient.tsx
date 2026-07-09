@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import type { ReactNode } from 'react'
 import {
   AlertTriangle,
@@ -252,6 +252,15 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
     setWorkspace(result)
   }
 
+  const rosterById = useMemo(
+    () => new Map((workspace?.roster ?? []).map(member => [member.id, member])),
+    [workspace?.roster]
+  )
+  const selectedAssignmentMemberIds = useMemo(
+    () => new Set(assignmentRows.map(row => row.memberId).filter(Boolean)),
+    [assignmentRows]
+  )
+
   if (loading) {
     return <div className="p-10 text-center text-slate-400">Loading PMAC event workspace...</div>
   }
@@ -276,9 +285,34 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
     )
   }
 
-  const { event, permissions, roster, viewerRole } = workspace
+  const { event, permissions, viewerRole } = workspace
   const isImportedCmacEvent = event.sourceType === 'CMAC_REQUEST'
   const canManageAttachments = permissions.canEdit || permissions.canManageAssignments || permissions.canApprove || permissions.canRecordAttendance
+
+  const selectSuggestedMember = (suggestion: any) => {
+    if (selectedAssignmentMemberIds.has(suggestion.memberId)) {
+      return
+    }
+
+    const suggestedRole = (suggestion.matchedRoles?.[0] as AssignmentRow['assignmentRole'] | undefined)
+      ?? (workspace.staffingReadiness.missingRoles[0] as AssignmentRow['assignmentRole'] | undefined)
+      ?? 'PHOTOGRAPHER'
+
+    setAssignmentRows(previous => {
+      const emptyIndex = previous.findIndex(row => !row.memberId)
+      const nextRow = {
+        memberId: suggestion.memberId,
+        assignmentRole: suggestedRole,
+        assignmentNotes: '',
+      }
+
+      if (emptyIndex === -1) {
+        return [...previous, nextRow]
+      }
+
+      return previous.map((row, index) => (index === emptyIndex ? nextRow : row))
+    })
+  }
 
   const uploadAttachment = async () => {
     if (!attachmentFile) {
@@ -546,10 +580,27 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
 
               {workspace.assignmentSuggestions.length ? (
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-3">
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Suggested Members</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Suggested Members</p>
+                    <p className="text-[11px] font-medium text-emerald-700">Click a member to assign</p>
+                  </div>
                   <div className="mt-2 grid max-h-[22rem] gap-2 overflow-y-auto pr-1 lg:grid-cols-2">
-                    {workspace.assignmentSuggestions.map((suggestion: any) => (
-                      <div key={suggestion.memberId} className="rounded-xl border border-white/80 bg-white px-3 py-2">
+                    {workspace.assignmentSuggestions.map((suggestion: any) => {
+                      const isSelected = selectedAssignmentMemberIds.has(suggestion.memberId)
+
+                      return (
+                      <button
+                        key={suggestion.memberId}
+                        type="button"
+                        disabled={isSelected}
+                        onClick={() => selectSuggestedMember(suggestion)}
+                        className={clsx(
+                          'rounded-xl border px-3 py-2 text-left transition-all disabled:cursor-default',
+                          isSelected
+                            ? 'border-emerald-300 bg-emerald-100/80 ring-2 ring-emerald-200'
+                            : 'border-white/80 bg-white hover:border-emerald-200 hover:bg-white hover:shadow-sm'
+                        )}
+                      >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="truncate text-sm font-semibold text-slate-800">{suggestion.fullName}</p>
@@ -559,7 +610,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                             </p>
                           </div>
                           <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-                            Match {suggestion.score}%
+                            {isSelected ? 'Selected' : `Match ${suggestion.score}%`}
                           </span>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -571,31 +622,38 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                             </span>
                           ) : null}
                         </div>
-                      </div>
-                    ))}
+                      </button>
+                      )
+                    })}
                   </div>
                 </div>
               ) : null}
 
               <div className="space-y-3">
-                {assignmentRows.map((row, index) => (
+                {assignmentRows.map((row, index) => {
+                  const selectedMember = rosterById.get(row.memberId)
+
+                  return (
                   <div key={`${row.memberId}-${row.assignmentRole}-${index}`} className="grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3 md:grid-cols-[1.2fr_1fr_1fr_auto]">
-                    <select
-                      value={row.memberId}
-                      onChange={event => setAssignmentRows(previous => previous.map((item, itemIndex) => (
-                        itemIndex === index
-                          ? { ...item, memberId: event.target.value }
-                          : item
-                      )))}
-                      className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                    >
-                      <option value="">Select PMAC member</option>
-                      {roster.map(member => (
-                        <option key={member.id} value={member.id}>
-                          {member.fullName} - {PMAC_CLUB_ROLE_LABELS[member.clubRole]}{member.executiveTitle ? ` (${PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle as PmacExecutiveTitle]})` : ''}
-                        </option>
-                      ))}
-                    </select>
+                    <div className={clsx(
+                      'rounded-xl border px-3 py-2.5 text-sm',
+                      selectedMember ? 'border-emerald-200 bg-white' : 'border-dashed border-slate-300 bg-white/70'
+                    )}>
+                      {selectedMember ? (
+                        <>
+                          <p className="font-semibold text-slate-800">{selectedMember.fullName}</p>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            {PMAC_CLUB_ROLE_LABELS[selectedMember.clubRole as keyof typeof PMAC_CLUB_ROLE_LABELS]}
+                            {selectedMember.executiveTitle ? ` | ${PMAC_EXECUTIVE_TITLE_LABELS[selectedMember.executiveTitle as PmacExecutiveTitle]}` : ''}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-semibold text-slate-500">Select from suggested members</p>
+                          <p className="mt-0.5 text-xs text-slate-400">Click a name above to fill this slot.</p>
+                        </>
+                      )}
+                    </div>
 
                     <select
                       value={row.assignmentRole}
@@ -633,7 +691,8 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                       <Trash2 size={14} />
                     </button>
                   </div>
-                ))}
+                  )
+                })}
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -643,7 +702,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   <Plus size={14} />
-                  Add Assignment
+                  Add Empty Slot
                 </button>
 
                 <button
