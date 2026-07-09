@@ -329,7 +329,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
             <p className="mt-3 max-h-28 overflow-y-auto whitespace-pre-line text-sm leading-6 text-slate-600">{event.description || 'No description yet.'}</p>
             {event.sourceType === 'CMAC_REQUEST' ? (
               <p className="mt-4 border-t border-slate-100 pt-3 text-xs font-medium text-slate-500">
-                CMAC: {event.sourceSchool || 'School not recorded'} · {event.sourceDocumentationType || 'Documentation not recorded'} · {event.sourceCampusType === 'OFF_CAMPUS' ? 'Off-Campus' : event.sourceCampusType === 'IN_CAMPUS' ? 'In-Campus' : 'Location not recorded'}
+                CMAC: {event.sourceSchool || 'School not recorded'} | {event.sourceDocumentationType || 'Documentation not recorded'} | {event.sourceCampusType === 'OFF_CAMPUS' ? 'Off-Campus' : event.sourceCampusType === 'IN_CAMPUS' ? 'In-Campus' : 'Location not recorded'}
               </p>
             ) : null}
           </div>
@@ -450,7 +450,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                 <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50 p-4">
                   <div className="space-y-1">
                     <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Assignment Templates</p>
-                    <p className="text-sm text-slate-500">Start with a role layout based on the event’s coverage needs, then assign members to each slot.</p>
+                    <p className="text-sm text-slate-500">Start with a role layout based on coverage needs, then assign members to each slot.</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {workspace.assignmentTemplates.map((template: any) => (
@@ -964,7 +964,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                           {attachment.fileName}
                         </a>
                         <p className="mt-1 text-xs text-slate-400">
-                          Uploaded by {attachment.uploadedBy.name || 'Unknown'} · {formatDateTime(attachment.createdAt)}
+                          Uploaded by {attachment.uploadedBy.name || 'Unknown'} | {formatDateTime(attachment.createdAt)}
                         </p>
                       </div>
                       {canManageAttachments ? (
@@ -1005,7 +1005,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                       <div>
                         <p className="text-sm font-semibold text-slate-800">{entry.summary}</p>
                         <p className="mt-1 text-xs text-slate-400">
-                          {entry.actorName} · {entry.actorRole.replaceAll('_', ' ')} · {formatDateTime(entry.createdAt)}
+                          {entry.actorName} | {entry.actorRole.replaceAll('_', ' ')} | {formatDateTime(entry.createdAt)}
                         </p>
                       </div>
                       <span className="status-badge bg-slate-100 text-slate-700 border-slate-200">{entry.action.replaceAll('_', ' ')}</span>
