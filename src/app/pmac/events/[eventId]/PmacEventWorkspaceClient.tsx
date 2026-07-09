@@ -363,7 +363,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
         <div className="border-b border-emerald-50 bg-white px-5 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">PMAC Event Workspace</p>
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">Event Summary</p>
               <PmacEventStatusBadge status={event.status} />
               {renderSourceBadge(event.sourceType)}
             </div>
