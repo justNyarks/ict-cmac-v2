@@ -260,6 +260,14 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
     () => new Set(assignmentRows.map(row => row.memberId).filter(Boolean)),
     [assignmentRows]
   )
+  const suggestedAssignmentMemberIds = useMemo(
+    () => new Set((workspace?.assignmentSuggestions ?? []).map((suggestion: any) => suggestion.memberId)),
+    [workspace?.assignmentSuggestions]
+  )
+  const otherAssignableMembers = useMemo(
+    () => (workspace?.roster ?? []).filter(member => !suggestedAssignmentMemberIds.has(member.id)),
+    [workspace?.roster, suggestedAssignmentMemberIds]
+  )
 
   if (loading) {
     return <div className="p-10 text-center text-slate-400">Loading PMAC event workspace...</div>
@@ -578,53 +586,108 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                 </div>
               ) : null}
 
-              {workspace.assignmentSuggestions.length ? (
+              {(workspace.assignmentSuggestions.length || otherAssignableMembers.length) ? (
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Suggested Members</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Member Picker</p>
                     <p className="text-[11px] font-medium text-emerald-700">Click a member to assign</p>
                   </div>
-                  <div className="mt-2 grid max-h-[22rem] gap-2 overflow-y-auto pr-1 lg:grid-cols-2">
-                    {workspace.assignmentSuggestions.map((suggestion: any) => {
-                      const isSelected = selectedAssignmentMemberIds.has(suggestion.memberId)
+                  <div className="mt-2 grid gap-3 xl:grid-cols-[1.1fr_0.9fr]">
+                    {workspace.assignmentSuggestions.length ? (
+                      <div>
+                        <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Suggested Members</p>
+                        <div className="grid max-h-[22rem] gap-2 overflow-y-auto pr-1 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                          {workspace.assignmentSuggestions.map((suggestion: any) => {
+                            const isSelected = selectedAssignmentMemberIds.has(suggestion.memberId)
 
-                      return (
-                      <button
-                        key={suggestion.memberId}
-                        type="button"
-                        disabled={isSelected}
-                        onClick={() => selectSuggestedMember(suggestion)}
-                        className={clsx(
-                          'rounded-xl border px-3 py-2 text-left transition-all disabled:cursor-default',
-                          isSelected
-                            ? 'border-emerald-300 bg-emerald-100/80 ring-2 ring-emerald-200'
-                            : 'border-white/80 bg-white hover:border-emerald-200 hover:bg-white hover:shadow-sm'
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-slate-800">{suggestion.fullName}</p>
-                            <p className="mt-0.5 truncate text-[11px] text-slate-500">
-                              {PMAC_CLUB_ROLE_LABELS[suggestion.clubRole as keyof typeof PMAC_CLUB_ROLE_LABELS]}
-                              {suggestion.executiveTitle ? ` | ${PMAC_EXECUTIVE_TITLE_LABELS[suggestion.executiveTitle as PmacExecutiveTitle]}` : ''}
-                            </p>
-                          </div>
-                          <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-                            {isSelected ? 'Selected' : `Match ${suggestion.score}%`}
-                          </span>
+                            return (
+                              <button
+                                key={suggestion.memberId}
+                                type="button"
+                                disabled={isSelected}
+                                onClick={() => selectSuggestedMember(suggestion)}
+                                className={clsx(
+                                  'rounded-xl border px-3 py-2 text-left transition-all disabled:cursor-default',
+                                  isSelected
+                                    ? 'border-emerald-300 bg-emerald-100/80 ring-2 ring-emerald-200'
+                                    : 'border-white/80 bg-white hover:border-emerald-200 hover:bg-white hover:shadow-sm'
+                                )}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-semibold text-slate-800">{suggestion.fullName}</p>
+                                    <p className="mt-0.5 truncate text-[11px] text-slate-500">
+                                      {PMAC_CLUB_ROLE_LABELS[suggestion.clubRole as keyof typeof PMAC_CLUB_ROLE_LABELS]}
+                                      {suggestion.executiveTitle ? ` | ${PMAC_EXECUTIVE_TITLE_LABELS[suggestion.executiveTitle as PmacExecutiveTitle]}` : ''}
+                                    </p>
+                                  </div>
+                                  <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                    {isSelected ? 'Selected' : `Match ${suggestion.score}%`}
+                                  </span>
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{suggestion.workloadTier} load</span>
+                                  <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">{suggestion.attendanceRate}% attendance</span>
+                                  {suggestion.matchedRoles.length ? (
+                                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                      {PMAC_EVENT_DUTY_ROLE_LABELS[suggestion.matchedRoles[0] as AssignmentRow['assignmentRole']]}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </button>
+                            )
+                          })}
                         </div>
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{suggestion.workloadTier} load</span>
-                          <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">{suggestion.attendanceRate}% attendance</span>
-                          {suggestion.matchedRoles.length ? (
-                            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                              {PMAC_EVENT_DUTY_ROLE_LABELS[suggestion.matchedRoles[0] as AssignmentRow['assignmentRole']]}
-                            </span>
-                          ) : null}
+                      </div>
+                    ) : null}
+
+                    {otherAssignableMembers.length ? (
+                      <div>
+                        <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Other Members</p>
+                        <div className="grid max-h-[22rem] gap-2 overflow-y-auto pr-1">
+                          {otherAssignableMembers.map(member => {
+                            const isSelected = selectedAssignmentMemberIds.has(member.id)
+
+                            return (
+                              <button
+                                key={member.id}
+                                type="button"
+                                disabled={isSelected}
+                                onClick={() => selectSuggestedMember({ memberId: member.id, matchedRoles: [] })}
+                                className={clsx(
+                                  'rounded-xl border px-3 py-2 text-left transition-all disabled:cursor-default',
+                                  isSelected
+                                    ? 'border-slate-300 bg-slate-100 ring-2 ring-slate-200'
+                                    : 'border-white/80 bg-white hover:border-emerald-200 hover:bg-white hover:shadow-sm'
+                                )}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-semibold text-slate-800">{member.fullName}</p>
+                                    <p className="mt-0.5 truncate text-[11px] text-slate-500">
+                                      {PMAC_CLUB_ROLE_LABELS[member.clubRole as keyof typeof PMAC_CLUB_ROLE_LABELS]}
+                                      {member.executiveTitle ? ` | ${PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle as PmacExecutiveTitle]}` : ''}
+                                    </p>
+                                  </div>
+                                  <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                                    {isSelected ? 'Selected' : 'Add'}
+                                  </span>
+                                </div>
+                                {member.specialties?.length ? (
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {member.specialties.slice(0, 3).map((entry: any) => (
+                                      <span key={`${member.id}-${entry.specialty}`} className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                        {entry.specialty.replaceAll('_', ' ')}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </button>
+                            )
+                          })}
                         </div>
-                      </button>
-                      )
-                    })}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
