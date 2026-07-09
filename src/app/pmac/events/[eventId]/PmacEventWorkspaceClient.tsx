@@ -39,16 +39,18 @@ import { PmacAttendanceBadge, PmacAvailabilityBadge, PmacEventStatusBadge } from
 import PmacEventForm from '@/components/pmac/PmacEventForm'
 import {
   PMAC_EXECUTIVE_TITLE_LABELS,
+  getDutyRolesForSpecialties,
   getPmacEventSourceBadgeClass,
   PMAC_ATTENDANCE_LABELS,
   PMAC_ATTENDANCE_STATUSES,
   PMAC_EVENT_SOURCE_LABELS,
   PMAC_EVENT_DUTY_ROLES,
   PMAC_EVENT_DUTY_ROLE_LABELS,
+  PMAC_SPECIALTY_LABELS,
 } from '@/lib/pmac'
 import { runWithReverification } from '@/lib/reverificationClient'
 import { PMAC_CLUB_ROLE_LABELS } from '@/lib/roles'
-import type { PmacEventSourceType, PmacExecutiveTitle } from '@/types'
+import type { PmacEventSourceType, PmacExecutiveTitle, PmacSpecialty } from '@/types'
 
 type WorkspaceData = Awaited<ReturnType<typeof getPmacEventWorkspace>>
 
@@ -91,6 +93,11 @@ function buildTemplateRows(roles: readonly AssignmentRow['assignmentRole'][]) {
     assignmentRole: role,
     assignmentNotes: '',
   }))
+}
+
+function getMemberDutyRoles(member?: { specialties?: Array<{ specialty: PmacSpecialty }> | null }) {
+  const specialtyValues = member?.specialties?.map(entry => entry.specialty) ?? []
+  return getDutyRolesForSpecialties(specialtyValues)
 }
 
 function formatDateTime(value: string | Date | null | undefined) {
@@ -218,11 +225,16 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
     setApprovalRemarks(workspace.event.approvalRemarks || '')
     setAssignmentRows(
       workspace.event.assignments.length
-        ? workspace.event.assignments.map((assignment: any) => ({
-            memberId: assignment.memberId,
-            assignmentRole: assignment.assignmentRole as AssignmentRow['assignmentRole'],
-            assignmentNotes: assignment.assignmentNotes || '',
-          }))
+        ? workspace.event.assignments.map((assignment: any) => {
+            const currentRole = assignment.assignmentRole as AssignmentRow['assignmentRole']
+            const allowedRoles = getMemberDutyRoles(workspace.roster.find(member => member.id === assignment.memberId))
+
+            return {
+              memberId: assignment.memberId,
+              assignmentRole: allowedRoles.includes(currentRole) ? currentRole : allowedRoles[0] ?? currentRole,
+              assignmentNotes: assignment.assignmentNotes || '',
+            }
+          })
         : [EMPTY_ASSIGNMENT]
     )
     setAttendanceRows(buildAttendanceRows(workspace))
@@ -302,9 +314,17 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
       return
     }
 
-    const suggestedRole = (suggestion.matchedRoles?.[0] as AssignmentRow['assignmentRole'] | undefined)
-      ?? (workspace.staffingReadiness.missingRoles[0] as AssignmentRow['assignmentRole'] | undefined)
-      ?? 'PHOTOGRAPHER'
+    const member = rosterById.get(suggestion.memberId)
+    const allowedRoles = getMemberDutyRoles(member)
+    const missingRoles = workspace.staffingReadiness.missingRoles as AssignmentRow['assignmentRole'][]
+    const suggestedRole = allowedRoles.find(role => role === suggestion.matchedRoles?.[0])
+      ?? allowedRoles.find(role => missingRoles.includes(role))
+      ?? allowedRoles[0]
+
+    if (!suggestedRole) {
+      showToast('error', 'This member has no specialty-linked duty roles.')
+      return
+    }
 
     setAssignmentRows(previous => {
       const emptyIndex = previous.findIndex(row => !row.memberId)
@@ -677,7 +697,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                                   <div className="mt-2 flex flex-wrap gap-1.5">
                                     {member.specialties.slice(0, 3).map((entry: any) => (
                                       <span key={`${member.id}-${entry.specialty}`} className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                                        {entry.specialty.replaceAll('_', ' ')}
+                                        {PMAC_SPECIALTY_LABELS[entry.specialty as PmacSpecialty]}
                                       </span>
                                     ))}
                                   </div>
@@ -695,6 +715,8 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
               <div className="space-y-3">
                 {assignmentRows.map((row, index) => {
                   const selectedMember = rosterById.get(row.memberId)
+                  const allowedRoles = getMemberDutyRoles(selectedMember)
+                  const selectedRoleIsAllowed = allowedRoles.includes(row.assignmentRole)
 
                   return (
                   <div key={`${row.memberId}-${row.assignmentRole}-${index}`} className="grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3 md:grid-cols-[1.2fr_1fr_1fr_auto]">
@@ -725,9 +747,17 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                           ? { ...item, assignmentRole: event.target.value as AssignmentRow['assignmentRole'] }
                           : item
                       )))}
-                      className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                      disabled={!selectedMember || !allowedRoles.length}
+                      className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:bg-slate-100 disabled:text-slate-400"
                     >
-                      {PMAC_EVENT_DUTY_ROLES.map(role => (
+                      {!selectedMember ? (
+                        <option value={row.assignmentRole}>Select member first</option>
+                      ) : !allowedRoles.length ? (
+                        <option value={row.assignmentRole}>No specialty roles</option>
+                      ) : !selectedRoleIsAllowed ? (
+                        <option value={row.assignmentRole}>Choose allowed duty</option>
+                      ) : null}
+                      {allowedRoles.map(role => (
                         <option key={role} value={role}>
                           {PMAC_EVENT_DUTY_ROLE_LABELS[role]}
                         </option>

@@ -2642,11 +2642,29 @@ export async function savePmacAssignments(eventId: string, assignments: PmacAssi
       select: {
         id: true,
         fullName: true,
+        specialties: {
+          select: {
+            specialty: true,
+          },
+        },
       },
     })
 
     if (activeMembers.length !== memberIds.length) {
       return { success: false, error: 'All assigned PMAC members must be active.' }
+    }
+
+    const activeMemberById = new Map(activeMembers.map(member => [member.id, member]))
+    for (const assignment of normalizedAssignments) {
+      const member = activeMemberById.get(assignment.memberId)
+      const allowedRoles = getDutyRolesForSpecialties(member?.specialties.map(entry => entry.specialty) ?? [])
+
+      if (!allowedRoles.includes(assignment.assignmentRole)) {
+        return {
+          success: false,
+          error: `${member?.fullName || 'Selected member'} can only be assigned duties linked to their PMAC specialty.`,
+        }
+      }
     }
 
     const existingAssignments = await prisma.pmacEventAssignment.findMany({
