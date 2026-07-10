@@ -1,10 +1,8 @@
 import { prisma } from '@/lib/prisma'
-import { getNotificationFeed } from '@/lib/notifications'
-import { getPmacActivityFeed } from '@/lib/pmacActivity'
-import { isPmacAssignmentResponderRole, isPmacEventManagerRole, PMAC_EXECUTIVE_TITLE_LABELS, PMAC_PROJECT_STATUS_LABELS, PMAC_SPECIALTY_LABELS } from '@/lib/pmac'
+import { isPmacAssignmentResponderRole, isPmacEventManagerRole, PMAC_EXECUTIVE_TITLE_LABELS, PMAC_PROJECT_STATUS_LABELS } from '@/lib/pmac'
 import { getPmacProjectWhere } from '@/lib/pmacProjects'
-import { PMAC_CLUB_ROLE_LABELS, PMAC_MEMBER_STATUS_LABELS, getRoleLabel } from '@/lib/roles'
-import type { PmacExecutiveTitle, PmacSpecialty, Role } from '@/types'
+import { getRoleLabel } from '@/lib/roles'
+import type { Role } from '@/types'
 import PmacDashboardPlaceholder from '@/components/pmac/PmacDashboardPlaceholder'
 import { requireRoleAccess } from '@/lib/security'
 
@@ -127,26 +125,8 @@ export default async function PmacRolePage({ allowedRole, nextPath, accessSummar
           id: '__missing_member__',
         }
 
-  const member = session.user.pmacMemberId
-    ? await prisma.pmacMember.findUnique({
-        where: { id: session.user.pmacMemberId },
-        select: {
-          clubRole: true,
-          status: true,
-          executiveTitle: true,
-          specialties: {
-            select: {
-              specialty: true,
-            },
-            orderBy: {
-              specialty: 'asc',
-            },
-          },
-        },
-      })
-    : null
   const projectWhere = await getPmacProjectWhere(session.user)
-  const [eventCount, importedNeedsStaffing, projectCount, activeProjectCount, openPollCount, pendingResponses, upcomingEvents, branchProjects, openPolls, notifications, recentActivity] = await Promise.all([
+  const [eventCount, importedNeedsStaffing, projectCount, activeProjectCount, openPollCount, pendingResponses, upcomingEvents, branchProjects, openPolls] = await Promise.all([
     prisma.pmacEvent.count({
       where: eventWhere,
     }),
@@ -237,8 +217,6 @@ export default async function PmacRolePage({ allowedRole, nextPath, accessSummar
       },
       take: 3,
     }),
-    getNotificationFeed(session.user, 4),
-    getPmacActivityFeed(session.user, 4),
   ])
 
   return (
@@ -246,30 +224,6 @@ export default async function PmacRolePage({ allowedRole, nextPath, accessSummar
       name={session.user.name}
       roleLabel={getRoleLabel(session.user.role)}
       accessSummary={accessSummary}
-      badge={member ? (
-        <div className="flex flex-wrap gap-2">
-          <span className="status-badge bg-sky-50 text-sky-700 border-sky-200">
-            Club: {PMAC_CLUB_ROLE_LABELS[member.clubRole]}
-          </span>
-          {member.executiveTitle ? (
-            <span className="status-badge bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200">
-              {PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle as PmacExecutiveTitle]}
-            </span>
-          ) : null}
-          {member.specialties.map((entry) => (
-            <span key={entry.specialty} className="status-badge bg-amber-50 text-amber-700 border-amber-200">
-              {PMAC_SPECIALTY_LABELS[entry.specialty as PmacSpecialty]}
-            </span>
-          ))}
-          <span className="status-badge bg-emerald-50 text-emerald-700 border-emerald-200">
-            Status: {PMAC_MEMBER_STATUS_LABELS[member.status]}
-          </span>
-        </div>
-      ) : (
-        <span className="status-badge bg-amber-50 text-amber-700 border-amber-200">
-          No PMAC member profile linked
-        </span>
-      )}
       stats={getPmacDashboardStats({
         role: session.user.role,
         eventCount,
@@ -314,19 +268,6 @@ export default async function PmacRolePage({ allowedRole, nextPath, accessSummar
         }) : 'not scheduled'}`,
         href: `/pmac/polls/${poll.id}`,
         badge: poll.type,
-      }))}
-      notifications={notifications}
-      recentActivity={recentActivity.map((entry) => ({
-        id: entry.id,
-        title: entry.summary,
-        meta: `${entry.actorName} | ${new Date(entry.createdAt).toLocaleString('en-PH', {
-          month: 'short',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-        })}`,
-        href: entry.href,
-        badge: entry.entityType,
       }))}
       mustChangePassword={session.user.mustChangePassword}
       links={getPmacRoleLinks(session.user.role)}
