@@ -345,6 +345,13 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
   const { event, permissions, viewerRole } = workspace
   const isImportedCmacEvent = event.sourceType === 'CMAC_REQUEST'
   const canManageAttachments = permissions.canEdit || permissions.canManageAssignments || permissions.canApprove || permissions.canRecordAttendance
+  const attendanceSummary = {
+    total: attendanceRows.length,
+    present: attendanceRows.filter(row => row.status === 'PRESENT').length,
+    late: attendanceRows.filter(row => row.status === 'LATE').length,
+    absent: attendanceRows.filter(row => row.status === 'ABSENT').length,
+    excused: attendanceRows.filter(row => row.status === 'EXCUSED').length,
+  }
 
   const selectSuggestedMember = (suggestion: any) => {
     if (selectedAssignmentMemberIds.has(suggestion.memberId)) {
@@ -1052,39 +1059,67 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
               {permissions.canRecordAttendance ? (
                 <div className="space-y-3">
                   {attendanceRows.length ? (
-                    attendanceRows.map((row, index) => (
-                      <div key={row.memberId} className="grid gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-4 md:grid-cols-[1.1fr_0.9fr_1.2fr]">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-800">{row.fullName}</p>
+                    <>
+                      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 p-3 text-sm sm:grid-cols-5">
+                        <div className="rounded-xl bg-white px-3 py-2">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Assigned</p>
+                          <p className="mt-1 font-bold text-slate-800">{attendanceSummary.total}</p>
                         </div>
-                        <select
-                          value={row.status}
-                          onChange={event => setAttendanceRows(previous => previous.map((item, itemIndex) => (
-                            itemIndex === index
-                              ? { ...item, status: event.target.value as AttendanceRow['status'] }
-                              : item
-                          )))}
-                          className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                        >
-                          {PMAC_ATTENDANCE_STATUSES.map(status => (
-                            <option key={status} value={status}>
-                              {PMAC_ATTENDANCE_LABELS[status]}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          type="text"
-                          value={row.notes}
-                          onChange={event => setAttendanceRows(previous => previous.map((item, itemIndex) => (
-                            itemIndex === index
-                              ? { ...item, notes: event.target.value }
-                              : item
-                          )))}
-                          placeholder="Attendance notes"
-                          className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                        />
+                        <div className="rounded-xl bg-emerald-50 px-3 py-2">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-emerald-700">Present</p>
+                          <p className="mt-1 font-bold text-emerald-800">{attendanceSummary.present}</p>
+                        </div>
+                        <div className="rounded-xl bg-sky-50 px-3 py-2">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-sky-700">Late</p>
+                          <p className="mt-1 font-bold text-sky-800">{attendanceSummary.late}</p>
+                        </div>
+                        <div className="rounded-xl bg-red-50 px-3 py-2">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-red-700">Absent</p>
+                          <p className="mt-1 font-bold text-red-800">{attendanceSummary.absent}</p>
+                        </div>
+                        <div className="rounded-xl bg-amber-50 px-3 py-2">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-amber-700">Excused</p>
+                          <p className="mt-1 font-bold text-amber-800">{attendanceSummary.excused}</p>
+                        </div>
                       </div>
-                    ))
+
+                      <div className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
+                        {attendanceRows.map((row, index) => (
+                          <div key={row.memberId} className="grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3 md:grid-cols-[1fr_11rem_1.1fr]">
+                            <div className="rounded-xl border border-slate-100 bg-white px-3 py-2.5">
+                              <p className="truncate text-sm font-semibold text-slate-800">{row.fullName}</p>
+                              <p className="mt-0.5 text-xs text-slate-400">PMAC assignment member</p>
+                            </div>
+                            <select
+                              value={row.status}
+                              onChange={event => setAttendanceRows(previous => previous.map((item, itemIndex) => (
+                                itemIndex === index
+                                  ? { ...item, status: event.target.value as AttendanceRow['status'] }
+                                  : item
+                              )))}
+                              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                            >
+                              {PMAC_ATTENDANCE_STATUSES.map(status => (
+                                <option key={status} value={status}>
+                                  {PMAC_ATTENDANCE_LABELS[status]}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              value={row.notes}
+                              onChange={event => setAttendanceRows(previous => previous.map((item, itemIndex) => (
+                                itemIndex === index
+                                  ? { ...item, notes: event.target.value }
+                                  : item
+                              )))}
+                              placeholder="Attendance notes"
+                              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </>
                   ) : (
                     <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500">
                       Assign members to the event first so attendance can be recorded.
@@ -1120,9 +1155,9 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                   ) : null}
                 </div>
               ) : event.attendance.length ? (
-                <div className="space-y-3">
+                <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
                   {event.attendance.map((record: any) => (
-                    <div key={record.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
+                    <div key={record.id} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm font-semibold text-slate-800">{record.member.fullName}</p>
                         <PmacAttendanceBadge status={record.status} />
