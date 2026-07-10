@@ -1060,8 +1060,8 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                 <div className="space-y-3">
                   {attendanceRows.length ? (
                     <>
-                      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 p-3 text-sm sm:grid-cols-5">
-                        <div className="rounded-xl bg-white px-3 py-2">
+                      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 p-3 text-sm">
+                        <div className="col-span-2 rounded-xl bg-white px-3 py-2">
                           <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Assigned</p>
                           <p className="mt-1 font-bold text-slate-800">{attendanceSummary.total}</p>
                         </div>
@@ -1085,7 +1085,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
 
                       <div className="max-h-[28rem] space-y-2 overflow-y-auto pr-1">
                         {attendanceRows.map((row, index) => (
-                          <div key={row.memberId} className="grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-3 md:grid-cols-[1fr_11rem_1.1fr]">
+                          <div key={row.memberId} className="grid gap-2 rounded-2xl border border-slate-100 bg-slate-50/80 p-3">
                             <div className="rounded-xl border border-slate-100 bg-white px-3 py-2.5">
                               <p className="truncate text-sm font-semibold text-slate-800">{row.fullName}</p>
                               <p className="mt-0.5 text-xs text-slate-400">PMAC assignment member</p>
@@ -1121,13 +1121,14 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                       </div>
                     </>
                   ) : (
-                    <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500">
-                      Assign members to the event first so attendance can be recorded.
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center text-sm text-slate-500">
+                      <p className="font-semibold text-slate-700">No assigned members yet</p>
+                      <p className="mt-1">Assign PMAC members before recording attendance.</p>
                     </div>
                   )}
 
                   {attendanceRows.length ? (
-                    <div className="flex justify-end">
+                    <div className="flex">
                       <button
                         type="button"
                         disabled={isPending}
@@ -1147,7 +1148,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                             await refreshWorkspace()
                           })
                         }}
-                        className="rounded-xl bg-[#064e3b] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#065f46] disabled:opacity-60"
+                        className="w-full rounded-xl bg-[#064e3b] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#065f46] disabled:opacity-60"
                       >
                         {isPending ? 'Saving...' : 'Save Attendance'}
                       </button>
@@ -1168,8 +1169,9 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                   ))}
                 </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-500">
-                  No attendance has been recorded for this PMAC event yet.
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center text-sm text-slate-500">
+                  <p className="font-semibold text-slate-700">No attendance recorded</p>
+                  <p className="mt-1">Attendance records will appear here after they are saved.</p>
                 </div>
               )}
             </div>
