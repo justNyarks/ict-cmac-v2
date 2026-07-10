@@ -402,17 +402,18 @@ export default function PmacManagementPageClient({
 
       {canManageMembers && showModal && (
         <Portal>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 print:hidden" onClick={closeModal}>
-            <div className="w-full max-w-2xl space-y-5 rounded-2xl bg-white p-7 shadow-2xl" onClick={event => event.stopPropagation()}>
-              <div className="space-y-1">
+          <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/45 px-4 py-6 print:hidden sm:py-8" onClick={closeModal}>
+            <div className="mx-auto flex max-h-[calc(100dvh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={event => event.stopPropagation()}>
+              <div className="border-b border-slate-100 px-6 py-5 sm:px-7">
                 <h3 className="font-display text-xl font-bold text-slate-800">
                   {form.id ? 'Edit PMAC Member' : 'Create PMAC Member'}
                 </h3>
-                <p className="text-sm text-slate-500">
+                <p className="mt-1 text-sm leading-6 text-slate-500">
                   Club role controls PMAC leadership placement. System access role controls the dashboard route and login permissions.
                 </p>
               </div>
 
+              <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5 sm:px-7">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">Full Name</label>
@@ -603,7 +604,9 @@ export default function PmacManagementPageClient({
                 />
               </div>
 
-              <div className="flex gap-3">
+              </div>
+
+              <div className="flex gap-3 border-t border-slate-100 bg-white px-6 py-4 sm:px-7">
                 <button
                   onClick={handleSave}
                   disabled={saving}
