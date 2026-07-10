@@ -2,12 +2,28 @@ import { verifySensitiveActionPassword } from '@/app/reverificationActions'
 
 export const REVERIFICATION_REQUIRED_MESSAGE = 'Zero trust verification required'
 
+type ReverificationPromptHandler = () => Promise<string | null>
+
+let reverificationPromptHandler: ReverificationPromptHandler | null = null
+
+export function registerReverificationPrompt(handler: ReverificationPromptHandler) {
+  reverificationPromptHandler = handler
+
+  return () => {
+    if (reverificationPromptHandler === handler) {
+      reverificationPromptHandler = null
+    }
+  }
+}
+
 function shouldPromptForReverification(message: string | null | undefined) {
   return message === REVERIFICATION_REQUIRED_MESSAGE
 }
 
 async function promptAndVerify() {
-  const password = window.prompt('Please re-enter your current password to continue this sensitive change.')
+  const password = reverificationPromptHandler
+    ? await reverificationPromptHandler()
+    : window.prompt('Please re-enter your current signed-in account password to continue this sensitive change.')
 
   if (!password) {
     throw new Error('Re-verification was cancelled.')
