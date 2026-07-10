@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import type { ReactNode } from 'react'
 import {
   AlertTriangle,
@@ -15,6 +15,7 @@ import {
   MapPin,
   Paperclip,
   Plus,
+  Search,
   Trash2,
   Upload,
   UserRoundCheck,
@@ -46,6 +47,7 @@ import {
   PMAC_EVENT_SOURCE_LABELS,
   PMAC_EVENT_DUTY_ROLES,
   PMAC_EVENT_DUTY_ROLE_LABELS,
+  PMAC_SPECIALTIES,
   PMAC_SPECIALTY_LABELS,
 } from '@/lib/pmac'
 import { runWithReverification } from '@/lib/reverificationClient'
@@ -195,6 +197,8 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
   const [attachmentDescription, setAttachmentDescription] = useState('')
   const [attachmentBusy, setAttachmentBusy] = useState(false)
+  const [memberPickerQuery, setMemberPickerQuery] = useState('')
+  const [memberPickerSpecialty, setMemberPickerSpecialty] = useState<'ALL' | PmacSpecialty>('ALL')
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
@@ -279,6 +283,39 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
   const otherAssignableMembers = useMemo(
     () => (workspace?.roster ?? []).filter(member => !suggestedAssignmentMemberIds.has(member.id)),
     [workspace?.roster, suggestedAssignmentMemberIds]
+  )
+  const memberMatchesPickerFilters = useCallback((member: {
+    fullName: string
+    clubRole: string
+    executiveTitle?: PmacExecutiveTitle | null
+    specialties?: Array<{ specialty: PmacSpecialty }> | null
+  }) => {
+    const query = memberPickerQuery.trim().toLowerCase()
+    const specialties = member.specialties?.map(entry => entry.specialty) ?? []
+    const matchesSpecialty = memberPickerSpecialty === 'ALL' || specialties.includes(memberPickerSpecialty)
+
+    if (!matchesSpecialty) {
+      return false
+    }
+
+    if (!query) {
+      return true
+    }
+
+    return [
+      member.fullName,
+      PMAC_CLUB_ROLE_LABELS[member.clubRole as keyof typeof PMAC_CLUB_ROLE_LABELS],
+      member.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle] : '',
+      ...specialties.map(specialty => PMAC_SPECIALTY_LABELS[specialty]),
+    ].some(value => value.toLowerCase().includes(query))
+  }, [memberPickerQuery, memberPickerSpecialty])
+  const filteredAssignmentSuggestions = useMemo(
+    () => (workspace?.assignmentSuggestions ?? []).filter((suggestion: any) => memberMatchesPickerFilters(suggestion)),
+    [memberMatchesPickerFilters, workspace?.assignmentSuggestions]
+  )
+  const filteredOtherAssignableMembers = useMemo(
+    () => otherAssignableMembers.filter(member => memberMatchesPickerFilters(member)),
+    [memberMatchesPickerFilters, otherAssignableMembers]
   )
 
   if (loading) {
@@ -612,12 +649,35 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Member Picker</p>
                     <p className="text-[11px] font-medium text-emerald-700">Click a member to assign</p>
                   </div>
+                  <div className="mt-3 grid gap-2 md:grid-cols-[1fr_15rem]">
+                    <label className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-white px-3 py-2">
+                      <Search size={14} className="text-slate-400" />
+                      <input
+                        value={memberPickerQuery}
+                        onChange={event => setMemberPickerQuery(event.target.value)}
+                        placeholder="Search members, roles, or specialties"
+                        className="w-full bg-transparent text-sm text-slate-700 outline-none"
+                      />
+                    </label>
+                    <select
+                      value={memberPickerSpecialty}
+                      onChange={event => setMemberPickerSpecialty(event.target.value as 'ALL' | PmacSpecialty)}
+                      className="rounded-xl border border-emerald-100 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-200"
+                    >
+                      <option value="ALL">All specialties</option>
+                      {PMAC_SPECIALTIES.map(specialty => (
+                        <option key={specialty} value={specialty}>
+                          {PMAC_SPECIALTY_LABELS[specialty]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <div className="mt-2 grid gap-3 xl:grid-cols-[1.1fr_0.9fr]">
                     {workspace.assignmentSuggestions.length ? (
                       <div>
-                        <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Suggested Members</p>
+                        <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Suggested Members ({filteredAssignmentSuggestions.length})</p>
                         <div className="grid max-h-[22rem] gap-2 overflow-y-auto pr-1 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                          {workspace.assignmentSuggestions.map((suggestion: any) => {
+                          {filteredAssignmentSuggestions.map((suggestion: any) => {
                             const isSelected = selectedAssignmentMemberIds.has(suggestion.memberId)
 
                             return (
@@ -657,15 +717,20 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                               </button>
                             )
                           })}
+                          {!filteredAssignmentSuggestions.length ? (
+                            <div className="rounded-xl border border-dashed border-emerald-100 bg-white/70 px-3 py-5 text-center text-sm text-slate-500">
+                              No suggested members match the filter.
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     ) : null}
 
                     {otherAssignableMembers.length ? (
                       <div>
-                        <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Other Members</p>
+                        <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Other Members ({filteredOtherAssignableMembers.length})</p>
                         <div className="grid max-h-[22rem] gap-2 overflow-y-auto pr-1">
-                          {otherAssignableMembers.map(member => {
+                          {filteredOtherAssignableMembers.map(member => {
                             const isSelected = selectedAssignmentMemberIds.has(member.id)
 
                             return (
@@ -705,6 +770,11 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                               </button>
                             )
                           })}
+                          {!filteredOtherAssignableMembers.length ? (
+                            <div className="rounded-xl border border-dashed border-emerald-100 bg-white/70 px-3 py-5 text-center text-sm text-slate-500">
+                              No other members match the filter.
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     ) : null}
