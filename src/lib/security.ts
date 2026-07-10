@@ -7,7 +7,6 @@ import {
   createZeroTrustToken,
   getZeroTrustRedirectPath,
   isPrivilegedRole,
-  shouldEnforceZeroTrust,
   verifyZeroTrustToken,
 } from '@/lib/zeroTrust'
 import { cookies } from 'next/headers'
@@ -155,8 +154,7 @@ export async function requireRoleAccess(allowedRoles: readonly Role[], options: 
     redirect('/')
   }
 
-  const needsZeroTrust = options.zeroTrust || shouldEnforceZeroTrust(session.user.role, options.nextPath ?? '')
-  if (needsZeroTrust && isPrivilegedRole(session.user.role)) {
+  if (options.zeroTrust && isPrivilegedRole(session.user.role)) {
     const isZeroTrustValid = await hasValidZeroTrustSession(session.user.id, session.user.role)
 
     if (!isZeroTrustValid) {
