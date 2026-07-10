@@ -13,6 +13,7 @@ import {
   PMAC_SPECIALTIES,
   PMAC_SPECIALTY_LABELS,
 } from '@/lib/pmac'
+import { PMAC_DEPARTMENTS, normalizePmacMemberName, parseCourseOrDepartment } from '@/lib/pmacMembers'
 import { runWithReverification } from '@/lib/reverificationClient'
 import {
   getDefaultClubRoleForSystemRole,
@@ -22,7 +23,6 @@ import {
   PMAC_MEMBER_STATUS_LABELS,
   PMAC_SYSTEM_ROLES,
   ROLE_LABELS,
-  getDefaultSystemRoleForClubRole,
 } from '@/lib/roles'
 import { getPmacMembers, savePmacMember } from './actions'
 import type { PmacClubRole, PmacExecutiveTitle, PmacMemberStatus, PmacSpecialty, Role } from '@/types'
@@ -34,8 +34,8 @@ type MemberFormState = {
   fullName: string
   email: string
   phone: string
-  courseOrDepartment: string
-  notes: string
+  department: string
+  course: string
   joinedAt: string
   clubRole: PmacClubRole
   status: PmacMemberStatus
@@ -53,8 +53,8 @@ const EMPTY_FORM: MemberFormState = {
   fullName: '',
   email: '',
   phone: '',
-  courseOrDepartment: '',
-  notes: '',
+  department: '',
+  course: '',
   joinedAt: '',
   clubRole: 'MEMBER',
   status: 'ACTIVE',
@@ -77,13 +77,15 @@ function formatDate(value: Date | string | null | undefined) {
 }
 
 function toFormState(member: PmacMemberRecord): MemberFormState {
+  const schoolInfo = parseCourseOrDepartment(member.courseOrDepartment)
+
   return {
     id: member.id,
     fullName: member.fullName,
     email: member.email,
     phone: member.phone ?? '',
-    courseOrDepartment: member.courseOrDepartment ?? '',
-    notes: member.notes ?? '',
+    department: schoolInfo.department,
+    course: schoolInfo.course,
     joinedAt: member.joinedAt ? new Date(member.joinedAt).toISOString().slice(0, 10) : '',
     clubRole: member.clubRole as PmacClubRole,
     status: member.status as PmacMemberStatus,
@@ -150,7 +152,7 @@ export default function PmacManagementPageClient({
     ),
     [clubRoleFilter, members, query, statusFilter]
   )
-  const shouldShowExecutiveTitle = form.clubRole === 'EXECUTIVE' || form.systemRole === 'PMAC_EXECUTIVE'
+  const shouldShowExecutiveTitle = form.systemRole === 'PMAC_EXECUTIVE'
 
   const openCreate = () => {
     setForm(EMPTY_FORM)
@@ -172,10 +174,38 @@ export default function PmacManagementPageClient({
   }
 
   const handleSave = async () => {
+    const normalizedName = normalizePmacMemberName(form.fullName)
+
+    if (!normalizedName) {
+      showToast('error', 'Full name is required.')
+      return
+    }
+    if (!form.email.trim()) {
+      showToast('error', 'Email is required.')
+      return
+    }
+    if (!form.department) {
+      showToast('error', 'Please select a department.')
+      return
+    }
+    if (!form.course.trim()) {
+      showToast('error', 'Course is required.')
+      return
+    }
+    if (form.systemRole === 'PMAC_EXECUTIVE' && !form.executiveTitle) {
+      showToast('error', 'Executive accounts must have an executive title.')
+      return
+    }
+    if (!form.id && form.password.length < 8) {
+      showToast('error', 'Password must be at least 8 characters.')
+      return
+    }
+
     setSaving(true)
     try {
       const payload = {
         ...form,
+        fullName: normalizedName,
         executiveTitle: form.executiveTitle || null,
       }
       const result = await runWithReverification(
@@ -254,7 +284,7 @@ export default function PmacManagementPageClient({
             <h3 className="font-semibold text-slate-800">PMAC Member Directory</h3>
             <p className="mt-1 text-xs text-slate-400">
               {canManageMembers
-                ? 'Manage member identity, club role, system access role, and account status.'
+                ? 'Manage member identity, department, course, system access role, and account status.'
                 : 'Coordinator view for PMAC roster visibility while member creation stays with PMAC director and secretary.'}
             </p>
           </div>
@@ -285,7 +315,7 @@ export default function PmacManagementPageClient({
             <input
               value={query}
               onChange={event => setQuery(event.target.value)}
-              placeholder="Search name, email, notes, or course"
+              placeholder="Search name, email, department, or course"
               className="w-full bg-transparent text-sm text-slate-700 outline-none"
             />
           </label>
@@ -409,7 +439,7 @@ export default function PmacManagementPageClient({
                   {form.id ? 'Edit PMAC Member' : 'Create PMAC Member'}
                 </h3>
                 <p className="mt-1 text-sm leading-6 text-slate-500">
-                  Club role controls PMAC leadership placement. System access role controls the dashboard route and login permissions.
+                  System access role controls dashboard access. Department is selected, while course is entered manually.
                 </p>
               </div>
 
@@ -421,6 +451,7 @@ export default function PmacManagementPageClient({
                     type="text"
                     value={form.fullName}
                     onChange={event => setForm(previous => ({ ...previous, fullName: event.target.value }))}
+                    onBlur={() => setForm(previous => ({ ...previous, fullName: normalizePmacMemberName(previous.fullName) }))}
                     className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
                   />
                 </div>
@@ -452,54 +483,17 @@ export default function PmacManagementPageClient({
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">Club Role</label>
-                  <select
-                    value={form.clubRole}
-                    onChange={event =>
-                      setForm(previous => {
-                        const clubRole = event.target.value as PmacClubRole
-                        const nextSystemRole = clubRole === 'EXECUTIVE'
-                          ? 'PMAC_EXECUTIVE'
-                          : previous.systemRole === 'PMAC_EXECUTIVE'
-                            ? getDefaultSystemRoleForClubRole(clubRole)
-                            : previous.id
-                              ? previous.systemRole
-                              : getDefaultSystemRoleForClubRole(clubRole)
-                        return {
-                          ...previous,
-                          clubRole,
-                          executiveTitle: clubRole === 'EXECUTIVE' || nextSystemRole === 'PMAC_EXECUTIVE'
-                            ? previous.executiveTitle
-                            : '',
-                          systemRole: nextSystemRole,
-                        }
-                      })
-                    }
-                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                  >
-                    {PMAC_CLUB_ROLES.map(role => (
-                      <option key={role} value={role}>
-                        {PMAC_CLUB_ROLE_LABELS[role]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">System Access Role</label>
                   <select
                     value={form.systemRole}
                     onChange={event => setForm(previous => {
                       const systemRole = event.target.value as PmacSystemRole
-                      const nextClubRole = systemRole === 'PMAC_EXECUTIVE'
-                        ? 'EXECUTIVE'
-                        : previous.clubRole === 'EXECUTIVE'
-                          ? getDefaultClubRoleForSystemRole(systemRole)
-                          : previous.clubRole
+                      const nextClubRole = getDefaultClubRoleForSystemRole(systemRole)
                       return {
                         ...previous,
                         clubRole: nextClubRole,
                         systemRole,
-                        executiveTitle: systemRole === 'PMAC_EXECUTIVE' || nextClubRole === 'EXECUTIVE'
+                        executiveTitle: systemRole === 'PMAC_EXECUTIVE'
                           ? previous.executiveTitle
                           : '',
                       }
@@ -544,6 +538,31 @@ export default function PmacManagementPageClient({
                   </select>
                 </div>
                 <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">Department</label>
+                  <select
+                    value={form.department}
+                    onChange={event => setForm(previous => ({ ...previous, department: event.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                  >
+                    <option value="">Select department</option>
+                    {PMAC_DEPARTMENTS.map(department => (
+                      <option key={department} value={department}>
+                        {department}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">Course</label>
+                  <input
+                    type="text"
+                    value={form.course}
+                    onChange={event => setForm(previous => ({ ...previous, course: event.target.value }))}
+                    placeholder="Example: BSIT, BS Nursing"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                  />
+                </div>
+                <div>
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">
                     {form.id ? 'Reset Password (Optional)' : 'Password'}
                   </label>
@@ -581,27 +600,7 @@ export default function PmacManagementPageClient({
                     )
                   })}
                 </div>
-                <p className="mt-2 text-xs text-slate-400">Specialties stay separate from club role, executive title, and access role.</p>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">Course or Department</label>
-                <input
-                  type="text"
-                  value={form.courseOrDepartment}
-                  onChange={event => setForm(previous => ({ ...previous, courseOrDepartment: event.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">Notes</label>
-                <textarea
-                  rows={4}
-                  value={form.notes}
-                  onChange={event => setForm(previous => ({ ...previous, notes: event.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                />
+                <p className="mt-2 text-xs text-slate-400">Specialties stay separate from executive title and access role.</p>
               </div>
 
               </div>

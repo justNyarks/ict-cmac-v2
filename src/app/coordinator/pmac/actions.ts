@@ -5,10 +5,11 @@ import { revalidatePath } from 'next/cache'
 
 import { PMAC_EXECUTIVE_TITLES, PMAC_SPECIALTIES } from '@/lib/pmac'
 import { recordPmacActivity } from '@/lib/pmacActivity'
+import { formatCourseOrDepartment, isPmacDepartment, normalizePmacMemberName } from '@/lib/pmacMembers'
 import { hasUserSecurityFields, prisma } from '@/lib/prisma'
-import { PMAC_SYSTEM_ROLES } from '@/lib/roles'
+import { getDefaultClubRoleForSystemRole, PMAC_SYSTEM_ROLES } from '@/lib/roles'
 import { assertActionAccess } from '@/lib/security'
-import { sanitizeEmailAddress, sanitizeMultilineText, sanitizePasswordInput, sanitizeSingleLineText } from '@/lib/sanitization'
+import { sanitizeEmailAddress, sanitizePasswordInput, sanitizeSingleLineText } from '@/lib/sanitization'
 import type { PmacClubRole, PmacExecutiveTitle, PmacMemberStatus, PmacSpecialty, Role } from '@/types'
 
 type PmacSystemRole = Extract<Role, 'PMAC_DIRECTOR' | 'PMAC_ASSISTANT_DIRECTOR' | 'PMAC_SECRETARY' | 'PMAC_EXECUTIVE' | 'PMAC_MEMBER'>
@@ -18,10 +19,11 @@ type PmacMemberPayload = {
   fullName: string
   email: string
   phone?: string
+  department?: string
+  course?: string
   courseOrDepartment?: string
-  notes?: string
   joinedAt?: string | null
-  clubRole: PmacClubRole
+  clubRole?: PmacClubRole
   status: PmacMemberStatus
   executiveTitle?: PmacExecutiveTitle | null
   specialties: PmacSpecialty[]
@@ -178,24 +180,30 @@ export async function savePmacMember(payload: PmacMemberPayload) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' }
   }
 
-  const fullName = sanitizeSingleLineText(payload.fullName, {
+  const fullName = normalizePmacMemberName(sanitizeSingleLineText(payload.fullName, {
     fieldName: 'Full name',
     maxLength: 191,
     required: true,
-  })
+  }))
   const email = sanitizeEmailAddress(payload.email)
   const phone = sanitizeSingleLineText(payload.phone, {
     fieldName: 'Phone',
     maxLength: 50,
   })
-  const courseOrDepartment = sanitizeSingleLineText(payload.courseOrDepartment, {
-    fieldName: 'Course or department',
-    maxLength: 191,
+  const department = sanitizeSingleLineText(payload.department, {
+    fieldName: 'Department',
+    maxLength: 20,
+    required: true,
   })
-  const notes = sanitizeMultilineText(payload.notes, {
-    fieldName: 'Notes',
-    maxLength: 2000,
+  if (!isPmacDepartment(department)) {
+    return { success: false, error: 'Please choose a valid PMAC department.' }
+  }
+  const course = sanitizeSingleLineText(payload.course ?? payload.courseOrDepartment, {
+    fieldName: 'Course',
+    maxLength: 120,
+    required: true,
   })
+  const courseOrDepartment = formatCourseOrDepartment(department, course)
   const specialties = Array.from(new Set((payload.specialties ?? []).map((specialty) => String(specialty).trim()).filter(Boolean)))
   if (specialties.some((specialty) => !isPmacSpecialty(specialty))) {
     return { success: false, error: 'Please choose valid PMAC specialties.' }
@@ -207,12 +215,12 @@ export async function savePmacMember(payload: PmacMemberPayload) {
   if (executiveTitleValue && !isPmacExecutiveTitle(executiveTitleValue)) {
     return { success: false, error: 'Please choose a valid executive title.' }
   }
-  const executiveTitle = executiveTitleValue ? executiveTitleValue as PmacExecutiveTitle : null
-  const needsExecutiveTitle = payload.clubRole === 'EXECUTIVE' || payload.systemRole === 'PMAC_EXECUTIVE'
-
-  if ((payload.clubRole === 'EXECUTIVE') !== (payload.systemRole === 'PMAC_EXECUTIVE')) {
-    return { success: false, error: 'Executive members must use both the Executive club role and the PMAC Executive system role.' }
+  if (!isPmacSystemRole(payload.systemRole)) {
+    return { success: false, error: 'Please choose a valid PMAC system role.' }
   }
+  const executiveTitle = executiveTitleValue ? executiveTitleValue as PmacExecutiveTitle : null
+  const clubRole = getDefaultClubRoleForSystemRole(payload.systemRole)
+  const needsExecutiveTitle = clubRole === 'EXECUTIVE'
 
   if (needsExecutiveTitle && !executiveTitle) {
     return { success: false, error: 'Executive accounts must have a branch head title.' }
@@ -220,10 +228,6 @@ export async function savePmacMember(payload: PmacMemberPayload) {
 
   if (!needsExecutiveTitle && executiveTitle) {
     return { success: false, error: 'Executive titles can only be used for executive members.' }
-  }
-
-  if (!isPmacSystemRole(payload.systemRole)) {
-    return { success: false, error: 'Please choose a valid PMAC system role.' }
   }
 
   let password = ''
@@ -277,9 +281,9 @@ export async function savePmacMember(payload: PmacMemberPayload) {
               email,
               phone: phone || null,
               courseOrDepartment: courseOrDepartment || null,
-              notes: notes || null,
+              notes: null,
               joinedAt,
-              clubRole: payload.clubRole,
+              clubRole,
               status: payload.status,
               executiveTitle,
             },
@@ -290,9 +294,9 @@ export async function savePmacMember(payload: PmacMemberPayload) {
               email,
               phone: phone || null,
               courseOrDepartment: courseOrDepartment || null,
-              notes: notes || null,
+              notes: null,
               joinedAt,
-              clubRole: payload.clubRole,
+              clubRole,
               status: payload.status,
               executiveTitle,
             },
