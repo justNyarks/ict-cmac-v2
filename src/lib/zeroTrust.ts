@@ -4,7 +4,15 @@ export const ZERO_TRUST_COOKIE_NAME = 'ict_cmac_zero_trust'
 export const ZERO_TRUST_PATH = '/zero-trust'
 export const ZERO_TRUST_TTL_SECONDS = 15 * 60
 
-const ZERO_TRUST_PROTECTED_PREFIXES = ['/admin', '/analytics', '/logs', '/requests'] as const
+const ZERO_TRUST_PROTECTED_PREFIXES = [
+  '/admin',
+  '/analytics',
+  '/logs',
+  '/requests',
+  '/coordinator/pmac',
+  '/pmac/members',
+  '/pmac/reports',
+] as const
 export const SENSITIVE_ACTION_ROLES: Role[] = [
   'CMAC_COORDINATOR',
   'ICT_DIRECTOR',

@@ -268,7 +268,11 @@ async function syncApprovedPmacRequestsFromCurrentData() {
 }
 
 async function main() {
-  const seedPassword = process.env.SEED_DEFAULT_PASSWORD || 'password123'
+  const seedPassword = process.env.SEED_DEFAULT_PASSWORD
+  if (!seedPassword) {
+    throw new Error('SEED_DEFAULT_PASSWORD is required. Refusing to seed accounts with a predictable default password.')
+  }
+
   const password = await bcrypt.hash(seedPassword, 10)
 
   // Must match the School enum in schema.prisma exactly

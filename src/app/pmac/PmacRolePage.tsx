@@ -1,9 +1,8 @@
-import type { Prisma } from '@prisma/client'
-
 import { prisma } from '@/lib/prisma'
 import { getNotificationFeed } from '@/lib/notifications'
 import { getPmacActivityFeed } from '@/lib/pmacActivity'
-import { isPmacAssignmentResponderRole, isPmacEventManagerRole, isPmacProjectLauncherRole, PMAC_EXECUTIVE_TITLE_LABELS, PMAC_PROJECT_STATUS_LABELS, PMAC_SPECIALTY_LABELS } from '@/lib/pmac'
+import { isPmacAssignmentResponderRole, isPmacEventManagerRole, PMAC_EXECUTIVE_TITLE_LABELS, PMAC_PROJECT_STATUS_LABELS, PMAC_SPECIALTY_LABELS } from '@/lib/pmac'
+import { getPmacProjectWhere } from '@/lib/pmacProjects'
 import { PMAC_CLUB_ROLE_LABELS, PMAC_MEMBER_STATUS_LABELS, getRoleLabel } from '@/lib/roles'
 import type { PmacExecutiveTitle, PmacSpecialty, Role } from '@/types'
 import PmacDashboardPlaceholder from '@/components/pmac/PmacDashboardPlaceholder'
@@ -111,43 +110,6 @@ function getPmacDashboardStats(params: {
   return stats
 }
 
-function getPmacProjectWhere(user: { role: Role; pmacMemberId: string | null }): Prisma.PmacProjectWhereInput {
-  if (isPmacProjectLauncherRole(user.role)) {
-    return {}
-  }
-
-  if (!user.pmacMemberId) {
-    return { id: '__missing_project_access__' }
-  }
-
-  if (user.role === 'PMAC_EXECUTIVE') {
-    return {
-      OR: [
-        { headMemberId: user.pmacMemberId },
-        {
-          memberAssignments: {
-            some: {
-              memberId: user.pmacMemberId,
-            },
-          },
-        },
-      ],
-    }
-  }
-
-  if (user.role === 'PMAC_MEMBER') {
-    return {
-      memberAssignments: {
-        some: {
-          memberId: user.pmacMemberId,
-        },
-      },
-    }
-  }
-
-  return { id: '__missing_project_access__' }
-}
-
 export default async function PmacRolePage({ allowedRole, nextPath, accessSummary }: PmacRolePageProps) {
   const session = await requireRoleAccess([allowedRole], { nextPath })
   const now = new Date()
@@ -183,7 +145,7 @@ export default async function PmacRolePage({ allowedRole, nextPath, accessSummar
         },
       })
     : null
-  const projectWhere = getPmacProjectWhere(session.user)
+  const projectWhere = await getPmacProjectWhere(session.user)
   const [eventCount, importedNeedsStaffing, projectCount, activeProjectCount, openPollCount, pendingResponses, upcomingEvents, branchProjects, openPolls, notifications, recentActivity] = await Promise.all([
     prisma.pmacEvent.count({
       where: eventWhere,

@@ -40,6 +40,7 @@ import {
   isPmacProjectLauncherRole,
 } from '@/lib/pmac'
 import { recordPmacActivity } from '@/lib/pmacActivity'
+import { getExecutiveBranchForUser, getPmacProjectWhere } from '@/lib/pmacProjects'
 import { hasPmacV4Delegates, prisma } from '@/lib/prisma'
 import { revalidatePmacViews } from '@/lib/pmacRevalidation'
 import { assertActionAccess } from '@/lib/security'
@@ -3013,60 +3014,6 @@ function parseProjectDate(value: string, fieldName: string) {
   return parsed
 }
 
-async function getExecutiveBranchForUser(user: SessionUser) {
-  if (user.role !== 'PMAC_EXECUTIVE' || !user.pmacMemberId) {
-    return null
-  }
-
-  const member = await prisma.pmacMember.findUnique({
-    where: { id: user.pmacMemberId },
-    select: { executiveTitle: true },
-  })
-
-  return member?.executiveTitle ?? null
-}
-
-async function getPmacProjectWhere(user: SessionUser): Promise<Prisma.PmacProjectWhereInput> {
-  if (isPmacProjectLauncherRole(user.role)) {
-    return {}
-  }
-
-  if (!user.pmacMemberId) {
-    return { id: '__missing_project_access__' }
-  }
-
-  const branch = await getExecutiveBranchForUser(user)
-
-  if (user.role === 'PMAC_EXECUTIVE' && branch) {
-    return {
-      OR: [
-        { headMemberId: user.pmacMemberId },
-        {
-          memberAssignments: {
-            some: {
-              memberId: user.pmacMemberId,
-            },
-          },
-        },
-        {
-          AND: [
-            { headMemberId: null },
-            { branch },
-          ],
-        },
-      ],
-    }
-  }
-
-  return {
-    memberAssignments: {
-      some: {
-        memberId: user.pmacMemberId,
-      },
-    },
-  }
-}
-
 async function getPmacProjectPeopleOptions() {
   const [executiveHeads, assignableMembers] = await Promise.all([
     prisma.pmacMember.findMany({
@@ -3592,7 +3539,12 @@ export async function savePmacProject(payload: PmacProjectPayload) {
     })
 
     if (projectId) {
-      await assertPmacProjectAccess(projectId, session.user)
+      const accessibleProject = await assertPmacProjectAccess(projectId, session.user)
+      if (status === 'COMPLETED') {
+        const directorChecked = await hasPmacDirectorClosureCheck(projectId)
+        assertPmacProjectCloseAccess(accessibleProject, session.user, directorChecked)
+      }
+
       await prisma.$transaction(async (tx) => {
         const current = await tx.pmacProject.findUnique({
           where: { id: projectId },
