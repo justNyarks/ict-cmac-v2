@@ -56,7 +56,7 @@ function buildCoreNotificationWhere(user: SessionUser): Prisma.AuditLogWhereInpu
     return {
       OR: [
         {
-          action: { in: ['COORDINATOR_APPROVED', 'DIRECTOR_APPROVED', 'REJECTED'] },
+          action: { in: ['COORDINATOR_APPROVED', 'DIRECTOR_APPROVED', 'REVISION_REQUESTED', 'REJECTED', 'CANCELLED'] },
           request: {
             is: {
               deletedAt: null,
@@ -81,7 +81,7 @@ function buildCoreNotificationWhere(user: SessionUser): Prisma.AuditLogWhereInpu
     return {
       OR: [
         {
-          action: 'SUBMITTED',
+          action: { in: ['SUBMITTED', 'RESUBMITTED'] },
           request: {
             is: {
               deletedAt: null,
@@ -95,6 +95,15 @@ function buildCoreNotificationWhere(user: SessionUser): Prisma.AuditLogWhereInpu
             is: {
               deletedAt: null,
               status: 'DIRECTOR_APPROVED',
+            },
+          },
+        },
+        {
+          action: 'CANCELLED',
+          request: {
+            is: {
+              deletedAt: null,
+              status: 'CANCELLED',
             },
           },
         },
@@ -136,6 +145,7 @@ function formatCoreNotification(
 ): AppNotification {
   const isOwnRequest = log.request.secretaryId === user.id
   const dueLabel = log.request.eventDate && isToday(log.request.eventDate) ? 'Event day' : null
+  const requestHref = `/requests?requestId=${encodeURIComponent(log.request.id)}`
 
   if (user.role === 'SECRETARY') {
     if (!isOwnRequest) {
@@ -160,7 +170,7 @@ function formatCoreNotification(
         tone: 'warning',
         priority: 'high',
         createdAt: log.createdAt.toISOString(),
-        href: '/requests',
+        href: requestHref,
         module: 'CORE',
         dueLabel,
       })
@@ -174,7 +184,35 @@ function formatCoreNotification(
         tone: 'danger',
         priority: 'critical',
         createdAt: log.createdAt.toISOString(),
-        href: '/requests',
+        href: requestHref,
+        module: 'CORE',
+        dueLabel,
+      })
+    }
+
+    if (log.action === 'REVISION_REQUESTED') {
+      return buildNotification({
+        id: `core-revision-${log.id}`,
+        title: `Changes requested for "${log.request.eventTitle}"`,
+        description: 'Open the request, correct its details, then resubmit it.',
+        tone: 'warning',
+        priority: 'high',
+        createdAt: log.createdAt.toISOString(),
+        href: requestHref,
+        module: 'CORE',
+        dueLabel,
+      })
+    }
+
+    if (log.action === 'CANCELLED') {
+      return buildNotification({
+        id: `core-cancelled-${log.id}`,
+        title: `"${log.request.eventTitle}" was cancelled`,
+        description: 'The request and its operational history remain available.',
+        tone: 'danger',
+        priority: 'high',
+        createdAt: log.createdAt.toISOString(),
+        href: requestHref,
         module: 'CORE',
         dueLabel,
       })
@@ -187,13 +225,27 @@ function formatCoreNotification(
       tone: 'success',
       priority: 'medium',
       createdAt: log.createdAt.toISOString(),
-      href: '/requests',
+      href: requestHref,
       module: 'CORE',
       dueLabel,
     })
   }
 
   if (user.role === 'CMAC_COORDINATOR') {
+    if (log.action === 'CANCELLED') {
+      return buildNotification({
+        id: `core-cancelled-coordinator-${log.id}`,
+        title: 'Approved event cancelled',
+        description: `"${log.request.eventTitle}" was closed by the ICT Director.`,
+        tone: 'danger',
+        priority: 'high',
+        createdAt: log.createdAt.toISOString(),
+        href: requestHref,
+        module: 'CORE',
+        dueLabel,
+      })
+    }
+
     if (log.action === 'DIRECT_BYPASS') {
       return buildNotification({
         id: `core-bypass-${log.id}`,
@@ -202,7 +254,7 @@ function formatCoreNotification(
         tone: 'info',
         priority: 'low',
         createdAt: log.createdAt.toISOString(),
-        href: '/requests',
+        href: requestHref,
         module: 'CORE',
         dueLabel,
       })
@@ -215,7 +267,7 @@ function formatCoreNotification(
       tone: 'warning',
       priority: 'high',
       createdAt: log.createdAt.toISOString(),
-      href: '/requests',
+      href: requestHref,
       module: 'CORE',
       dueLabel,
     })
@@ -228,7 +280,7 @@ function formatCoreNotification(
     tone: 'warning',
     priority: 'high',
     createdAt: log.createdAt.toISOString(),
-    href: '/requests',
+    href: requestHref,
     module: 'CORE',
     dueLabel,
   })

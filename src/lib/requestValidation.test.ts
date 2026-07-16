@@ -58,4 +58,16 @@ describe('validateAndNormalizeRequestInput', () => {
       mustChangePassword: false,
     })).toThrow('Service type is invalid.')
   })
+
+  it('allows an existing request inside the new-request lead-time window to be corrected', () => {
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const date = tomorrow.toISOString().slice(0, 10)
+
+    expect(() => validateAndNormalizeRequestInput({
+      ...validInput,
+      eventDate: date,
+      endDate: date,
+    }, baseUser, { isEditing: true })).not.toThrow()
+  })
 })

@@ -1,16 +1,16 @@
 'use client'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { getStatusLabel, getStatusColor } from '@/lib/data'
-import { CheckCircle, Download, Eye, Filter, FileCheck2, Printer, X, Trash2 } from 'lucide-react'
+import { Archive, CheckCircle, Download, Eye, Filter, FileCheck2, Printer, RotateCcw, X } from 'lucide-react'
 import clsx from 'clsx'
 import Portal from '@/components/Portal'
 import ConfirmModal from '@/components/ConfirmModal'
 import { runWithReverification } from '@/lib/reverificationClient'
 import type { ServiceType } from '@/types'
 
-const FILTERS = ['ALL', 'PENDING', 'COORDINATOR_APPROVED', 'DIRECTOR_APPROVED', 'REJECTED'] as const
+const FILTERS = ['ALL', 'PENDING', 'COORDINATOR_APPROVED', 'REVISION_REQUESTED', 'DIRECTOR_APPROVED', 'WITHDRAWN', 'CANCELLED', 'REJECTED'] as const
 
-import { approveRequest, rejectRequest, deleteRequest, getRequests, checkConflict } from './actions'
+import { approveRequest, rejectRequest, archiveRequest, cancelRequest, requestRevision, resubmitRequest, withdrawRequest, getRequests, checkConflict } from './actions'
 import { useSession } from 'next-auth/react'
 import { useEffect } from 'react'
 import {
@@ -35,6 +35,7 @@ export default function RequestsPage() {
   const [note, setNote] = useState('')
   const [conflicts, setConflicts] = useState<ConflictItem[]>([])
   const [sameDayEvents, setSameDayEvents] = useState<SameDayEventItem[]>([])
+  const [conflictError, setConflictError] = useState('')
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [idToDelete, setIdToDelete] = useState<string | null>(null)
   const [printMode, setPrintMode] = useState<'LETTER' | 'RECEIPT'>('LETTER')
@@ -56,22 +57,37 @@ export default function RequestsPage() {
       : receiptLetterSource.length > 900
         ? 'text-[8.6px] leading-[1.5]'
         : 'text-[9.2px] leading-[1.6]'
+  const latestFeedbackAt = selected?.logs
+    .find((log) => log.action === 'REVISION_REQUESTED' || log.action === 'REJECTED')?.createdAt
+  const canResubmitSelected = selected?.status === 'WITHDRAWN' || (
+    !!latestFeedbackAt
+    && !!selected?.logs.some((log) => log.action === 'CORRECTED' && new Date(log.createdAt) > new Date(latestFeedbackAt))
+  )
 
-  const fetchRequests = async () => {
+  const fetchRequests = useCallback(async (openDeepLink = false) => {
     setLoading(true)
     try {
       const data = await getRequests()
       setRequests(data)
+      const requestedId = new URLSearchParams(window.location.search).get('requestId')
+      if (openDeepLink && requestedId) {
+        const requested = data.find((request) => request.id === requestedId)
+        if (requested) {
+          setSelected(requested)
+          setSelectedServiceType(requested.serviceType || 'CMAC')
+          window.history.replaceState({}, '', '/requests')
+        }
+      }
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to load requests.')
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
-    fetchRequests()
-  }, [])
+    void fetchRequests(true)
+  }, [fetchRequests])
 
   useEffect(() => {
     if (selected && session?.user && ['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes(session.user.role)) {
@@ -83,12 +99,18 @@ export default function RequestsPage() {
         selected.eventVenue,
         selected.id
       ).then(res => {
+        setConflictError('')
         setConflicts(res.conflicts || [])
         setSameDayEvents(res.sameDayEvents || [])
+      }).catch(() => {
+        setConflicts([])
+        setSameDayEvents([])
+        setConflictError('Schedule availability could not be verified. Approval is blocked until the check succeeds.')
       })
     } else {
       setConflicts([])
       setSameDayEvents([])
+      setConflictError('')
     }
   }, [selected, session])
 
@@ -159,12 +181,50 @@ export default function RequestsPage() {
   async function handleDelete() {
     if (!idToDelete) return;
     try {
-      await runWithReverification(() => deleteRequest(idToDelete))
+      await runWithReverification(() => archiveRequest(idToDelete, note))
       await fetchRequests()
       setIdToDelete(null)
       setNote('')
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Failed to delete')
+    }
+  }
+
+  async function handleRequestRevision(id: string) {
+    if (!note.trim()) return alert('Enter the corrections required before returning this request.')
+    try {
+      await runWithReverification(() => requestRevision(id, note))
+      await fetchRequests()
+      setSelected(null)
+      setNote('')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Unable to request a revision.')
+    }
+  }
+
+  async function handleSecretaryTransition(action: 'withdraw' | 'resubmit') {
+    if (!selected) return
+    if (action === 'withdraw' && !note.trim()) return alert('Enter a withdrawal reason.')
+    try {
+      if (action === 'withdraw') await withdrawRequest(selected.id, note)
+      else await resubmitRequest(selected.id, note)
+      await fetchRequests()
+      setSelected(null)
+      setNote('')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Unable to update this request.')
+    }
+  }
+
+  async function handleCancel(id: string) {
+    if (!note.trim()) return alert('Enter a cancellation reason.')
+    try {
+      await runWithReverification(() => cancelRequest(id, note))
+      await fetchRequests()
+      setSelected(null)
+      setNote('')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Unable to cancel this request.')
     }
   }
 
@@ -446,7 +506,9 @@ export default function RequestsPage() {
                       <div className="flex justify-between items-center">
                         <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Official Request Letter</p>
                         {selected.letterUrl && !selected.letterContent && (
-                          <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded font-bold uppercase">{selected.letterUrl}</span>
+                          <a href={selected.letterUrl} target="_blank" rel="noreferrer" className="text-[10px] bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg font-bold uppercase">
+                            Open Letter
+                          </a>
                         )}
                       </div>
                       {selected.letterContent ? (
@@ -462,7 +524,7 @@ export default function RequestsPage() {
                           </div>
                           <div>
                             <p className="text-sm font-bold text-slate-700">Attachment Provided</p>
-                            <p className="text-[10px] text-slate-400 font-medium uppercase">{selected.letterUrl}</p>
+                            <p className="text-[10px] text-slate-400 font-medium uppercase">Stored securely and available to authorized reviewers</p>
                           </div>
                         </div>
                       )}
@@ -526,11 +588,15 @@ export default function RequestsPage() {
                      (['PENDING', 'COORDINATOR_APPROVED'].includes(selected.status) && session?.user.role === 'ICT_DIRECTOR')) && (
                     <div className="pt-6 border-t border-emerald-50 space-y-4">
                       {/* Service Type — Director only */}
-                      {session?.user.role === 'ICT_DIRECTOR' && (
+                      {['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes(session?.user.role || '') && (
                         <>
                           <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Assign Service Type</p>
-                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">Director Only</span>
+                            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                              {session?.user.role === 'ICT_DIRECTOR' ? 'Final Service Assignment' : 'Routing Recommendation'}
+                            </p>
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+                              {session?.user.role === 'ICT_DIRECTOR' ? 'Final' : 'Recommendation'}
+                            </span>
                           </div>
                           <div className="grid grid-cols-2 gap-4 mb-4">
                             {(['CMAC', 'PMAC'] as const).map(type => (
@@ -563,6 +629,11 @@ export default function RequestsPage() {
                           </p>
                         </div>
                       )}
+                      {conflictError && (
+                        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700">
+                          {conflictError}
+                        </div>
+                      )}
                       <textarea
                         rows={3}
                         value={note}
@@ -573,7 +644,7 @@ export default function RequestsPage() {
                       <div className="flex gap-4">
                         <button
                           onClick={() => handleApprove(selected.id)}
-                          disabled={isDirectorBypassApproval && !note.trim()}
+                          disabled={(isDirectorBypassApproval && !note.trim()) || !!conflictError}
                           className="flex-1 flex items-center justify-center gap-2 bg-[#064e3b] hover:bg-[#065f46] text-white rounded-2xl py-4 text-sm font-black shadow-lg shadow-emerald-900/20 transition-all"
                         >
                           <CheckCircle size={18} /> Approve Request
@@ -584,7 +655,52 @@ export default function RequestsPage() {
                         >
                           Reject
                         </button>
+                        <button
+                          onClick={() => handleRequestRevision(selected.id)}
+                          className="px-5 flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-2xl py-4 text-sm font-black transition-all border border-amber-200"
+                        >
+                          <RotateCcw size={17} /> Revise
+                        </button>
                       </div>
+                    </div>
+                  )}
+
+                  {session?.user.role === 'SECRETARY' && ['PENDING', 'REVISION_REQUESTED', 'WITHDRAWN', 'REJECTED'].includes(selected.status) && (
+                    <div className="pt-6 border-t border-slate-100 space-y-3">
+                      <button
+                        onClick={() => { window.location.href = `/new-request?edit=${encodeURIComponent(selected.id)}` }}
+                        className="w-full rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800"
+                      >
+                        Edit Request Details
+                      </button>
+                      <textarea
+                        rows={2}
+                        value={note}
+                        onChange={event => setNote(event.target.value)}
+                        placeholder={selected.status === 'PENDING' ? 'Reason for withdrawing this request' : 'Optional note about the corrections made'}
+                        className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm"
+                      />
+                      <div className="flex gap-3">
+                        {['REVISION_REQUESTED', 'WITHDRAWN', 'REJECTED'].includes(selected.status) && canResubmitSelected && (
+                          <button onClick={() => handleSecretaryTransition('resubmit')} className="flex-1 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white">
+                            Resubmit for Review
+                          </button>
+                        )}
+                        {['PENDING', 'REVISION_REQUESTED'].includes(selected.status) && (
+                          <button onClick={() => handleSecretaryTransition('withdraw')} className="flex-1 rounded-xl border border-slate-300 px-4 py-3 text-sm font-bold text-slate-700">
+                            Withdraw Request
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {selected.status === 'DIRECTOR_APPROVED' && session?.user.role === 'ICT_DIRECTOR' && (
+                    <div className="pt-6 border-t border-rose-100 space-y-3">
+                      <textarea rows={2} value={note} onChange={event => setNote(event.target.value)} placeholder="Cancellation reason" className="w-full rounded-xl border border-rose-200 bg-rose-50/40 p-3 text-sm" />
+                      <button onClick={() => handleCancel(selected.id)} className="w-full rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">
+                        Cancel Approved Event
+                      </button>
                     </div>
                   )}
 
@@ -616,7 +732,7 @@ export default function RequestsPage() {
                   )}
 
                   {/* Admin Delete Action */}
-                  {isPrivilegedUser && (
+                  {isPrivilegedUser && ['WITHDRAWN', 'CANCELLED', 'REJECTED'].includes(selected.status) && (
                     <div className="pt-6 border-t border-slate-100 space-y-3">
                       <button
                         onClick={() => {
@@ -626,7 +742,7 @@ export default function RequestsPage() {
                         }}
                         className="w-full flex items-center justify-center gap-2 bg-red-50 hover:bg-red-500 hover:text-white text-red-600 border border-red-100 rounded-2xl py-3 text-sm font-black transition-all"
                       >
-                        <Trash2 size={18} /> Delete Request
+                        <Archive size={18} /> Archive Closed Request
                       </button>
                     </div>
                   )}
@@ -1299,9 +1415,9 @@ export default function RequestsPage() {
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleDelete}
-        title="Delete Request"
-        message="Are you sure you want to permanently delete this request? This action cannot be undone."
-        confirmText="Yes, Delete"
+        title="Archive Request"
+        message="Archive this closed request? Its audit history and any PMAC operational record will remain available."
+        confirmText="Archive"
         cancelText="Keep Request"
       />
     </>

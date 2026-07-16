@@ -62,7 +62,11 @@ export type RequestStatus =
   | 'PENDING'          // submitted by Secretary, awaiting CMAC Coordinator
   | 'COORDINATOR_APPROVED'  // CMAC Coordinator approved, awaiting ICT Director
   | 'DIRECTOR_APPROVED'     // ICT Director approved — fully approved
+  | 'REVISION_REQUESTED'
+  | 'WITHDRAWN'
+  | 'CANCELLED'
   | 'REJECTED'
+  | 'ARCHIVED'
 
 export interface ServiceRequest {
   id: string
@@ -89,6 +93,7 @@ export interface ServiceRequest {
   coordinatorApprovedAt?: string
   directorApprovedAt?: string
   deletedAt?: string | null
+  archivedAt?: string | null
   // Relations
   secretaryId: string
   coordinatorId?: string

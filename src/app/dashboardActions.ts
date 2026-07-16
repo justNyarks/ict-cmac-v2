@@ -15,16 +15,27 @@ function getWorkflowStageLabel(status: string) {
       return 'Coordinator Approved'
     case 'DIRECTOR_APPROVED':
       return 'Director Approved'
+    case 'REVISION_REQUESTED':
+      return 'Revision Requested'
+    case 'WITHDRAWN':
+      return 'Withdrawn'
+    case 'CANCELLED':
+      return 'Cancelled'
     case 'REJECTED':
       return 'Rejected'
+    case 'ARCHIVED':
+      return 'Archived'
     default:
       return status
   }
 }
 
-function getSlaLabel(request: { status: string; createdAt: Date; eventDate: Date }) {
+function getSlaLabel(request: { status: string; createdAt: Date; coordinatorApprovedAt: Date | null; eventDate: Date }) {
   const now = new Date()
-  const ageHours = Math.floor((now.getTime() - request.createdAt.getTime()) / 3600000)
+  const stageStartedAt = request.status === 'COORDINATOR_APPROVED'
+    ? request.coordinatorApprovedAt ?? request.createdAt
+    : request.createdAt
+  const ageHours = Math.floor((now.getTime() - stageStartedAt.getTime()) / 3600000)
   const daysUntilEvent = Math.ceil((request.eventDate.getTime() - now.getTime()) / 86400000)
 
   if (request.status === 'PENDING' && ageHours >= 24) {
@@ -43,7 +54,7 @@ function getSlaLabel(request: { status: string; createdAt: Date; eventDate: Date
     return 'Upcoming soon'
   }
 
-  if (request.status === 'REJECTED') {
+  if (['REVISION_REQUESTED', 'WITHDRAWN', 'CANCELLED', 'REJECTED', 'ARCHIVED'].includes(request.status)) {
     return 'Closed'
   }
 
@@ -95,7 +106,8 @@ export async function getDashboardStats() {
     const coordApproved = allRequests.filter(r => r.status === 'COORDINATOR_APPROVED').length
     const pmacApproved = approvedRequests.filter(r => r.serviceType === 'PMAC').length
     const cmacApproved = approvedRequests.filter(r => r.serviceType === 'CMAC').length
-    const unassignedService = allRequests.filter(r => !r.serviceType && r.status !== 'REJECTED').length
+    const closedStatuses = ['REVISION_REQUESTED', 'WITHDRAWN', 'CANCELLED', 'REJECTED', 'ARCHIVED']
+    const unassignedService = allRequests.filter(r => !r.serviceType && !closedStatuses.includes(r.status)).length
     const photoCount = allRequests.filter(r => r.documentationType === 'PHOTO').length
     const videoCount = allRequests.filter(r => r.documentationType === 'VIDEO').length
     const bothCount = allRequests.filter(r => r.documentationType === 'BOTH').length
@@ -104,7 +116,7 @@ export async function getDashboardStats() {
       where: whereClause,
       orderBy: { createdAt: 'desc' },
       take: 5,
-      select: { id: true, eventTitle: true, school: true, eventDate: true, status: true, serviceType: true, createdAt: true, secretaryId: true, secretary: { select: { name: true } } }
+      select: { id: true, eventTitle: true, school: true, eventDate: true, status: true, serviceType: true, createdAt: true, coordinatorApprovedAt: true, secretaryId: true, secretary: { select: { name: true } } }
     })
     
     const notifications = await getNotificationFeed(user, 5)
@@ -117,7 +129,7 @@ export async function getDashboardStats() {
       slaLabel: getSlaLabel(request),
       eventDate: request.eventDate,
       createdAt: request.createdAt,
-      href: '/requests',
+      href: `/requests?requestId=${encodeURIComponent(request.id)}`,
     }))
 
     return {

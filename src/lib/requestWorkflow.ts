@@ -11,17 +11,23 @@ export function getRequestListWhere(user: SessionUser): Prisma.ServiceRequestWhe
   if (user.role === "SECRETARY") {
     return {
       deletedAt: null,
+      status: { not: 'ARCHIVED' },
       secretaryId: user.id,
     }
   }
 
-  return { deletedAt: null }
+  return { deletedAt: null, status: { not: 'ARCHIVED' } }
 }
 
 export function getCalendarWhere(user: SessionUser): Prisma.ServiceRequestWhereInput {
+  const activeCalendarStatuses: Prisma.EnumRequestStatusFilter = {
+    in: ['PENDING', 'COORDINATOR_APPROVED', 'DIRECTOR_APPROVED'],
+  }
+
   if (user.role === "SECRETARY") {
     return {
       deletedAt: null,
+      status: activeCalendarStatuses,
       OR: [
         { secretaryId: user.id },
         { status: "DIRECTOR_APPROVED" },
@@ -29,7 +35,7 @@ export function getCalendarWhere(user: SessionUser): Prisma.ServiceRequestWhereI
     }
   }
 
-  return { deletedAt: null }
+  return { deletedAt: null, status: activeCalendarStatuses }
 }
 
 export function revalidateRequestViews(includeLogs = false) {

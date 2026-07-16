@@ -1,6 +1,6 @@
 'use server'
 
-import { ServiceType } from "@prisma/client"
+import { Prisma, type ServiceType } from "@prisma/client"
 import { unstable_noStore as noStore } from "next/cache"
 import { getServerSession } from "next-auth"
 
@@ -10,10 +10,19 @@ import { revalidatePmacViews } from "@/lib/pmacRevalidation"
 import { syncPmacEventFromServiceRequest } from "@/lib/pmacRequestSync"
 import { prisma } from "@/lib/prisma"
 import { getCalendarWhere, getRequestListWhere, revalidateRequestViews } from "@/lib/requestWorkflow"
+import { applyAtomicRequestTransition, type RequestTransitionAction } from "@/lib/requestTransitions"
 import { assertActionAccess } from "@/lib/security"
 import { sanitizeSingleLineText } from "@/lib/sanitization"
+import { validateAndNormalizeRequestInput, type RequestInput } from "@/lib/requestValidation"
 import { isCoreWorkflowRole } from "@/lib/roles"
 import { isPrivilegedRole } from "@/lib/zeroTrust"
+
+function getActorName(name?: string | null) {
+  return sanitizeSingleLineText(name, {
+    fieldName: 'Actor name',
+    maxLength: 191,
+  }) || 'Unknown'
+}
 
 export async function approveRequest(id: string, note: string, serviceType?: ServiceType) {
   const session = await assertActionAccess(['CMAC_COORDINATOR', 'ICT_DIRECTOR'], { zeroTrust: true })
@@ -23,10 +32,7 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
     fieldName: 'Approval note',
     maxLength: 191,
   })
-  const actorName = sanitizeSingleLineText(user.name, {
-    fieldName: 'Actor name',
-    maxLength: 191,
-  }) || 'Unknown'
+  const actorName = getActorName(user.name)
   const syncActor = {
     id: user.id,
     name: user.name,
@@ -39,14 +45,11 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
     if (request.deletedAt) throw new Error('Request has already been deleted')
 
     if (user.role === 'CMAC_COORDINATOR' && request.status === 'PENDING') {
-      await tx.serviceRequest.update({
-        where: { id },
-        data: {
-          status: 'COORDINATOR_APPROVED',
+      await applyAtomicRequestTransition(tx, request, user.role, 'APPROVE', {
           coordinatorNote: sanitizedNote,
           coordinatorId: user.id,
           coordinatorApprovedAt: new Date(),
-        },
+          serviceType: serviceType ?? request.serviceType,
       })
 
       await tx.auditLog.create({
@@ -55,7 +58,10 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
           action: 'COORDINATOR_APPROVED',
           actorName,
           actorRole: user.role,
-          details: sanitizedNote ? `Note: ${sanitizedNote}` : 'Approved without additional notes.',
+          details: [
+            `Routing recommendation: ${serviceType ?? request.serviceType ?? 'Unassigned'}.`,
+            sanitizedNote ? `Note: ${sanitizedNote}` : 'Approved without additional notes.',
+          ].join(' '),
         },
       })
 
@@ -74,7 +80,7 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
         endTime: request.endTime ?? undefined,
         eventVenue: request.eventVenue,
         currentRequestId: request.id,
-      })
+      }, tx)
       if (conflictCheck.conflicts.length > 0) {
         const [firstConflict] = conflictCheck.conflicts
         throw new Error(`Cannot approve because "${firstConflict.title}" already conflicts with this schedule at ${firstConflict.venue}.`)
@@ -85,16 +91,12 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
         throw new Error('A bypass reason is required when the director skips coordinator review')
       }
 
-      const updatedRequest = await tx.serviceRequest.update({
-        where: { id },
-        data: {
-          status: 'DIRECTOR_APPROVED',
+      const updatedRequest = await applyAtomicRequestTransition(tx, request, user.role, 'APPROVE', {
           directorNote: sanitizedNote,
           directorId: user.id,
           directorApprovedAt: new Date(),
           serviceType,
           coordinatorNote: isDirectBypass && !request.coordinatorNote ? 'Bypassed by Director' : undefined,
-          },
       })
 
       const mirrored = await syncPmacEventFromServiceRequest(tx, updatedRequest, syncActor)
@@ -105,11 +107,14 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
           action: isDirectBypass ? 'DIRECT_BYPASS' : 'DIRECTOR_APPROVED',
           actorName,
           actorRole: user.role,
-          details: sanitizedNote
-            ? `Note: ${sanitizedNote}`
-            : isDirectBypass
-              ? 'Approved directly by the ICT Director.'
-              : 'Approved without additional notes.',
+          details: [
+            `Final service assignment: ${serviceType}.`,
+            sanitizedNote
+              ? `Note: ${sanitizedNote}`
+              : isDirectBypass
+                ? 'Approved directly by the ICT Director.'
+                : 'Approved without additional notes.',
+          ].join(' '),
         },
       })
 
@@ -117,7 +122,7 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
     }
 
     throw new Error('Invalid action for this role or request status')
-  })
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 
   revalidateRequestViews(true)
   if (touchedPmacEvent) {
@@ -134,23 +139,16 @@ export async function rejectRequest(id: string, note: string) {
     maxLength: 191,
     required: true,
   })
-  const actorName = sanitizeSingleLineText(user.name, {
-    fieldName: 'Actor name',
-    maxLength: 191,
-  }) || 'Unknown'
+  const actorName = getActorName(user.name)
 
   const touchedPmacEvent = await prisma.$transaction(async (tx) => {
     const request = await tx.serviceRequest.findUnique({ where: { id } })
     if (!request) throw new Error('Request not found')
     if (request.deletedAt) throw new Error('Request has already been deleted')
 
-    const updatedRequest = await tx.serviceRequest.update({
-      where: { id },
-      data: {
-        status: 'REJECTED',
+    const updatedRequest = await applyAtomicRequestTransition(tx, request, user.role, 'REJECT', {
         coordinatorNote: user.role === 'CMAC_COORDINATOR' ? sanitizedNote : undefined,
         directorNote: user.role === 'ICT_DIRECTOR' ? sanitizedNote : undefined,
-      },
     })
 
     const mirrored = await syncPmacEventFromServiceRequest(tx, updatedRequest, {
@@ -169,7 +167,7 @@ export async function rejectRequest(id: string, note: string) {
         },
       })
     return mirrored || request.serviceType === 'PMAC'
-  })
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 
   revalidateRequestViews(true)
   if (touchedPmacEvent) {
@@ -177,50 +175,43 @@ export async function rejectRequest(id: string, note: string) {
   }
 }
 
-export async function deleteRequest(id: string) {
-  const session = await assertActionAccess(['CMAC_COORDINATOR', 'ICT_DIRECTOR'], { zeroTrust: true })
-
-  const { user } = session
-  const actorName = sanitizeSingleLineText(user.name, {
-    fieldName: 'Actor name',
+async function transitionWithNote(
+  id: string,
+  action: Extract<RequestTransitionAction, 'REQUEST_REVISION' | 'CANCEL' | 'ARCHIVE'>,
+  note: string,
+  allowedRoles: Array<'CMAC_COORDINATOR' | 'ICT_DIRECTOR'>
+) {
+  const session = await assertActionAccess(allowedRoles, { zeroTrust: true })
+  const sanitizedNote = sanitizeSingleLineText(note, {
+    fieldName: action === 'ARCHIVE' ? 'Archive note' : 'Reason',
     maxLength: 191,
-  }) || 'Unknown'
+    required: action !== 'ARCHIVE',
+  })
+  const { user } = session
 
   const touchedPmacEvent = await prisma.$transaction(async (tx) => {
-    const request = await tx.serviceRequest.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        createdAt: true,
-        eventTitle: true,
-        eventDate: true,
-        endDate: true,
-        startTime: true,
-        endTime: true,
-        eventVenue: true,
-        school: true,
-        serviceType: true,
-        documentationType: true,
-        campusType: true,
-        letterContent: true,
-        eventDetails: true,
-        status: true,
-        deletedAt: true,
-        secretaryId: true,
-        coordinatorApprovedAt: true,
-        directorId: true,
-        directorApprovedAt: true,
-        directorNote: true,
-        coordinatorNote: true,
-      },
-    })
-    if (!request) throw new Error('Request not found')
-    if (request.deletedAt) throw new Error('Request has already been deleted')
+    const request = await tx.serviceRequest.findUnique({ where: { id } })
+    if (!request || request.deletedAt) throw new Error('Request not found')
 
-    const updatedRequest = await tx.serviceRequest.update({
-      where: { id },
+    const updatedRequest = await applyAtomicRequestTransition(tx, request, user.role, action, {
+      archivedAt: action === 'ARCHIVE' ? new Date() : undefined,
+      coordinatorNote: user.role === 'CMAC_COORDINATOR' && sanitizedNote ? sanitizedNote : undefined,
+      directorNote: user.role === 'ICT_DIRECTOR' && sanitizedNote ? sanitizedNote : undefined,
+    })
+
+    const auditAction = action === 'REQUEST_REVISION'
+      ? 'REVISION_REQUESTED'
+      : action === 'CANCEL'
+        ? 'CANCELLED'
+        : 'ARCHIVED'
+
+    await tx.auditLog.create({
       data: {
-        deletedAt: new Date(),
+        requestId: id,
+        action: auditAction,
+        actorName: getActorName(user.name),
+        actorRole: user.role,
+        details: sanitizedNote || `Request archived by ${getActorName(user.name)}.`,
       },
     })
 
@@ -229,24 +220,180 @@ export async function deleteRequest(id: string) {
       name: user.name,
       role: user.role,
     })
-
-    await tx.auditLog.create({
-        data: {
-          requestId: id,
-          action: 'DELETED',
-          actorName,
-          actorRole: user.role,
-          details: `Request for "${request.eventTitle || 'Unknown'}" was deleted from the system.`,
-        },
-    })
-
     return mirrored || request.serviceType === 'PMAC'
-  })
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 
   revalidateRequestViews(true)
-  if (touchedPmacEvent) {
-    revalidatePmacViews([`/pmac/events/${id}`])
-  }
+  if (touchedPmacEvent) revalidatePmacViews([`/pmac/events/${id}`])
+}
+
+export async function requestRevision(id: string, note: string) {
+  return transitionWithNote(id, 'REQUEST_REVISION', note, ['CMAC_COORDINATOR', 'ICT_DIRECTOR'])
+}
+
+export async function cancelRequest(id: string, note: string) {
+  return transitionWithNote(id, 'CANCEL', note, ['ICT_DIRECTOR'])
+}
+
+export async function archiveRequest(id: string, note = '') {
+  return transitionWithNote(id, 'ARCHIVE', note, ['CMAC_COORDINATOR', 'ICT_DIRECTOR'])
+}
+
+export async function withdrawRequest(id: string, note: string) {
+  const session = await assertActionAccess(['SECRETARY'])
+  const sanitizedNote = sanitizeSingleLineText(note, {
+    fieldName: 'Withdrawal reason',
+    maxLength: 191,
+    required: true,
+  })
+  const { user } = session
+
+  await prisma.$transaction(async (tx) => {
+    const request = await tx.serviceRequest.findUnique({ where: { id } })
+    if (!request || request.deletedAt || request.secretaryId !== user.id) throw new Error('Request not found')
+    await applyAtomicRequestTransition(tx, request, user.role, 'WITHDRAW')
+    await tx.auditLog.create({
+      data: {
+        requestId: id,
+        action: 'WITHDRAWN',
+        actorName: getActorName(user.name),
+        actorRole: user.role,
+        details: sanitizedNote,
+      },
+    })
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+
+  revalidateRequestViews(true)
+}
+
+export async function resubmitRequest(id: string, note = '') {
+  const session = await assertActionAccess(['SECRETARY'])
+  const sanitizedNote = sanitizeSingleLineText(note, {
+    fieldName: 'Resubmission note',
+    maxLength: 191,
+  })
+  const { user } = session
+
+  await prisma.$transaction(async (tx) => {
+    const request = await tx.serviceRequest.findUnique({ where: { id } })
+    if (!request || request.deletedAt || request.secretaryId !== user.id) throw new Error('Request not found')
+    if (request.status === 'REVISION_REQUESTED' || request.status === 'REJECTED') {
+      const feedback = await tx.auditLog.findFirst({
+        where: { requestId: id, action: { in: ['REVISION_REQUESTED', 'REJECTED'] } },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      })
+      const correction = await tx.auditLog.findFirst({
+        where: {
+          requestId: id,
+          action: 'CORRECTED',
+          createdAt: feedback ? { gt: feedback.createdAt } : undefined,
+        },
+        select: { id: true },
+      })
+      if (!correction) throw new Error('Edit and save the requested corrections before resubmitting.')
+    }
+    await applyAtomicRequestTransition(tx, request, user.role, 'RESUBMIT', {
+      coordinatorId: null,
+      coordinatorApprovedAt: null,
+      directorId: null,
+      directorApprovedAt: null,
+      archivedAt: null,
+    })
+    await tx.auditLog.create({
+      data: {
+        requestId: id,
+        action: 'RESUBMITTED',
+        actorName: getActorName(user.name),
+        actorRole: user.role,
+        details: sanitizedNote || 'Request corrected and resubmitted for coordinator review.',
+      },
+    })
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+
+  revalidateRequestViews(true)
+}
+
+export async function updateServiceRequest(id: string, formData: RequestInput) {
+  const session = await assertActionAccess(['SECRETARY'])
+  const { user } = session
+  const normalized = validateAndNormalizeRequestInput(formData, user, { isEditing: true })
+
+  await prisma.$transaction(async (tx) => {
+    const request = await tx.serviceRequest.findUnique({ where: { id } })
+    if (!request || request.deletedAt || request.secretaryId !== user.id) throw new Error('Request not found')
+    if (!['PENDING', 'REVISION_REQUESTED', 'REJECTED', 'WITHDRAWN'].includes(request.status)) {
+      throw new Error('This request can no longer be edited.')
+    }
+
+    const conflictCheck = await findRequestConflicts({
+      startDate: formData.eventDate,
+      startTime: formData.startTime,
+      endDate: formData.endDate,
+      endTime: formData.endTime,
+      eventVenue: formData.eventVenue,
+      currentRequestId: id,
+    }, tx)
+    if (conflictCheck.conflicts.length > 0) {
+      const [firstConflict] = conflictCheck.conflicts
+      throw new Error(`Schedule conflict with "${firstConflict.title}" at ${firstConflict.venue}. Please choose a different schedule.`)
+    }
+
+    if (normalized.letterAttachmentId) {
+      const attachment = await tx.requestLetterAttachment.findFirst({
+        where: { id: normalized.letterAttachmentId, uploadedById: user.id, requestId: null },
+        select: { id: true },
+      })
+      if (!attachment) throw new Error('The uploaded request letter is no longer available.')
+      await tx.requestLetterAttachment.deleteMany({
+        where: { requestId: id },
+      })
+    } else if (normalized.letterContent) {
+      await tx.requestLetterAttachment.deleteMany({ where: { requestId: id } })
+    }
+
+    const updated = await tx.serviceRequest.updateMany({
+      where: { id, status: request.status, deletedAt: null },
+      data: {
+        eventTitle: normalized.eventTitle,
+        eventDate: normalized.eventDate,
+        endDate: normalized.endDate,
+        startTime: normalized.startTime,
+        endTime: normalized.endTime,
+        eventVenue: normalized.eventVenue,
+        school: normalized.school,
+        documentationType: normalized.documentationType,
+        campusType: normalized.campusType,
+        letterUrl: normalized.letterAttachmentId
+          ? `/api/request-letters/${normalized.letterAttachmentId}`
+          : normalized.letterUrl,
+        letterContent: normalized.letterContent,
+        needsSameDayEdit: normalized.needsSameDayEdit,
+        needsSameDayPhoto: normalized.needsSameDayPhoto,
+      },
+    })
+    if (updated.count !== 1) throw new Error('This request changed while you were editing it. Refresh and try again.')
+
+    if (normalized.letterAttachmentId) {
+      const linked = await tx.requestLetterAttachment.updateMany({
+        where: { id: normalized.letterAttachmentId, uploadedById: user.id, requestId: null },
+        data: { requestId: id },
+      })
+      if (linked.count !== 1) throw new Error('The uploaded request letter could not be linked to this request.')
+    }
+
+    await tx.auditLog.create({
+      data: {
+        requestId: id,
+        action: 'CORRECTED',
+        actorName: getActorName(user.name),
+        actorRole: user.role,
+        details: 'Request details were corrected by the submitter.',
+      },
+    })
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+
+  revalidateRequestViews(true)
 }
 
 export async function getRequests() {

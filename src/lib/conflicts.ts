@@ -1,4 +1,4 @@
-import type { RequestStatus } from "@prisma/client"
+import type { Prisma, RequestStatus } from "@prisma/client"
 import { differenceInCalendarDays, isSameDay, max, min } from "date-fns"
 
 import { prisma } from "@/lib/prisma"
@@ -148,18 +148,17 @@ export async function findRequestConflicts({
   endTime,
   eventVenue,
   currentRequestId,
-}: ConflictCheckInput): Promise<ConflictCheckResult> {
+}: ConflictCheckInput, database: Pick<Prisma.TransactionClient, 'serviceRequest'> = prisma): Promise<ConflictCheckResult> {
   if (!startDate) return EMPTY_RESULT
 
-  try {
-    const requestStart = new Date(startDate)
-    const requestEnd = endDate?.trim() ? new Date(endDate) : new Date(startDate)
-    const normalizedVenue = sanitizeSingleLineText(eventVenue, {
-      fieldName: 'Venue',
-      maxLength: 191,
-    })
+  const requestStart = new Date(startDate)
+  const requestEnd = endDate?.trim() ? new Date(endDate) : new Date(startDate)
+  const normalizedVenue = sanitizeSingleLineText(eventVenue, {
+    fieldName: 'Venue',
+    maxLength: 191,
+  })
 
-    const overlappingBookings = await prisma.serviceRequest.findMany({
+  const overlappingBookings = await database.serviceRequest.findMany({
       where: {
         deletedAt: null,
         id: currentRequestId ? { not: currentRequestId } : undefined,
@@ -186,27 +185,23 @@ export async function findRequestConflicts({
       },
     })
 
-    const conflicts = overlappingBookings.filter((booking) => {
-      if (normalizedVenue && booking.eventVenue !== normalizedVenue) {
-        return false
-      }
-
-      return hasTimeOverlapForSharedDay(
-        requestStart,
-        requestEnd,
-        startTime,
-        endTime,
-        booking
-      )
-    })
-
-    return {
-      hasConflict: conflicts.length > 0,
-      conflicts: conflicts.map(toConflictCard),
-      sameDayEvents: overlappingBookings.map(toConflictCard),
+  const conflicts = overlappingBookings.filter((booking) => {
+    if (normalizedVenue && booking.eventVenue !== normalizedVenue) {
+      return false
     }
-  } catch (error) {
-    console.error("Conflict check error:", error)
-    return EMPTY_RESULT
+
+    return hasTimeOverlapForSharedDay(
+      requestStart,
+      requestEnd,
+      startTime,
+      endTime,
+      booking
+    )
+  })
+
+  return {
+    hasConflict: conflicts.length > 0,
+    conflicts: conflicts.map(toConflictCard),
+    sameDayEvents: overlappingBookings.map(toConflictCard),
   }
 }

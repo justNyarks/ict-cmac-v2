@@ -15,6 +15,7 @@ export interface RequestInput {
   serviceType?: ServiceType | '' | null
   documentationType: DocumentationType
   letterUrl?: string | null
+  letterAttachmentId?: string | null
   letterContent?: string | null
   needsSameDayEdit?: boolean
   needsSameDayPhoto?: boolean
@@ -33,6 +34,7 @@ export interface NormalizedRequestInput {
   serviceType: ServiceType | null
   documentationType: DocumentationType
   letterUrl: string | null
+  letterAttachmentId: string | null
   letterContent: string | null
   needsSameDayEdit: boolean
   needsSameDayPhoto: boolean
@@ -145,6 +147,7 @@ export function buildRequestQualityAssessment(
     maxStep: RequestQualityStep
     now?: Date
     hasUploadedLetter?: boolean
+    isEditing?: boolean
   }
 ): RequestQualityAssessment {
   const errors: string[] = []
@@ -189,7 +192,7 @@ export function buildRequestQualityAssessment(
       const leadDays = differenceInDays(referenceDate, startOfLocalDay(eventDate))
       if (leadDays < 0) {
         errors.push('Event date cannot be in the past.')
-      } else if (leadDays < MIN_ADVANCE_DAYS && !isDirector) {
+      } else if (leadDays < MIN_ADVANCE_DAYS && !isDirector && !options.isEditing) {
         errors.push('Lead time is below the 3-day requirement.')
       } else if (leadDays <= 5) {
         warnings.push('This request is close to the lead-time minimum.')
@@ -268,6 +271,7 @@ export function getRequestBlockingError(
     maxStep: RequestQualityStep
     now?: Date
     hasUploadedLetter?: boolean
+    isEditing?: boolean
   }
 ) {
   return buildRequestQualityAssessment(formData, options).errors[0] ?? ''
@@ -275,7 +279,8 @@ export function getRequestBlockingError(
 
 export function validateAndNormalizeRequestInput(
   formData: RequestInput,
-  user: SessionUser
+  user: SessionUser,
+  options: { isEditing?: boolean } = {}
 ): NormalizedRequestInput {
   const eventTitle = sanitizeSingleLineText(formData.eventTitle, {
     fieldName: "Event title",
@@ -322,7 +327,7 @@ export function validateAndNormalizeRequestInput(
   }
 
   const isDirector = user.role === "ICT_DIRECTOR"
-  if (!isDirector) {
+  if (!isDirector && !options.isEditing) {
     const today = startOfLocalDay(new Date())
     const advanceDays = differenceInDays(today, startOfLocalDay(eventDate))
 
@@ -350,6 +355,10 @@ export function validateAndNormalizeRequestInput(
     serviceType,
     documentationType,
     letterUrl: sanitizeAttachmentReference(formData.letterUrl),
+    letterAttachmentId: sanitizeSingleLineText(formData.letterAttachmentId, {
+      fieldName: 'Request letter attachment ID',
+      maxLength: 191,
+    }) || null,
     letterContent: sanitizeMultilineText(formData.letterContent, {
       fieldName: "Request letter",
       maxLength: 10000,

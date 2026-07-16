@@ -79,7 +79,16 @@ export function buildAnalyticsSnapshot(requests: AnalyticsSourceRequest[], now =
   const schoolCounts = createCounter(SCHOOLS)
   const serviceTypeCounts = createCounter(['CMAC', 'PMAC', 'Unassigned'] as const)
   const documentationCounts = createCounter(['PHOTO', 'VIDEO', 'BOTH'] as const)
-  const statusCounts = createCounter(['PENDING', 'COORDINATOR_APPROVED', 'DIRECTOR_APPROVED', 'REJECTED'] as const)
+  const statusCounts = createCounter([
+    'PENDING',
+    'COORDINATOR_APPROVED',
+    'DIRECTOR_APPROVED',
+    'REVISION_REQUESTED',
+    'WITHDRAWN',
+    'CANCELLED',
+    'REJECTED',
+    'ARCHIVED',
+  ] as const)
   const monthCounts: Record<string, number> = {}
 
   const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
@@ -155,7 +164,11 @@ export function buildAnalyticsSnapshot(requests: AnalyticsSourceRequest[], now =
       { label: 'Fully Approved', value: statusCounts.DIRECTOR_APPROVED },
       { label: 'Coord. Approved', value: statusCounts.COORDINATOR_APPROVED },
       { label: 'Pending', value: statusCounts.PENDING },
+      { label: 'Needs Revision', value: statusCounts.REVISION_REQUESTED },
+      { label: 'Withdrawn', value: statusCounts.WITHDRAWN },
+      { label: 'Cancelled', value: statusCounts.CANCELLED },
       { label: 'Rejected', value: statusCounts.REJECTED },
+      { label: 'Archived', value: statusCounts.ARCHIVED },
     ],
     serviceTypeBreakdown: [
       { label: 'CMAC', value: serviceTypeCounts.CMAC },

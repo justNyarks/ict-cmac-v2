@@ -25,13 +25,16 @@ export function getSecretaryTitle(school?: string) {
 
 export function getSlaLabel(request: RequestItem, referenceTime: number) {
   const createdAt = new Date(request.createdAt)
+  const stageStartedAt = request.status === 'COORDINATOR_APPROVED' && request.coordinatorApprovedAt
+    ? new Date(request.coordinatorApprovedAt)
+    : createdAt
   const eventDate = new Date(request.eventDate)
-  const ageHours = Math.floor((referenceTime - createdAt.getTime()) / 3_600_000)
+  const ageHours = Math.floor((referenceTime - stageStartedAt.getTime()) / 3_600_000)
   const daysUntilEvent = Math.ceil((eventDate.getTime() - referenceTime) / 86_400_000)
 
   if (request.status === 'PENDING' && ageHours >= 24) return 'Needs coordinator review'
   if (request.status === 'COORDINATOR_APPROVED' && ageHours >= 48) return 'Needs director sign-off'
   if (request.status === 'DIRECTOR_APPROVED' && daysUntilEvent <= 2) return 'Upcoming soon'
-  if (request.status === 'REJECTED') return 'Closed'
+  if (['REVISION_REQUESTED', 'WITHDRAWN', 'CANCELLED', 'REJECTED', 'ARCHIVED'].includes(request.status)) return 'Closed'
   return 'On track'
 }

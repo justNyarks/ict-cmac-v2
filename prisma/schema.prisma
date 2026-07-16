@@ -172,7 +172,11 @@ enum RequestStatus {
   PENDING
   COORDINATOR_APPROVED
   DIRECTOR_APPROVED
+  REVISION_REQUESTED
+  WITHDRAWN
+  CANCELLED
   REJECTED
+  ARCHIVED
 }
 
 model User {
@@ -205,6 +209,7 @@ model User {
   castPmacVotes              PmacVote[]              @relation("PmacVoteCastBy")
   pmacActivityLogs           PmacActivityLog[]       @relation("PmacActivityActor")
   uploadedPmacAttachments    PmacAttachment[]        @relation("PmacAttachmentUploadedBy")
+  uploadedRequestLetters     RequestLetterAttachment[] @relation("RequestLetterUploadedBy")
   notificationReceipts       NotificationReceipt[]
 
   createdAt DateTime @default(now())
@@ -545,10 +550,31 @@ model ServiceRequest {
   directorId         String?
   directorApprovedAt DateTime?
   deletedAt          DateTime?
+  archivedAt         DateTime?
 
   logs      AuditLog[]
+  letterAttachment RequestLetterAttachment?
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
+
+  @@index([status, deletedAt, eventDate])
+  @@index([secretaryId, status, createdAt])
+}
+
+model RequestLetterAttachment {
+  id           String          @id @default(cuid())
+  requestId    String?         @unique
+  request      ServiceRequest? @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  uploadedById String
+  uploadedBy   User            @relation("RequestLetterUploadedBy", fields: [uploadedById], references: [id], onDelete: Cascade)
+  fileName     String
+  mimeType     String
+  sizeBytes    Int
+  data         Bytes           @db.LongBlob
+  createdAt    DateTime        @default(now())
+
+  @@index([uploadedById, createdAt])
+  @@index([requestId])
 }
 
 model AuditLog {

@@ -180,7 +180,11 @@ export default async function AnalyticsPage({
     'Fully Approved': '#2dd4bf',
     'Coord. Approved': '#6366f1',
     Pending: '#f5a524',
+    'Needs Revision': '#f59e0b',
+    Withdrawn: '#8b98a9',
+    Cancelled: '#fb7185',
     Rejected: '#d946ef',
+    Archived: '#64748b',
   }
 
   return (

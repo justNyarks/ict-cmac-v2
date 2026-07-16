@@ -11,6 +11,43 @@ import { assertActionAccess } from "@/lib/security"
 import { validateAndNormalizeRequestInput } from "@/lib/requestValidation"
 import { sanitizeSingleLineText } from "@/lib/sanitization"
 import type { DocumentationType, School, ServiceType } from "@/types"
+import { updateServiceRequest as updateExistingServiceRequest } from "@/app/requests/actions"
+import type { RequestInput } from "@/lib/requestValidation"
+
+export async function getEditableServiceRequest(id: string) {
+  const session = await assertActionAccess(['SECRETARY'])
+  return prisma.serviceRequest.findFirst({
+    where: {
+      id,
+      secretaryId: session.user.id,
+      deletedAt: null,
+      status: { in: ['PENDING', 'REVISION_REQUESTED', 'REJECTED', 'WITHDRAWN'] },
+    },
+    select: {
+      id: true,
+      status: true,
+      eventTitle: true,
+      eventDate: true,
+      endDate: true,
+      startTime: true,
+      endTime: true,
+      eventVenue: true,
+      school: true,
+      serviceType: true,
+      documentationType: true,
+      letterUrl: true,
+      letterContent: true,
+      needsSameDayEdit: true,
+      needsSameDayPhoto: true,
+      campusType: true,
+    },
+  })
+}
+
+export async function updateExistingRequest(id: string, formData: RequestInput) {
+  await updateExistingServiceRequest(id, formData)
+  return { success: true as const }
+}
 
 export async function createServiceRequest(formData: {
   eventTitle: string
@@ -23,6 +60,7 @@ export async function createServiceRequest(formData: {
   serviceType?: ServiceType | null
   documentationType: DocumentationType
   letterUrl?: string | null
+  letterAttachmentId?: string | null
   letterContent?: string | null
   needsSameDayEdit?: boolean
   needsSameDayPhoto?: boolean
@@ -46,23 +84,31 @@ export async function createServiceRequest(formData: {
     }
 
     const normalized = validateAndNormalizeRequestInput(formData, user)
-    const conflictCheck = await findRequestConflicts({
-      startDate: formData.eventDate,
-      startTime: formData.startTime,
-      endDate: formData.endDate,
-      endTime: formData.endTime,
-      eventVenue: formData.eventVenue,
-    })
-
-    if (conflictCheck.conflicts.length > 0) {
-      const [firstConflict] = conflictCheck.conflicts
-      return {
-        success: false,
-        error: `Schedule conflict with "${firstConflict.title}" at ${firstConflict.venue}. Please choose a different schedule.`,
-      }
-    }
-
     const request = await prisma.$transaction(async (tx) => {
+      const conflictCheck = await findRequestConflicts({
+        startDate: formData.eventDate,
+        startTime: formData.startTime,
+        endDate: formData.endDate,
+        endTime: formData.endTime,
+        eventVenue: formData.eventVenue,
+      }, tx)
+      if (conflictCheck.conflicts.length > 0) {
+        const [firstConflict] = conflictCheck.conflicts
+        throw new Error(`Schedule conflict with "${firstConflict.title}" at ${firstConflict.venue}. Please choose a different schedule.`)
+      }
+
+      if (normalized.letterAttachmentId) {
+        const attachment = await tx.requestLetterAttachment.findFirst({
+          where: {
+            id: normalized.letterAttachmentId,
+            uploadedById: user.id,
+            requestId: null,
+          },
+          select: { id: true },
+        })
+        if (!attachment) throw new Error('The uploaded request letter is no longer available. Please upload it again.')
+      }
+
       const createdRequest = await tx.serviceRequest.create({
         data: {
           eventTitle: normalized.eventTitle,
@@ -74,7 +120,9 @@ export async function createServiceRequest(formData: {
           school: normalized.school,
           serviceType: normalized.serviceType,
           documentationType: normalized.documentationType,
-          letterUrl: normalized.letterUrl,
+          letterUrl: normalized.letterAttachmentId
+            ? `/api/request-letters/${normalized.letterAttachmentId}`
+            : normalized.letterUrl,
           letterContent: normalized.letterContent,
           needsSameDayEdit: normalized.needsSameDayEdit,
           needsSameDayPhoto: normalized.needsSameDayPhoto,
@@ -102,6 +150,18 @@ export async function createServiceRequest(formData: {
         },
       })
 
+      if (normalized.letterAttachmentId) {
+        const linked = await tx.requestLetterAttachment.updateMany({
+          where: {
+            id: normalized.letterAttachmentId,
+            uploadedById: user.id,
+            requestId: null,
+          },
+          data: { requestId: createdRequest.id },
+        })
+        if (linked.count !== 1) throw new Error('The request letter was already used by another request.')
+      }
+
       if (isDirector) {
         await syncPmacEventFromServiceRequest(tx, createdRequest, {
           id: user.id,
@@ -111,7 +171,7 @@ export async function createServiceRequest(formData: {
       }
 
       return createdRequest
-    })
+    }, { isolationLevel: 'Serializable' })
 
     revalidateRequestViews()
     if (isDirector && normalized.serviceType === 'PMAC') {

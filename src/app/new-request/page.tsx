@@ -58,7 +58,7 @@ const REQUEST_TEMPLATES = [
 
 type Step = 1 | 2 | 3 | 4
 
-import { createServiceRequest, checkConflict } from './actions'
+import { createServiceRequest, checkConflict, getEditableServiceRequest, updateExistingRequest } from './actions'
 
 type ConflictResult = Awaited<ReturnType<typeof checkConflict>>
 type RequestForm = {
@@ -120,7 +120,10 @@ export default function NewRequestPage() {
   const [conflicts, setConflicts] = useState<ConflictResult['conflicts']>([])
   const [step1Conflicts, setStep1Conflicts] = useState<ConflictResult['conflicts']>([])
   const [sameDayEvents, setSameDayEvents] = useState<ConflictResult['sameDayEvents']>([])
+  const [conflictCheckError, setConflictCheckError] = useState('')
   const [qualityReferenceTime] = useState(() => Date.now())
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [existingLetterUrl, setExistingLetterUrl] = useState<string | null>(null)
   const isDirector = session?.user.role === 'ICT_DIRECTOR'
 
   const buildSharedQualityAssessment = (maxStep: Step) => buildRequestQualityAssessment(form, {
@@ -128,7 +131,8 @@ export default function NewRequestPage() {
     submissionMethod,
     maxStep,
     now: new Date(qualityReferenceTime),
-    hasUploadedLetter: !!form.letterFile,
+    hasUploadedLetter: !!form.letterFile || !!existingLetterUrl,
+    isEditing: !!editingId,
   })
 
   function getBlockingErrorForStep(maxStep: Step) {
@@ -137,7 +141,8 @@ export default function NewRequestPage() {
       submissionMethod,
       maxStep,
       now: new Date(qualityReferenceTime),
-      hasUploadedLetter: !!form.letterFile,
+      hasUploadedLetter: !!form.letterFile || !!existingLetterUrl,
+      isEditing: !!editingId,
     })
   }
 
@@ -149,6 +154,38 @@ export default function NewRequestPage() {
     && !form.eventDate
     && !form.endDate
     && !form.eventVenue.trim()
+
+  useEffect(() => {
+    if (session?.user.role !== 'SECRETARY') return
+    const id = new URLSearchParams(window.location.search).get('edit')
+    if (!id) return
+
+    getEditableServiceRequest(id).then((request) => {
+      if (!request) throw new Error('This request is not available for editing.')
+      const formatDate = (value: Date | null) => value ? new Date(value).toISOString().slice(0, 10) : ''
+      setEditingId(request.id)
+      setExistingLetterUrl(request.letterUrl)
+      setSubmissionMethod(request.letterContent ? 'generate' : 'upload')
+      setForm((previous) => ({
+        ...previous,
+        school: request.school,
+        eventTitle: request.eventTitle,
+        eventDate: formatDate(request.eventDate),
+        endDate: formatDate(request.endDate),
+        startTime: request.startTime || '',
+        endTime: request.endTime || '',
+        eventVenue: request.eventVenue,
+        letterContent: request.letterContent || '',
+        serviceType: request.serviceType,
+        documentationType: request.documentationType,
+        needsSameDayEdit: request.needsSameDayEdit,
+        needsSameDayPhoto: request.needsSameDayPhoto,
+        campusType: request.campusType,
+      }))
+    }).catch((error) => {
+      setStepError(error instanceof Error ? error.message : 'Unable to load this request.')
+    })
+  }, [session?.user.role])
 
   function applyRequestTemplate(templateId: (typeof REQUEST_TEMPLATES)[number]['id']) {
     const template = REQUEST_TEMPLATES.find((item) => item.id === templateId)
@@ -171,15 +208,22 @@ export default function NewRequestPage() {
       return
     }
     const timer = setTimeout(async () => {
-      const res = await checkConflict(
-        form.eventDate, 
-        form.startTime || undefined, 
-        form.endDate || undefined,
-        form.endTime || undefined,
-        form.eventVenue || undefined
-      )
-      setStep1Conflicts(res.conflicts || [])
-      setSameDayEvents(res.sameDayEvents || [])
+      try {
+        const res = await checkConflict(
+          form.eventDate,
+          form.startTime || undefined,
+          form.endDate || undefined,
+          form.endTime || undefined,
+          form.eventVenue || undefined
+        )
+        setConflictCheckError('')
+        setStep1Conflicts(res.conflicts || [])
+        setSameDayEvents(res.sameDayEvents || [])
+      } catch {
+        setStep1Conflicts([])
+        setSameDayEvents([])
+        setConflictCheckError('Schedule availability could not be verified. Submission is blocked until the check succeeds.')
+      }
     }, 500)
     return () => clearTimeout(timer)
   }, [form.eventDate, form.startTime, form.endTime, form.eventVenue, form.endDate])
@@ -258,6 +302,7 @@ ${isDirector ? 'Director' : 'Secretary'}, ${form.school || '[School/Department]'
   }
 
   async function submit() {
+    if (conflictCheckError) { setStep(1); setStepError(conflictCheckError); return }
     const e1 = getBlockingErrorForStep(1)
     const e2 = getBlockingErrorForStep(2)
     const e3 = getBlockingErrorForStep(3)
@@ -274,16 +319,30 @@ ${isDirector ? 'Director' : 'Secretary'}, ${form.school || '[School/Department]'
 
     if (loading) return
     setLoading(true)
+    let uploadedAttachmentId: string | null = null
     
     try {
+      if (submissionMethod === 'upload' && form.letterFile) {
+        const uploadForm = new FormData()
+        uploadForm.set('file', form.letterFile)
+        const uploadResponse = await fetch('/api/request-letters', {
+          method: 'POST',
+          credentials: 'include',
+          body: uploadForm,
+        })
+        const uploadPayload = await uploadResponse.json().catch(() => null)
+        if (!uploadResponse.ok || !uploadPayload?.attachment?.id) {
+          throw new Error(uploadPayload?.error || 'The request letter could not be uploaded.')
+        }
+        uploadedAttachmentId = uploadPayload.attachment.id
+      }
+
       // Create a timeout promise
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Submission timed out. The server might be busy.')), 15000)
       )
 
-      // Race the action against the timeout
-      const res = await Promise.race([
-        createServiceRequest({
+      const requestPayload = {
           eventTitle: form.eventTitle,
           eventDate: form.eventDate,
           endDate: form.endDate,
@@ -294,22 +353,51 @@ ${isDirector ? 'Director' : 'Secretary'}, ${form.school || '[School/Department]'
           school: form.school,
           serviceType: form.serviceType,
           documentationType: form.documentationType,
-          letterUrl: submissionMethod === 'upload' ? (form.letterFile?.name || null) : 'generated-letter.pdf',
+          letterUrl: submissionMethod === 'generate' ? 'generated-letter.pdf' : existingLetterUrl,
+          letterAttachmentId: uploadedAttachmentId,
           needsSameDayEdit: form.needsSameDayEdit,
           needsSameDayPhoto: form.needsSameDayPhoto,
           campusType: form.campusType,
           directorBypassReason: form.directorBypassReason,
-        }),
+      }
+
+      const mutation = editingId
+        ? updateExistingRequest(editingId, requestPayload)
+        : createServiceRequest(requestPayload)
+
+      // Race the action against the timeout
+      const res = await Promise.race([
+        mutation,
         timeout
       ])
       
       if (res.success) {
+        if (editingId) {
+          window.location.href = `/requests?requestId=${encodeURIComponent(editingId)}`
+          return
+        }
         setSubmitted(true)
       } else {
+        if (uploadedAttachmentId) {
+          await fetch('/api/request-letters', {
+            method: 'DELETE',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: uploadedAttachmentId }),
+          }).catch(() => null)
+        }
         alert(`Submission Failed: ${res.error}`)
       }
     } catch (e: unknown) {
       console.error('Submission Error:', e)
+      if (uploadedAttachmentId) {
+        await fetch('/api/request-letters', {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: uploadedAttachmentId }),
+        }).catch(() => null)
+      }
       alert('A technical error occurred: ' + (e instanceof Error ? e.message : 'Unknown error'))
     } finally {
       setLoading(false)
@@ -451,7 +539,7 @@ ${isDirector ? 'Director' : 'Secretary'}, ${form.school || '[School/Department]'
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Start Date</label>
                 <input type="date" value={form.eventDate} 
-                  min={minDateStr}
+                  min={editingId ? undefined : minDateStr}
                   onChange={e => {
                     const newDate = e.target.value;
                     setForm(prev => ({
@@ -467,7 +555,7 @@ ${isDirector ? 'Director' : 'Secretary'}, ${form.school || '[School/Department]'
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">End Date</label>
                 <input type="date" value={form.endDate} onChange={e => set('endDate', e.target.value)}
-                  min={form.eventDate || minDateStr}
+                  min={form.eventDate || (editingId ? undefined : minDateStr)}
                   className="w-full border-2 border-slate-100 rounded-2xl px-5 py-3.5 text-sm font-medium focus:outline-none focus:border-emerald-500"
                 />
               </div>
@@ -707,7 +795,7 @@ ${isDirector ? 'Director' : 'Secretary'}, ${form.school || '[School/Department]'
               <div className="space-y-4">
                 <p className="text-sm text-slate-500 font-medium">Upload your signed MS Word or PDF document.</p>
                 <label className="block border-2 border-dashed border-emerald-100 rounded-[2rem] p-16 text-center cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/50 transition-all group relative overflow-hidden">
-                  <input type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden"
+                  <input type="file" accept=".pdf,.doc,.docx" className="hidden"
                     onChange={e => set('letterFile', e.target.files?.[0] ?? null)} />
                   <div className="relative z-10">
                     <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-900/5 group-hover:scale-110 transition-transform duration-500">

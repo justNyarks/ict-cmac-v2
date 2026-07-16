@@ -24,7 +24,7 @@ type RequestMirrorInput = {
   campusType: CampusType
   letterContent: string | null
   eventDetails: string | null
-  status: 'PENDING' | 'COORDINATOR_APPROVED' | 'DIRECTOR_APPROVED' | 'REJECTED'
+  status: 'PENDING' | 'COORDINATOR_APPROVED' | 'DIRECTOR_APPROVED' | 'REVISION_REQUESTED' | 'WITHDRAWN' | 'CANCELLED' | 'REJECTED' | 'ARCHIVED'
   deletedAt: Date | null
   secretaryId: string
   coordinatorApprovedAt: Date | null
@@ -101,7 +101,7 @@ export async function syncPmacEventFromServiceRequest(
   actor?: PmacSyncActor
 ) {
   if (!shouldMirrorRequestToPmacEvent(request)) {
-    const removed = await tx.pmacEvent.findFirst({
+    const retained = await tx.pmacEvent.findFirst({
       where: {
         OR: [
           { id: request.id },
@@ -111,30 +111,35 @@ export async function syncPmacEventFromServiceRequest(
       select: {
         id: true,
         title: true,
+        status: true,
       },
     })
 
-    if (removed) {
+    if (retained) {
+      await tx.pmacEvent.update({
+        where: { id: retained.id },
+        data: {
+          status: retained.status === 'COMPLETED' ? 'COMPLETED' : 'REJECTED',
+          rejectedAt: retained.status === 'COMPLETED' ? undefined : new Date(),
+          sourceLabel: 'Retained from a closed CMAC request',
+          approvalRemarks: `CMAC request is now ${request.status.toLowerCase().replaceAll('_', ' ')}.`,
+        },
+      })
+
       await recordPmacActivity(tx, {
         entityType: 'EVENT',
-        entityId: removed.id,
+        entityId: retained.id,
+        eventId: retained.id,
         actorId: actor?.id ?? request.directorId ?? null,
         actorName: actor?.name || 'CMAC Workflow',
         actorRole: actor?.role ?? 'ICT_DIRECTOR',
-        action: 'EVENT_REMOVED_FROM_CMAC_SYNC',
-        summary: `Removed imported PMAC event "${removed.title}" because the CMAC request is no longer an approved PMAC request.`,
-        details: 'The source request was rejected, deleted, or moved away from PMAC service.',
+        action: 'EVENT_CLOSED_FROM_CMAC_SYNC',
+        summary: `Closed imported PMAC event "${retained.title}" after its CMAC request changed status.`,
+        details: `The operational history was retained. CMAC status: ${request.status}.`,
       })
-    }
 
-    await tx.pmacEvent.deleteMany({
-      where: {
-        OR: [
-          { id: request.id },
-          { sourceRequestId: request.id },
-        ],
-      },
-    })
+      return true
+    }
     return false
   }
 

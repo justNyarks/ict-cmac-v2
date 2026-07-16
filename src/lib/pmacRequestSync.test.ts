@@ -113,4 +113,52 @@ describe('pmacRequestSync', () => {
     expect(update.mock.calls[0][0].data.description).not.toContain('Raw formal request letter')
     expect(tx.pmacEvent.create).not.toHaveBeenCalled()
   })
+
+  it('closes but retains an imported PMAC event when its CMAC request is cancelled', async () => {
+    const update = vi.fn()
+    const tx = {
+      pmacEvent: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'pmac-event-1',
+          title: 'Cancelled Coverage',
+          status: 'APPROVED',
+        }),
+        update,
+      },
+    }
+
+    const retained = await syncPmacEventFromServiceRequest(tx as never, {
+      id: 'service-request-2',
+      createdAt: new Date('2026-07-01T08:00:00'),
+      eventTitle: 'Cancelled Coverage',
+      eventDate: new Date('2026-07-20T00:00:00'),
+      endDate: null,
+      startTime: '09:00',
+      endTime: '11:00',
+      eventVenue: 'MM Hall',
+      school: 'SITE',
+      serviceType: 'PMAC',
+      documentationType: 'PHOTO',
+      campusType: 'IN_CAMPUS',
+      letterContent: null,
+      eventDetails: null,
+      status: 'CANCELLED',
+      deletedAt: null,
+      secretaryId: 'secretary-1',
+      coordinatorApprovedAt: new Date('2026-07-01T09:00:00'),
+      directorId: 'director-1',
+      directorApprovedAt: new Date('2026-07-01T10:00:00'),
+      directorNote: 'Cancelled.',
+      coordinatorNote: null,
+    })
+
+    expect(retained).toBe(true)
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'pmac-event-1' },
+      data: expect.objectContaining({
+        status: 'REJECTED',
+        sourceLabel: 'Retained from a closed CMAC request',
+      }),
+    }))
+  })
 })
