@@ -295,7 +295,7 @@ export default function RequestsPage() {
         {/* Table */}
         <div className="card overflow-hidden border border-emerald-100/50 shadow-xl shadow-emerald-900/5">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="select-none">
               <tr className="border-b border-emerald-50 bg-emerald-50/20">
                 {['Event & School', 'Service Type', 'Request Date', 'Status', 'SLA', ''].map(h => (
                   <th key={h} className="text-left px-6 py-4 text-[10px] font-black text-emerald-800/50 uppercase tracking-widest">{h}</th>
