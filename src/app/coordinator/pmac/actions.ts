@@ -1,7 +1,7 @@
 'use server'
 
 import bcrypt from 'bcryptjs'
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 
 import { PMAC_EXECUTIVE_TITLES, PMAC_SPECIALTIES } from '@/lib/pmac'
 import { recordPmacActivity } from '@/lib/pmacActivity'
@@ -40,6 +40,7 @@ type PmacOfficerAssignmentPayload = {
 }
 
 function revalidatePmacViews() {
+  revalidateTag('pmac-reports', 'max')
   revalidatePath('/coordinator/pmac')
   revalidatePath('/coordinator/pmac/officers')
   revalidatePath('/pmac/members')

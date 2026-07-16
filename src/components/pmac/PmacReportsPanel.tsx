@@ -1,11 +1,13 @@
 'use client'
 
-import { Download, Filter, LoaderCircle, X } from 'lucide-react'
-import { useState } from 'react'
+import { BarChart3, CalendarRange, Download, Filter, LoaderCircle, X } from 'lucide-react'
+import { usePathname, useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
-import { PMAC_EXECUTIVE_TITLE_LABELS, PMAC_EXECUTIVE_TITLES } from '@/lib/pmac'
+import { PMAC_ATTENDANCE_LABELS, PMAC_EXECUTIVE_TITLE_LABELS, PMAC_EXECUTIVE_TITLES } from '@/lib/pmac'
 import { PMAC_DEPARTMENTS } from '@/lib/pmacMembers'
-import { PMAC_REPORT_STATUSES } from '@/lib/pmacReportFilters'
+import { describePmacReportPeriod, PMAC_REPORT_STATUSES, type PmacReportFilters } from '@/lib/pmacReportFilters'
+import type { PmacReportAnalytics, PmacReportCounts } from '@/lib/pmacReports'
 import { runWithReverification } from '@/lib/reverificationClient'
 
 type ReportStats = {
@@ -42,7 +44,7 @@ type ReportFilterOptions = {
   projects: Array<{ id: string; title: string }>
 }
 
-type ReportFilters = {
+type ReportFilterForm = {
   from: string
   to: string
   status: string
@@ -51,7 +53,7 @@ type ReportFilters = {
   subject: string
 }
 
-const EMPTY_FILTERS: ReportFilters = {
+const EMPTY_FILTERS: ReportFilterForm = {
   from: '',
   to: '',
   status: '',
@@ -76,32 +78,51 @@ export default function PmacReportsPanel({
   description,
   stats,
   filterOptions,
+  counts,
+  analytics,
+  appliedFilters,
 }: {
   title: string
   description: string
   stats: ReportStats
   filterOptions: ReportFilterOptions
+  counts: PmacReportCounts
+  analytics: PmacReportAnalytics
+  appliedFilters: PmacReportFilters
 }) {
+  const pathname = usePathname()
+  const router = useRouter()
   const [downloadingTypes, setDownloadingTypes] = useState<string[]>([])
-  const [filters, setFilters] = useState<ReportFilters>(EMPTY_FILTERS)
+  const [filters, setFilters] = useState<ReportFilterForm>({ ...EMPTY_FILTERS, ...appliedFilters })
+  const [activeAnalyticsTab, setActiveAnalyticsTab] = useState<'attendance' | 'coverage' | 'projects' | 'members'>('attendance')
+  const [isApplyingFilters, setIsApplyingFilters] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  async function fetchReport(type: string) {
-    const params = new URLSearchParams({ type })
-    for (const [key, value] of Object.entries(filters)) {
+  useEffect(() => {
+    setFilters({ ...EMPTY_FILTERS, ...appliedFilters })
+    setIsApplyingFilters(false)
+  }, [appliedFilters])
+
+  function buildReportUrl(type?: string) {
+    const params = new URLSearchParams()
+    if (type) params.set('type', type)
+    for (const [key, value] of Object.entries(appliedFilters)) {
       if (value) {
         params.set(key, value)
       }
     }
 
-    const response = await fetch(`/api/exports/pmac?${params.toString()}`, {
-      method: 'GET',
+    return type ? `/api/exports/pmac?${params.toString()}` : params.toString()
+  }
+
+  async function authorizeReport(type: string) {
+    const response = await fetch(buildReportUrl(type), {
+      method: 'HEAD',
       credentials: 'include',
     })
 
     if (!response.ok) {
-      const payload = await response.json().catch(() => null)
-      throw new Error(payload?.error || (response.status === 428 ? 'Zero trust verification required' : 'Failed to download PMAC report.'))
+      throw new Error(response.status === 428 ? 'Zero trust verification required' : 'Failed to authorize PMAC report download.')
     }
 
     return response
@@ -112,21 +133,13 @@ export default function PmacReportsPanel({
     setMessage(null)
 
     try {
-      const response = await runWithReverification(() => fetchReport(type))
-      const blob = await response.blob()
-      const contentDisposition = response.headers.get('content-disposition')
-      const filenameMatch = contentDisposition?.match(/filename="([^"]+)"/i)
-      const filename = filenameMatch?.[1] || `pmac-${type}-report.csv`
-      const url = window.URL.createObjectURL(blob)
+      await runWithReverification(() => authorizeReport(type))
       const link = document.createElement('a')
-
-      link.href = url
-      link.download = filename
+      link.href = buildReportUrl(type)
       document.body.appendChild(link)
       link.click()
       link.remove()
-      window.URL.revokeObjectURL(url)
-      setMessage({ type: 'success', text: 'PMAC report downloaded.' })
+      setMessage({ type: 'success', text: 'PMAC report download started.' })
     } catch (error) {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to download PMAC report.' })
     } finally {
@@ -134,34 +147,28 @@ export default function PmacReportsPanel({
     }
   }
 
-  function updateFilter(field: keyof ReportFilters, value: string) {
+  function updateFilter(field: keyof ReportFilterForm, value: string) {
     setFilters((current) => ({ ...current, [field]: value }))
   }
 
-  function getReportCount(type: string) {
-    switch (type) {
-      case 'members':
-        return stats.members
-      case 'events':
-        return stats.events
-      case 'projects':
-        return stats.projects
-      case 'polls':
-        return stats.polls
-      case 'activity':
-        return stats.activity
-      case 'attendance':
-        return stats.attendanceRecords
-      case 'performance':
-        return stats.activeMembers
-      case 'staffing':
-        return stats.upcomingEvents + stats.activeMembers
-      default:
-        return 0
+  function applyFilters(nextFilters = filters) {
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(nextFilters)) {
+      if (value) params.set(key, value)
     }
+    setIsApplyingFilters(true)
+    router.push(params.size ? `${pathname}?${params.toString()}` : pathname)
   }
 
-  const hasFilters = Object.values(filters).some(Boolean)
+  function clearFilters() {
+    setFilters(EMPTY_FILTERS)
+    applyFilters(EMPTY_FILTERS)
+  }
+
+  const hasFilters = Object.values(appliedFilters).some(Boolean)
+  const hasPendingFilters = JSON.stringify(filters) !== JSON.stringify({ ...EMPTY_FILTERS, ...appliedFilters })
+  const reportingPeriod = describePmacReportPeriod(appliedFilters)
+  const trendMaximum = Math.max(1, ...analytics.trends.map((trend) => trend.assignments + trend.reliableAttendance + trend.absences))
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 animate-fade-in">
@@ -169,6 +176,10 @@ export default function PmacReportsPanel({
         <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">PMAC Reports</p>
         <h2 className="font-display text-3xl font-bold text-slate-800">{title}</h2>
         <p className="text-sm text-slate-500">{description}</p>
+        <p className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-700">
+          <CalendarRange size={14} />
+          Reporting period: {reportingPeriod}
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
@@ -220,10 +231,10 @@ export default function PmacReportsPanel({
             </h3>
             <p className="mt-0.5 text-xs text-slate-400">Applied to relevant exports and recorded in the CSV metadata.</p>
           </div>
-          {hasFilters ? (
+          {hasFilters || Object.values(filters).some(Boolean) ? (
             <button
               type="button"
-              onClick={() => setFilters(EMPTY_FILTERS)}
+              onClick={clearFilters}
               className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50"
             >
               <X size={15} />
@@ -305,6 +316,181 @@ export default function PmacReportsPanel({
             </select>
           </label>
         </div>
+        <div className="mt-3 flex items-center justify-end border-t border-slate-100 pt-3">
+          <button
+            type="button"
+            disabled={!hasPendingFilters || isApplyingFilters}
+            onClick={() => applyFilters()}
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-emerald-800 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isApplyingFilters ? <LoaderCircle size={15} className="animate-spin" /> : <Filter size={15} />}
+            {isApplyingFilters ? 'Applying...' : 'Apply Filters'}
+          </button>
+        </div>
+      </section>
+
+      <section className="card overflow-hidden" aria-labelledby="report-analytics-heading">
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h3 id="report-analytics-heading" className="flex items-center gap-2 font-semibold text-slate-800">
+              <BarChart3 size={17} className="text-slate-400" />
+              Report Analytics
+            </h3>
+            <p className="mt-0.5 text-xs text-slate-400">Filtered snapshot for {reportingPeriod.toLowerCase()}.</p>
+          </div>
+          <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1" role="tablist" aria-label="Report analytics views">
+            {([
+              ['attendance', 'Attendance'],
+              ['coverage', 'Event Coverage'],
+              ['projects', 'Projects'],
+              ['members', 'Members'],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={activeAnalyticsTab === value}
+                onClick={() => setActiveAnalyticsTab(value)}
+                className={`whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  activeAnalyticsTab === value ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {activeAnalyticsTab === 'attendance' ? (
+          <div className="divide-y divide-slate-100">
+            {analytics.attendance.map((entry) => (
+              <div key={entry.status} className="grid grid-cols-[minmax(110px,1fr)_minmax(120px,3fr)_auto] items-center gap-4 px-5 py-3">
+                <span className="text-sm font-semibold text-slate-700">{PMAC_ATTENDANCE_LABELS[entry.status as keyof typeof PMAC_ATTENDANCE_LABELS]}</span>
+                <span className="h-2 overflow-hidden rounded-full bg-slate-100">
+                  <span
+                    className={`block h-full rounded-full ${entry.status === 'ABSENT' ? 'bg-red-500' : entry.status === 'LATE' ? 'bg-amber-500' : 'bg-emerald-600'}`}
+                    style={{ width: `${entry.percentage}%` }}
+                  />
+                </span>
+                <span className="text-right text-xs font-bold text-slate-600">{entry.count} · {entry.percentage}%</span>
+              </div>
+            ))}
+            {!analytics.attendance.some((entry) => entry.count) ? (
+              <p className="px-5 py-8 text-center text-sm text-slate-400">No attendance records match these filters.</p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {activeAnalyticsTab === 'coverage' ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[680px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase text-slate-400">
+                <tr>
+                  <th className="px-5 py-3 font-bold">Event</th>
+                  <th className="px-4 py-3 font-bold">Date</th>
+                  <th className="px-4 py-3 text-center font-bold">Assigned</th>
+                  <th className="px-4 py-3 text-center font-bold">Pending</th>
+                  <th className="px-5 py-3 text-right font-bold">Coverage</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {analytics.coverage.map((event) => (
+                  <tr key={event.id}>
+                    <td className="max-w-[280px] truncate px-5 py-3 font-semibold text-slate-700">{event.title}</td>
+                    <td className="px-4 py-3 text-slate-500">{new Date(event.startsAt).toLocaleDateString('en-PH')}</td>
+                    <td className="px-4 py-3 text-center text-slate-600">{event.assigned}/{event.recommended || event.assigned}</td>
+                    <td className="px-4 py-3 text-center text-slate-600">{event.pending}</td>
+                    <td className="px-5 py-3 text-right font-bold text-slate-700">{event.percentage}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!analytics.coverage.length ? <p className="px-5 py-8 text-center text-sm text-slate-400">No events match these filters.</p> : null}
+          </div>
+        ) : null}
+
+        {activeAnalyticsTab === 'projects' ? (
+          <div className="grid divide-y divide-slate-100 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+            <div className="p-5">
+              <h4 className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Completion by Branch</h4>
+              <div className="mt-4 space-y-4">
+                {analytics.projectBranches.map((branch) => (
+                  <div key={branch.branch}>
+                    <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
+                      <span className="font-semibold text-slate-700">{branch.label}</span>
+                      <span className="text-slate-500">{branch.completed}/{branch.total} · {branch.percentage}%</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-full rounded-full bg-emerald-600" style={{ width: `${branch.percentage}%` }} />
+                    </div>
+                  </div>
+                ))}
+                {!analytics.projectBranches.length ? <p className="text-sm text-slate-400">No projects match these filters.</p> : null}
+              </div>
+            </div>
+            <div className="p-5">
+              <h4 className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Overdue Work</h4>
+              <div className="mt-3 divide-y divide-slate-100">
+                {analytics.overdue.map((item) => (
+                  <div key={`${item.type}:${item.id}`} className="flex items-start justify-between gap-3 py-3 first:pt-0">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-700">{item.label}</p>
+                      <p className="mt-0.5 truncate text-xs text-slate-400">{item.type === 'MILESTONE' ? `${item.projectTitle} · Milestone` : 'Project deadline'}</p>
+                    </div>
+                    <span className="shrink-0 text-xs font-bold text-red-600">{item.daysOverdue}d overdue</span>
+                  </div>
+                ))}
+                {!analytics.overdue.length ? <p className="text-sm text-slate-400">No overdue projects or milestones.</p> : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {activeAnalyticsTab === 'members' ? (
+          <div>
+            <div className="border-b border-slate-100 px-5 py-4">
+              <h4 className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Workload & Reliability Trend</h4>
+              <div className="mt-4 flex h-32 items-end gap-3 overflow-x-auto">
+                {analytics.trends.map((trend) => {
+                  const total = trend.assignments + trend.reliableAttendance + trend.absences
+                  return (
+                    <div key={trend.key} className="flex min-w-16 flex-1 flex-col items-center gap-2">
+                      <div className="flex h-24 w-7 items-end overflow-hidden rounded-t bg-slate-100" title={`${trend.assignments} assignments, ${trend.reliableAttendance} reliable attendance, ${trend.absences} absences`}>
+                        <div className="w-full bg-emerald-600" style={{ height: `${Math.max(4, (total / trendMaximum) * 100)}%` }} />
+                      </div>
+                      <span className="whitespace-nowrap text-xs font-semibold text-slate-500">{trend.label}</span>
+                    </div>
+                  )
+                })}
+                {!analytics.trends.length ? <p className="self-center text-sm text-slate-400">No trend data matches these filters.</p> : null}
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[620px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-400">
+                  <tr>
+                    <th className="px-5 py-3 font-bold">Member</th>
+                    <th className="px-4 py-3 font-bold">Department</th>
+                    <th className="px-4 py-3 text-center font-bold">Assignments</th>
+                    <th className="px-4 py-3 text-center font-bold">Attendance</th>
+                    <th className="px-5 py-3 text-right font-bold">Absences</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {analytics.members.map((member) => (
+                    <tr key={member.id}>
+                      <td className="px-5 py-3 font-semibold text-slate-700">{member.name}</td>
+                      <td className="px-4 py-3 text-slate-500">{member.department || 'Not set'}</td>
+                      <td className="px-4 py-3 text-center text-slate-600">{member.assignments}</td>
+                      <td className="px-4 py-3 text-center font-semibold text-slate-600">{member.attendanceRate}%</td>
+                      <td className="px-5 py-3 text-right font-semibold text-slate-600">{member.absences}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <div className="card overflow-hidden">
@@ -332,7 +518,7 @@ export default function PmacReportsPanel({
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-semibold text-slate-800">{report.label}</p>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">{getReportCount(report.type)} available</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">{counts[report.type]} matching</span>
                   </div>
                   <p className="mt-1 text-sm text-slate-500">{report.description}</p>
                 </div>

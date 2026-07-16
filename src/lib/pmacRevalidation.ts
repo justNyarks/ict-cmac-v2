@@ -1,4 +1,4 @@
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 
 const PMAC_REVALIDATE_PATHS = [
   '/coordinator/pmac',
@@ -27,6 +27,7 @@ const PMAC_REVALIDATE_PATHS = [
 ] as const
 
 export function revalidatePmacViews(extraPaths: string[] = []) {
+  revalidateTag('pmac-reports', 'max')
   for (const path of [...PMAC_REVALIDATE_PATHS, ...extraPaths]) {
     revalidatePath(path)
   }

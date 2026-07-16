@@ -30,6 +30,7 @@ export type PmacReportFilters = {
 }
 
 type SearchParamsReader = Pick<URLSearchParams, 'get'>
+export type PmacReportSearchParams = Record<string, string | string[] | undefined>
 
 function parseDate(value: string | null, fieldName: string) {
   if (!value) {
@@ -101,6 +102,16 @@ export function parsePmacReportFilters(searchParams: SearchParamsReader): PmacRe
     department: department as PmacReportFilters['department'],
     subject,
   }
+}
+
+export function parsePmacReportSearchParams(searchParams: PmacReportSearchParams) {
+  const normalized = new URLSearchParams()
+  for (const key of ['from', 'to', 'status', 'branch', 'department', 'subject']) {
+    const value = searchParams[key]
+    const firstValue = Array.isArray(value) ? value[0] : value
+    if (firstValue) normalized.set(key, firstValue)
+  }
+  return parsePmacReportFilters(normalized)
 }
 
 export function getPmacReportDateRange(filters: PmacReportFilters) {

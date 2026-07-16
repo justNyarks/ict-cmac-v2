@@ -5,6 +5,7 @@ import {
   getPmacReportDateRange,
   getPmacReportSubject,
   parsePmacReportFilters,
+  parsePmacReportSearchParams,
 } from './pmacReportFilters'
 
 describe('PMAC report filters', () => {
@@ -35,6 +36,13 @@ describe('PMAC report filters', () => {
 
     expect(range?.gte?.toISOString()).toBe('2026-06-30T16:00:00.000Z')
     expect(range?.lte?.toISOString()).toBe('2026-07-01T15:59:59.999Z')
+  })
+
+  it('normalizes page search parameters', () => {
+    expect(parsePmacReportSearchParams({ from: ['2026-07-01', 'ignored'], department: 'SITE' })).toMatchObject({
+      from: '2026-07-01',
+      department: 'SITE',
+    })
   })
 
   it('rejects inverted dates and unsupported values', () => {
