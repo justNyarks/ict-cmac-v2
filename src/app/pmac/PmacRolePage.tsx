@@ -44,10 +44,6 @@ function getPmacRoleLinks(role: Role) {
     links.push({ href: '/pmac/members', label: 'Members' })
   }
 
-  if (role === 'PMAC_EXECUTIVE') {
-    links.push({ href: '/pmac/tags', label: 'Tags' })
-  }
-
   links.push({ href: '/pmac/activity', label: 'Activity History' })
 
   if (role === 'PMAC_DIRECTOR' || role === 'PMAC_ASSISTANT_DIRECTOR' || role === 'PMAC_SECRETARY') {

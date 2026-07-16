@@ -1,0 +1,4 @@
+DELETE FROM `PmacActivityLog`
+WHERE `action` = 'MEMBER_TAGS_UPDATED';
+
+DROP TABLE IF EXISTS `PmacMemberTag`;

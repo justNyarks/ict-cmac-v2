@@ -226,8 +226,6 @@ model PmacMember {
   joinedAt           DateTime?
   account            User?
   specialties        PmacMemberSpecialty[]
-  assignedTags       PmacMemberTag[]         @relation("PmacMemberAssignedTags")
-  receivedTags       PmacMemberTag[]         @relation("PmacMemberReceivedTags")
   eventAssignments   PmacEventAssignment[]
   headedPmacProjects PmacProject[]           @relation("PmacProjectHead")
   projectAssignments PmacProjectAssignment[]
@@ -251,22 +249,6 @@ model PmacMemberSpecialty {
 
   @@id([memberId, specialty])
   @@index([specialty])
-}
-
-model PmacMemberTag {
-  id                 String     @id @default(cuid())
-  memberId           String
-  member             PmacMember @relation("PmacMemberReceivedTags", fields: [memberId], references: [id], onDelete: Cascade)
-  assignedByMemberId String
-  assignedByMember   PmacMember @relation("PmacMemberAssignedTags", fields: [assignedByMemberId], references: [id], onDelete: Cascade)
-  label              String
-  notes              String?    @db.Text
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
-
-  @@unique([memberId, assignedByMemberId, label])
-  @@index([memberId, createdAt])
-  @@index([assignedByMemberId, createdAt])
 }
 
 model PmacProject {

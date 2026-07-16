@@ -582,8 +582,6 @@ async function getPmacNotificationFeed(user: SessionUser, limit: number) {
             ? '/coordinator/pmac'
             : user.role === 'PMAC_DIRECTOR' || user.role === 'PMAC_SECRETARY'
               ? '/pmac/members'
-              : user.role === 'PMAC_EXECUTIVE'
-                ? '/pmac/tags'
               : '/pmac/activity',
       module: 'PMAC' as const,
     })),

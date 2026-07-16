@@ -23,10 +23,9 @@ export function filterPmacMembers<T extends {
   status: string
   executiveTitle?: string | null | undefined
   specialtiesText?: string | null | undefined
-  tagsText?: string | null | undefined
 }>(members: T[], query: string, status: string, clubRole: string) {
   return members.filter((member) => (
-    matchesQuery(member, query, ['fullName', 'email', 'department', 'course', 'courseOrDepartment', 'notes', 'executiveTitle', 'specialtiesText', 'tagsText'])
+    matchesQuery(member, query, ['fullName', 'email', 'department', 'course', 'courseOrDepartment', 'notes', 'executiveTitle', 'specialtiesText'])
     && (status === 'ALL' || member.status === status)
     && (clubRole === 'ALL' || member.clubRole === clubRole)
   ))

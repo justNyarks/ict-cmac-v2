@@ -65,7 +65,6 @@ function revalidatePmacViews() {
   revalidatePath('/pmac/secretary')
   revalidatePath('/pmac/executive')
   revalidatePath('/pmac/member')
-  revalidatePath('/pmac/tags')
   revalidatePath('/pmac/activity')
   revalidatePath('/pmac/reports')
 }
@@ -151,21 +150,6 @@ export async function getPmacMembers() {
           specialty: 'asc',
         },
       },
-      receivedTags: {
-        include: {
-          assignedByMember: {
-            select: {
-              id: true,
-              fullName: true,
-              executiveTitle: true,
-            },
-          },
-        },
-        orderBy: [
-          { label: 'asc' },
-          { createdAt: 'asc' },
-        ],
-      },
     },
     orderBy: [
       { clubRole: 'asc' },
@@ -207,7 +191,6 @@ export async function getPmacMemberDirectory(input: PmacMemberDirectoryQuery = {
             { phone: { contains: query } },
             { department: { contains: query } },
             { course: { contains: query } },
-            { receivedTags: { some: { label: { contains: query } } } },
           ],
         }
       : {}),
@@ -248,12 +231,6 @@ export async function getPmacMemberDirectory(input: PmacMemberDirectoryQuery = {
         },
       },
       specialties: { select: { specialty: true }, orderBy: { specialty: 'asc' } },
-      receivedTags: {
-        include: {
-          assignedByMember: { select: { id: true, fullName: true, executiveTitle: true } },
-        },
-        orderBy: [{ label: 'asc' }, { createdAt: 'asc' }],
-      },
       _count: {
         select: {
           eventAssignments: { where: { event: { status: 'APPROVED' } } },

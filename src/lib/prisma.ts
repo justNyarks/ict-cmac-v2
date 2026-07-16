@@ -8,9 +8,8 @@ const globalForPrisma = globalThis as unknown as {
 const REQUIRED_V4_DELEGATES = ['pmacActivityLog', 'pmacAttachment', 'pmacProject', 'pmacProjectMilestone', 'pmacProjectLink', 'pmacProjectAssignment'] as const
 const USER_SECURITY_FIELDS = ['mustChangePassword', 'passwordUpdatedAt'] as const
 const REQUIRED_MODEL_FIELDS = {
-  PmacMember: ['clubRole', 'status', 'executiveTitle', 'department', 'course', 'specialties', 'receivedTags'],
+  PmacMember: ['clubRole', 'status', 'executiveTitle', 'department', 'course', 'specialties'],
   PmacMemberSpecialty: ['memberId', 'specialty'],
-  PmacMemberTag: ['memberId', 'assignedByMemberId', 'label'],
   PmacProject: ['branch', 'status', 'startDate', 'targetDate', 'outputSummary', 'outputSubmittedAt', 'headMemberId', 'milestones', 'links', 'memberAssignments', 'activityLogs'],
   PmacProjectAssignment: ['projectId', 'memberId', 'assignedById'],
   PmacProjectMilestone: ['projectId', 'dueDate', 'status'],

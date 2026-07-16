@@ -14,7 +14,6 @@ import {
   Aperture,
   History,
   CheckCircle,
-  Tags,
   Vote,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -42,9 +41,6 @@ export default function Sidebar() {
           { href: '/pmac/calendar', label: 'PMAC Calendar', icon: CalendarDays },
           ...(role === 'PMAC_DIRECTOR' || role === 'PMAC_SECRETARY'
             ? [{ href: '/pmac/members', label: 'Members', icon: Settings }]
-            : []),
-          ...(role === 'PMAC_EXECUTIVE'
-            ? [{ href: '/pmac/tags', label: 'Tags', icon: Tags }]
             : []),
           { href: '/pmac/assignments', label: 'Assignments', icon: Briefcase },
           { href: '/pmac/activity', label: 'Activity', icon: History },

@@ -13,7 +13,6 @@ const PMAC_REVALIDATE_PATHS = [
   '/pmac/executive',
   '/pmac/member',
   '/pmac/members',
-  '/pmac/tags',
   '/pmac/events',
   '/pmac/projects',
   '/pmac/projects/calendar',

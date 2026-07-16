@@ -40,7 +40,6 @@ const PAGE_TITLES: Record<string, string> = {
   '/pmac/polls': 'PMAC Polls',
   '/pmac/polls/new': 'New PMAC Poll',
   '/pmac/calendar': 'PMAC Calendar',
-  '/pmac/tags': 'PMAC Tags',
   '/pmac/assignments': 'PMAC Assignments',
   '/pmac/attendance': 'PMAC Attendance',
   '/pmac/activity': 'PMAC Activity',

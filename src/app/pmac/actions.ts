@@ -1,5 +1,5 @@
 export { getPmacEvents, getPmacStaffingOverview, getPmacEventWorkspace, getPmacCalendarEvents, createPmacEvent, updatePmacEvent, submitPmacEvent, approvePmacEvent, rejectPmacEvent, markPmacEventCompleted, savePmacEventWrapUp } from './eventActions'
-export { getPmacAssignmentsBoard, getPmacExecutiveTagBoard, savePmacExecutiveTags, getPmacAttendanceBoard, savePmacAssignments, respondToPmacAssignment, savePmacAttendance } from './assignmentActions'
+export { getPmacAssignmentsBoard, getPmacAttendanceBoard, savePmacAssignments, respondToPmacAssignment, savePmacAttendance } from './assignmentActions'
 export { getPmacPolls, getPmacPollWorkspace, createPmacPoll, updatePmacPoll, openPmacPoll, closePmacPoll, archivePmacPoll, castPmacVote } from './pollActions'
 export { getPmacProjects, getPmacProjectCalendarItems, savePmacProject, updatePmacProjectStatus, checkPmacProjectForClosure, submitPmacProjectOutput, attachPmacProjectLink, assignPmacProjectMembers, savePmacProjectMilestone, updatePmacProjectMilestoneStatus } from './projectActions'
 export { getPmacReportSummary } from './reportActions'

@@ -20,7 +20,6 @@ const ACTION_LABELS: Record<string, string> = {
   EVENT_UPDATED_FROM_CMAC: 'Synced from CMAC',
   EVENT_WRAP_UP_UPDATED: 'Event wrap-up updated',
   MEMBER_CREATED: 'Member created',
-  MEMBER_TAGS_UPDATED: 'Member tags updated',
   MEMBER_UPDATED: 'Member profile updated',
   OFFICER_ASSIGNMENT_UPDATED: 'Leadership role updated',
   POLL_ARCHIVED: 'Poll archived',

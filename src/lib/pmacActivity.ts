@@ -205,10 +205,6 @@ export function getPmacActivityHref(
       return '/pmac/members'
     }
 
-    if (user.role === 'PMAC_EXECUTIVE') {
-      return '/pmac/tags'
-    }
-
     return '/pmac/activity'
   }
 

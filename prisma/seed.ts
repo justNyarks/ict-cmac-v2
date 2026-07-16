@@ -173,24 +173,6 @@ async function removeLegacyPmacMockData() {
     },
   })
 
-  await prisma.pmacMemberTag.deleteMany({
-    where: {
-      label: {
-        in: [
-          'Portrait Coverage',
-          'Feature Writer',
-          'Layout Support',
-          'B-Roll Support',
-          'Livestream Backup',
-        ],
-      },
-      member: {
-        email: {
-          in: ['pmac.member@spup.edu.ph', 'pmac.member.support@spup.edu.ph'],
-        },
-      },
-    },
-  })
 }
 
 async function syncApprovedPmacRequestsFromCurrentData() {

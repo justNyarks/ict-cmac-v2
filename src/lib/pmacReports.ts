@@ -475,20 +475,6 @@ export async function buildPmacMembersCsv(filters: PmacReportFilters = {}) {
           specialty: 'asc',
         },
       },
-      receivedTags: {
-        include: {
-          assignedByMember: {
-            select: {
-              fullName: true,
-              executiveTitle: true,
-            },
-          },
-        },
-        orderBy: [
-          { label: 'asc' },
-          { createdAt: 'asc' },
-        ],
-      },
     },
     orderBy: [
       { clubRole: 'asc' },
@@ -498,7 +484,7 @@ export async function buildPmacMembersCsv(filters: PmacReportFilters = {}) {
   })
 
   return joinCsv([
-    ['Full Name', 'Email', 'Club Role', 'Executive Title', 'Specialties', 'Assigned Tags', 'Status', 'System Role', 'Account Active', 'Password Reset Required', 'Joined At', 'Department', 'Course', 'Phone'],
+    ['Full Name', 'Email', 'Club Role', 'Executive Title', 'Specialties', 'Status', 'System Role', 'Account Active', 'Password Reset Required', 'Joined At', 'Department', 'Course', 'Phone'],
     ...members.map((member) => {
       const education = getPmacMemberEducation(member)
 
@@ -508,7 +494,6 @@ export async function buildPmacMembersCsv(filters: PmacReportFilters = {}) {
         member.clubRole,
         member.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle] : '',
         member.specialties.map((entry) => PMAC_SPECIALTY_LABELS[entry.specialty]).join(' | '),
-        member.receivedTags.map((tag) => `${tag.label} (${tag.assignedByMember.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[tag.assignedByMember.executiveTitle] : tag.assignedByMember.fullName})`).join(' | '),
         member.status,
         member.account?.role ?? '',
         member.account?.isActive ? 'Yes' : 'No',
@@ -1125,7 +1110,7 @@ async function* startPmacCsvStream(type: PmacReportType, filters: PmacReportFilt
 
 async function* streamPmacMembersCsv(filters: PmacReportFilters) {
   yield* startPmacCsvStream('members', filters, [
-    'Full Name', 'Email', 'Club Role', 'Executive Title', 'Specialties', 'Assigned Tags', 'Status', 'System Role',
+    'Full Name', 'Email', 'Club Role', 'Executive Title', 'Specialties', 'Status', 'System Role',
     'Account Active', 'Password Reset Required', 'Joined At', 'Department', 'Course', 'Phone',
   ])
 
@@ -1144,10 +1129,6 @@ async function* streamPmacMembersCsv(filters: PmacReportFilters) {
         },
       },
       specialties: { select: { specialty: true }, orderBy: { specialty: 'asc' } },
-      receivedTags: {
-        include: { assignedByMember: { select: { fullName: true, executiveTitle: true } } },
-        orderBy: [{ label: 'asc' }, { createdAt: 'asc' }],
-      },
     },
     orderBy: { id: 'asc' },
   }))) {
@@ -1159,7 +1140,6 @@ async function* streamPmacMembersCsv(filters: PmacReportFilters) {
         member.clubRole,
         member.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle] : '',
         member.specialties.map((entry) => PMAC_SPECIALTY_LABELS[entry.specialty]).join(' | '),
-        member.receivedTags.map((tag) => `${tag.label} (${tag.assignedByMember.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[tag.assignedByMember.executiveTitle] : tag.assignedByMember.fullName})`).join(' | '),
         member.status,
         member.account?.role ?? '',
         member.account?.isActive ? 'Yes' : 'No',

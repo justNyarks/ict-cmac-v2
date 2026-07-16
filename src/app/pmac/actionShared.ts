@@ -121,11 +121,6 @@ export type PmacWrapUpPayload = {
   wrapUpNotes?: string
 }
 
-export type PmacExecutiveTagPayload = {
-  memberId: string
-  tags: string[]
-}
-
 export const PMAC_ALLOWED_ROLES = [...PMAC_OPERATIONAL_ROLES, ...PMAC_OVERSIGHT_ROLES] as const satisfies readonly Role[]
 
 export const PMAC_EVENT_LIST_SELECT = {

@@ -393,7 +393,7 @@ export default function PmacManagementPageClient({
             <input
               value={query}
               onChange={event => setQuery(event.target.value)}
-              placeholder="Search name, email, phone, department, course, or tag"
+              placeholder="Search name, email, phone, department, or course"
               className="w-full bg-transparent text-sm text-slate-700 outline-none"
             />
           </label>
@@ -477,11 +477,6 @@ export default function PmacManagementPageClient({
                   <p className="mt-1 text-[11px] text-slate-500">
                     {formatPmacMemberEducation(member) || 'No department or course yet'} | Joined {formatDate(member.joinedAt)}
                   </p>
-                  {member.receivedTags.length ? (
-                    <p className="mt-2 text-[11px] text-slate-500">
-                      Tags: {member.receivedTags.map((tag) => `${tag.label} (${tag.assignedByMember.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[tag.assignedByMember.executiveTitle as PmacExecutiveTitle] : tag.assignedByMember.fullName})`).join(' | ')}
-                    </p>
-                  ) : null}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 md:max-w-[55%] md:justify-end">

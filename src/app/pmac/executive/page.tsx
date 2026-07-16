@@ -5,7 +5,7 @@ export default function PmacExecutivePage() {
     <PmacRolePage
       allowedRole="PMAC_EXECUTIVE"
       nextPath="/pmac/executive"
-      accessSummary="Manage assigned events, branch tags, and project teams for your specialty."
+      accessSummary="Manage assigned events and project teams for your specialty."
     />
   )
 }

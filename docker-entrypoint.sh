@@ -19,6 +19,7 @@ if [ -z "${SERVER_ACTION_ALLOWED_ORIGINS:-}" ]; then
 fi
 
 if [ "${PRISMA_SKIP_DB_PUSH:-0}" != "1" ]; then
+  npx prisma db execute --file prisma/remove-pmac-tags.sql --schema prisma/schema.prisma
   npx prisma db push
 fi
 
