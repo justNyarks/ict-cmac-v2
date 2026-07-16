@@ -293,37 +293,54 @@ export default function RequestsPage() {
         </div>
 
         {/* Table */}
-        <div className="card overflow-hidden border border-emerald-100/50 shadow-xl shadow-emerald-900/5">
-          <table className="w-full text-sm">
+        <div className="card border border-emerald-100/50 shadow-xl shadow-emerald-900/5">
+          <div className="overflow-x-auto rounded-[inherit]">
+          <table className="w-full min-w-[880px] table-fixed text-sm">
             <thead className="select-none">
               <tr className="border-b border-emerald-50 bg-emerald-50/20">
-                {['Event & School', 'Service Type', 'Request Date', 'Status', 'SLA', ''].map(h => (
-                  <th key={h} className="text-left px-6 py-4 text-[10px] font-black text-emerald-800/50 uppercase tracking-widest">{h}</th>
+                {[
+                  { label: 'Event & School', width: 'w-[26%]' },
+                  { label: 'Service Type', width: 'w-[17%]' },
+                  { label: 'Request Date', width: 'w-[16%]' },
+                  { label: 'Status', width: 'w-[19%]' },
+                  { label: 'SLA', width: 'w-[13%]' },
+                  { label: 'Actions', width: 'w-[9%]' },
+                ].map((header) => (
+                  <th
+                    key={header.label}
+                    className={clsx(
+                      header.width,
+                      'px-4 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-600 xl:px-6',
+                      header.label === 'Actions' && 'text-right',
+                    )}
+                  >
+                    {header.label}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-emerald-50/50">
               {filtered.map(req => (
                 <tr key={req.id} className="hover:bg-emerald-50/30 transition-colors group">
-                  <td className="px-6 py-5">
-                    <p className="font-bold text-[var(--text-dark)] group-hover:text-emerald-700 transition-colors">{req.eventTitle}</p>
+                  <td className="px-4 py-5 xl:px-6">
+                    <p className="truncate font-bold text-[var(--text-dark)] transition-colors group-hover:text-[var(--accent)]">{req.eventTitle}</p>
                     <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tight">{req.school}</p>
                   </td>
-                  <td className="px-6 py-5">
+                  <td className="px-4 py-5 xl:px-6">
                     <div className="flex flex-col">
                       <span className="font-bold text-emerald-700 text-xs">{req.serviceType || 'Unassigned'}</span>
                       <span className="text-[10px] font-bold text-slate-400 uppercase">{req.documentationType === 'BOTH' ? 'Photo + Video' : req.documentationType}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-5 text-slate-500 font-medium">
+                  <td className="whitespace-nowrap px-4 py-5 font-medium text-slate-500 xl:px-6">
                     {new Date(req.createdAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                   </td>
-                  <td className="px-6 py-5">
+                  <td className="px-4 py-5 xl:px-6">
                     <span className={`status-badge font-bold ${getStatusColor(req.status)}`}>
                       {getStatusLabel(req.status)}
                     </span>
                   </td>
-                  <td className="px-6 py-5">
+                  <td className="px-4 py-5 xl:px-6">
                     <span className={clsx(
                       'text-[10px] font-black uppercase tracking-widest',
                       getSlaLabel(req).includes('Needs') || getSlaLabel(req).includes('Upcoming') ? 'text-amber-600' : getSlaLabel(req) === 'Closed' ? 'text-red-500' : 'text-emerald-600'
@@ -331,7 +348,7 @@ export default function RequestsPage() {
                       {getSlaLabel(req)}
                     </span>
                   </td>
-                  <td className="px-6 py-5 text-right">
+                  <td className="px-4 py-5 text-right xl:px-6">
                     <div className="flex items-center justify-end gap-2">
                       {req.status === 'DIRECTOR_APPROVED' && (
                         <>
@@ -357,7 +374,8 @@ export default function RequestsPage() {
                       )}
                       <button
                         onClick={() => { setSelected(req); setNote(''); setSelectedServiceType(req.serviceType || 'CMAC') }}
-                        className="p-2.5 rounded-xl hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 transition-all border border-transparent hover:border-emerald-100"
+                        className="rounded-xl border border-transparent p-2.5 text-slate-400 transition-all hover:border-emerald-100 hover:bg-emerald-50 hover:text-[var(--accent)]"
+                        title="Review request"
                       >
                         <Eye size={18} />
                       </button>
@@ -367,6 +385,7 @@ export default function RequestsPage() {
               ))}
             </tbody>
           </table>
+          </div>
           {filtered.length === 0 && (
             <div className="py-24 text-center space-y-3">
               <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto">
