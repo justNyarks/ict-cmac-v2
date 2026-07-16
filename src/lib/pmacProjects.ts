@@ -9,6 +9,41 @@ type PmacProjectAccessUser = {
   pmacMemberId: string | null
 }
 
+const NO_PROJECT_ACCESS = { id: '__missing_project_access__' } as const
+
+export function buildPmacProjectWhere(user: PmacProjectAccessUser): Prisma.PmacProjectWhereInput {
+  if (isPmacProjectLauncherRole(user.role)) {
+    return {}
+  }
+
+  if (!user.pmacMemberId) {
+    return NO_PROJECT_ACCESS
+  }
+
+  if (user.role === 'PMAC_EXECUTIVE') {
+    return {
+      OR: [
+        { headMemberId: user.pmacMemberId },
+        {
+          memberAssignments: {
+            some: {
+              memberId: user.pmacMemberId,
+            },
+          },
+        },
+      ],
+    }
+  }
+
+  return {
+    memberAssignments: {
+      some: {
+        memberId: user.pmacMemberId,
+      },
+    },
+  }
+}
+
 export async function getExecutiveBranchForUser(user: PmacProjectAccessUser): Promise<PmacExecutiveTitle | null> {
   if (user.role !== 'PMAC_EXECUTIVE' || !user.pmacMemberId) {
     return null
@@ -22,43 +57,6 @@ export async function getExecutiveBranchForUser(user: PmacProjectAccessUser): Pr
   return member?.executiveTitle ?? null
 }
 
-export async function getPmacProjectWhere(user: PmacProjectAccessUser): Promise<Prisma.PmacProjectWhereInput> {
-  if (isPmacProjectLauncherRole(user.role)) {
-    return {}
-  }
-
-  if (!user.pmacMemberId) {
-    return { id: '__missing_project_access__' }
-  }
-
-  const branch = await getExecutiveBranchForUser(user)
-
-  if (user.role === 'PMAC_EXECUTIVE' && branch) {
-    return {
-      OR: [
-        { headMemberId: user.pmacMemberId },
-        {
-          memberAssignments: {
-            some: {
-              memberId: user.pmacMemberId,
-            },
-          },
-        },
-        {
-          AND: [
-            { headMemberId: null },
-            { branch },
-          ],
-        },
-      ],
-    }
-  }
-
-  return {
-    memberAssignments: {
-      some: {
-        memberId: user.pmacMemberId,
-      },
-    },
-  }
+export function getPmacProjectWhere(user: PmacProjectAccessUser): Prisma.PmacProjectWhereInput {
+  return buildPmacProjectWhere(user)
 }

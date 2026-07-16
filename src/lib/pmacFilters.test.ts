@@ -10,12 +10,13 @@ import {
 describe('pmacFilters', () => {
   it('filters members by query, status, and club role', () => {
     const members = [
-      { fullName: 'Paula Ramos', email: 'paula@example.com', courseOrDepartment: 'Leadership', notes: 'Director', status: 'ACTIVE', clubRole: 'DIRECTOR' },
-      { fullName: 'John Villanueva', email: 'john@example.com', courseOrDepartment: 'General Membership', notes: '', status: 'INACTIVE', clubRole: 'MEMBER' },
+      { fullName: 'Paula Ramos', email: 'paula@example.com', department: 'SASTE', course: 'Communication', courseOrDepartment: 'Leadership', notes: 'Director', status: 'ACTIVE', clubRole: 'DIRECTOR' },
+      { fullName: 'John Villanueva', email: 'john@example.com', department: 'SITE', course: 'BSIT', courseOrDepartment: 'General Membership', notes: '', status: 'INACTIVE', clubRole: 'MEMBER' },
     ]
 
     expect(filterPmacMembers(members, 'paula', 'ACTIVE', 'DIRECTOR')).toHaveLength(1)
     expect(filterPmacMembers(members, 'membership', 'ALL', 'MEMBER')).toHaveLength(1)
+    expect(filterPmacMembers(members, 'bsit', 'ALL', 'ALL')).toHaveLength(1)
     expect(filterPmacMembers(members, 'missing', 'ALL', 'ALL')).toHaveLength(0)
   })
 

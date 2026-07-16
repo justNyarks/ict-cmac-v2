@@ -15,6 +15,8 @@ function matchesQuery<T extends object>(record: T, query: string, keys: Array<ke
 export function filterPmacMembers<T extends {
   fullName: string
   email: string
+  department?: string | null | undefined
+  course?: string | null | undefined
   courseOrDepartment: string | null | undefined
   notes: string | null | undefined
   clubRole: string
@@ -24,7 +26,7 @@ export function filterPmacMembers<T extends {
   tagsText?: string | null | undefined
 }>(members: T[], query: string, status: string, clubRole: string) {
   return members.filter((member) => (
-    matchesQuery(member, query, ['fullName', 'email', 'courseOrDepartment', 'notes', 'executiveTitle', 'specialtiesText', 'tagsText'])
+    matchesQuery(member, query, ['fullName', 'email', 'department', 'course', 'courseOrDepartment', 'notes', 'executiveTitle', 'specialtiesText', 'tagsText'])
     && (status === 'ALL' || member.status === status)
     && (clubRole === 'ALL' || member.clubRole === clubRole)
   ))

@@ -13,7 +13,12 @@ import {
   PMAC_SPECIALTIES,
   PMAC_SPECIALTY_LABELS,
 } from '@/lib/pmac'
-import { PMAC_DEPARTMENTS, normalizePmacMemberName, parseCourseOrDepartment } from '@/lib/pmacMembers'
+import {
+  formatPmacMemberEducation,
+  getPmacMemberEducation,
+  PMAC_DEPARTMENTS,
+  normalizePmacMemberName,
+} from '@/lib/pmacMembers'
 import { runWithReverification } from '@/lib/reverificationClient'
 import {
   getDefaultClubRoleForSystemRole,
@@ -77,7 +82,7 @@ function formatDate(value: Date | string | null | undefined) {
 }
 
 function toFormState(member: PmacMemberRecord): MemberFormState {
-  const schoolInfo = parseCourseOrDepartment(member.courseOrDepartment)
+  const schoolInfo = getPmacMemberEducation(member)
 
   return {
     id: member.id,
@@ -363,7 +368,7 @@ export default function PmacManagementPageClient({
                   </div>
                   <p className="mt-1 text-xs text-slate-400">{member.email}</p>
                   <p className="mt-1 text-[11px] text-slate-500">
-                    {member.courseOrDepartment || 'No course or department yet'} · Joined {formatDate(member.joinedAt)}
+                    {formatPmacMemberEducation(member) || 'No department or course yet'} · Joined {formatDate(member.joinedAt)}
                   </p>
                   {member.receivedTags.length ? (
                     <p className="mt-2 text-[11px] text-slate-500">

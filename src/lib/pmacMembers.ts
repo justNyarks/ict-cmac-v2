@@ -2,6 +2,12 @@ export const PMAC_DEPARTMENTS = ['SASTE', 'SBAHM', 'SNAHS', 'SITE', 'SOM', 'BEU'
 
 export type PmacDepartment = (typeof PMAC_DEPARTMENTS)[number]
 
+type PmacMemberEducationInput = {
+  department?: string | null
+  course?: string | null
+  courseOrDepartment?: string | null
+}
+
 const DEPARTMENT_SEPARATOR = ' - '
 
 function capitalizeNameWord(word: string) {
@@ -53,7 +59,7 @@ export function parseCourseOrDepartment(value: string | null | undefined) {
   }
 
   const [possibleDepartment, ...courseParts] = normalized.split(DEPARTMENT_SEPARATOR)
-  if (possibleDepartment && isPmacDepartment(possibleDepartment) && courseParts.length) {
+  if (possibleDepartment && isPmacDepartment(possibleDepartment)) {
     return {
       department: possibleDepartment,
       course: courseParts.join(DEPARTMENT_SEPARATOR).trim(),
@@ -64,4 +70,20 @@ export function parseCourseOrDepartment(value: string | null | undefined) {
     department: '',
     course: normalized,
   }
+}
+
+export function getPmacMemberEducation(member: PmacMemberEducationInput) {
+  const legacy = parseCourseOrDepartment(member.courseOrDepartment)
+  const department = member.department?.trim() ?? ''
+  const course = member.course?.trim() ?? ''
+
+  return {
+    department: isPmacDepartment(department) ? department : legacy.department,
+    course: course || legacy.course,
+  }
+}
+
+export function formatPmacMemberEducation(member: PmacMemberEducationInput) {
+  const { department, course } = getPmacMemberEducation(member)
+  return [department, course].filter(Boolean).join(DEPARTMENT_SEPARATOR)
 }

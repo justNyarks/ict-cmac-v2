@@ -111,6 +111,8 @@ By default `docker compose` starts a local MySQL service named `db`, and the app
 The container also runs `prisma db push` before starting Next.js so the schema stays in sync with the configured database.
 The container keeps the same runtime contract as the non-Docker app: `DATABASE_URL`, `NEXTAUTH_SECRET`, and `NEXTAUTH_URL` must be provided. `docker compose` loads them from `.env`, and the entrypoint fails fast if any required value is missing.
 
+Vercel uses the build command in `vercel.json` to apply additive Prisma schema updates before creating the Next.js build. Ensure `DATABASE_URL` is configured for every Vercel environment that can deploy this application.
+
 ## Main Routes
 
 - `/` - dashboard

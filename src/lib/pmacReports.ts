@@ -1,5 +1,6 @@
 import { hasPmacV4Delegates, hasUserSecurityFields, prisma } from '@/lib/prisma'
 import { calculatePmacReadinessScore, getRecommendedAssignmentRoles, PMAC_EXECUTIVE_TITLE_LABELS, PMAC_SPECIALTY_LABELS } from '@/lib/pmac'
+import { getPmacMemberEducation } from '@/lib/pmacMembers'
 import { sanitizeCsvCell } from '@/lib/sanitization'
 
 export type PmacReportType = 'members' | 'events' | 'polls' | 'activity' | 'staffing' | 'performance'
@@ -66,22 +67,27 @@ export async function buildPmacMembersCsv() {
   })
 
   return joinCsv([
-    ['Full Name', 'Email', 'Club Role', 'Executive Title', 'Specialties', 'Assigned Tags', 'Status', 'System Role', 'Account Active', 'Password Reset Required', 'Joined At', 'Course / Department', 'Phone'],
-    ...members.map((member) => [
-      member.fullName,
-      member.email,
-      member.clubRole,
-      member.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle] : '',
-      member.specialties.map((entry) => PMAC_SPECIALTY_LABELS[entry.specialty]).join(' | '),
-      member.receivedTags.map((tag) => `${tag.label} (${tag.assignedByMember.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[tag.assignedByMember.executiveTitle] : tag.assignedByMember.fullName})`).join(' | '),
-      member.status,
-      member.account?.role ?? '',
-      member.account?.isActive ? 'Yes' : 'No',
-      member.account?.mustChangePassword ? 'Yes' : 'No',
-      member.joinedAt?.toISOString() ?? '',
-      member.courseOrDepartment ?? '',
-      member.phone ?? '',
-    ]),
+    ['Full Name', 'Email', 'Club Role', 'Executive Title', 'Specialties', 'Assigned Tags', 'Status', 'System Role', 'Account Active', 'Password Reset Required', 'Joined At', 'Department', 'Course', 'Phone'],
+    ...members.map((member) => {
+      const education = getPmacMemberEducation(member)
+
+      return [
+        member.fullName,
+        member.email,
+        member.clubRole,
+        member.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle] : '',
+        member.specialties.map((entry) => PMAC_SPECIALTY_LABELS[entry.specialty]).join(' | '),
+        member.receivedTags.map((tag) => `${tag.label} (${tag.assignedByMember.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[tag.assignedByMember.executiveTitle] : tag.assignedByMember.fullName})`).join(' | '),
+        member.status,
+        member.account?.role ?? '',
+        member.account?.isActive ? 'Yes' : 'No',
+        member.account?.mustChangePassword ? 'Yes' : 'No',
+        member.joinedAt?.toISOString() ?? '',
+        education.department,
+        education.course,
+        member.phone ?? '',
+      ]
+    }),
   ])
 }
 
