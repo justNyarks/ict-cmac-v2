@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client'
 import { unstable_noStore as noStore } from 'next/cache'
 import { getDutyRolesForSpecialties, getRecommendedAssignmentRoles, isPmacAttendanceManagerRole, isPmacStaffingManagerRole, PMAC_ATTENDANCE_STATUSES, PMAC_EVENT_DUTY_ROLES } from '@/lib/pmac'
 import { recordPmacActivity } from '@/lib/pmacActivity'
+import { getPmacAttendanceRecordKey, validatePmacAttendanceSubmission } from '@/lib/pmacAttendance'
 import { prisma } from '@/lib/prisma'
 import { revalidatePmacViews } from '@/lib/pmacRevalidation'
 import { sanitizeMultilineText, sanitizeSingleLineText } from '@/lib/sanitization'
@@ -368,6 +369,9 @@ export async function getPmacAttendanceBoard() {
       status: {
         in: ['APPROVED', 'COMPLETED'],
       },
+      assignments: {
+        some: {},
+      },
     },
     include: {
       attendance: {
@@ -412,9 +416,7 @@ export async function getPmacAttendanceBoard() {
         },
       },
     },
-    orderBy: {
-      startDateTime: 'asc',
-    },
+    orderBy: { startDateTime: 'desc' },
   })
 }
 
@@ -767,6 +769,9 @@ export async function savePmacAttendance(records: PmacAttendanceInput[]) {
   try {
     const session = await assertPmacActionSession(['PMAC_SECRETARY'])
 
+    const submissionProblem = validatePmacAttendanceSubmission(records)
+    if (submissionProblem) return { success: false, error: submissionProblem }
+
     const normalizedRecords = records.map((record) => {
       const eventId = sanitizeSingleLineText(record.eventId, {
         fieldName: 'Event ID',
@@ -794,7 +799,10 @@ export async function savePmacAttendance(records: PmacAttendanceInput[]) {
       }
     })
 
+    const recordKeys = normalizedRecords.map(getPmacAttendanceRecordKey)
+
     const eventIds = Array.from(new Set(normalizedRecords.map(record => record.eventId)))
+    const memberIds = Array.from(new Set(normalizedRecords.map(record => record.memberId)))
     const events = await prisma.pmacEvent.findMany({
       where: {
         id: {
@@ -803,7 +811,12 @@ export async function savePmacAttendance(records: PmacAttendanceInput[]) {
       },
       select: {
         id: true,
+        title: true,
         status: true,
+        assignments: {
+          where: { memberId: { in: memberIds } },
+          select: { memberId: true },
+        },
       },
     })
 
@@ -811,8 +824,32 @@ export async function savePmacAttendance(records: PmacAttendanceInput[]) {
       return { success: false, error: 'Attendance can only be recorded for approved or completed PMAC events.' }
     }
 
+    const assignedMemberKeys = new Set(events.flatMap(event => (
+      event.assignments.map(assignment => `${event.id}:${assignment.memberId}`)
+    )))
+    const scopeProblem = validatePmacAttendanceSubmission(normalizedRecords, assignedMemberKeys)
+    if (scopeProblem) return { success: false, error: scopeProblem }
+
+    const existingRecords = await prisma.pmacAttendance.findMany({
+      where: {
+        eventId: { in: eventIds },
+        memberId: { in: memberIds },
+      },
+      select: { eventId: true, memberId: true, status: true, notes: true },
+    })
+    const existingByKey = new Map(existingRecords.map(record => [getPmacAttendanceRecordKey(record), record]))
+    const changedRecords = normalizedRecords.filter(record => {
+      const existing = existingByKey.get(getPmacAttendanceRecordKey(record))
+      return !existing || existing.status !== record.status || (existing.notes ?? null) !== record.notes
+    })
+
+    if (!changedRecords.length) {
+      return { success: true, updatedCount: 0 }
+    }
+
     await prisma.$transaction(async (tx) => {
-      for (const record of normalizedRecords) {
+      const recordedAt = new Date()
+      for (const record of changedRecords) {
         await tx.pmacAttendance.upsert({
           where: {
             eventId_memberId: {
@@ -824,7 +861,7 @@ export async function savePmacAttendance(records: PmacAttendanceInput[]) {
             status: record.status,
             notes: record.notes,
             recordedById: session.user.id,
-            recordedAt: new Date(),
+            recordedAt,
           },
           create: {
             eventId: record.eventId,
@@ -832,25 +869,34 @@ export async function savePmacAttendance(records: PmacAttendanceInput[]) {
             status: record.status,
             notes: record.notes,
             recordedById: session.user.id,
-            recordedAt: new Date(),
+            recordedAt,
           },
         })
       }
 
-      for (const eventId of eventIds) {
+      for (const event of events) {
+        const eventChanges = changedRecords.filter(record => record.eventId === event.id)
+        if (!eventChanges.length) continue
+
+        const statusChanges = Object.fromEntries(eventChanges.map(record => {
+          const previous = existingByKey.get(getPmacAttendanceRecordKey(record))
+          return [record.memberId, { before: previous?.status ?? null, after: record.status }]
+        }))
         await recordPmacActivity(tx, {
           entityType: 'EVENT',
-          entityId: eventId,
-          eventId,
+          entityId: event.id,
+          eventId: event.id,
           ...getActivityActor(session.user),
           action: 'ATTENDANCE_UPDATED',
-          summary: 'Updated PMAC attendance records.',
+          summary: `Updated attendance for ${event.title}.`,
+          details: `${eventChanges.length} attendance record(s) changed.`,
+          changes: { attendanceStatus: { after: statusChanges } },
         })
       }
     })
 
     revalidatePmacViews(eventIds.map(eventId => `/pmac/events/${eventId}`))
-    return { success: true }
+    return { success: true, updatedCount: changedRecords.length }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to save attendance.' }
   }
