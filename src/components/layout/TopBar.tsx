@@ -333,7 +333,7 @@ export default function TopBar() {
               {getRoleLabel(session?.user?.role)}
             </p>
           </div>
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform duration-300">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform duration-300 dark:from-[#aab7b7] dark:to-[#718496] dark:text-[#1a2d42]">
             {session?.user?.name?.[0] || 'U'}
           </div>
         </Link>

@@ -223,7 +223,7 @@ export default function PmacPollWorkspaceClient({ pollId }: { pollId: string }) 
       <div className="card overflow-hidden">
         <div
           className="px-6 py-7 text-white"
-          style={{ background: 'linear-gradient(135deg, #0f172a 0%, #115e59 50%, #10b981 100%)' }}
+          style={{ background: 'var(--hero-gradient)' }}
         >
           <div className="flex flex-wrap items-start justify-between gap-6">
             <div className="space-y-2">

@@ -125,7 +125,7 @@ export default function DashboardPageClient() {
     <div className="max-w-6xl mx-auto space-y-8 animate-fade-in">
       <div
         className="relative rounded-2xl overflow-hidden shadow-xl"
-        style={{ background: 'linear-gradient(135deg, #064e3b 0%, #065f46 60%, #059669 100%)' }}
+        style={{ background: 'var(--hero-gradient)' }}
       >
         <div className="px-8 py-10 flex items-center justify-between">
           <div className="z-10">

@@ -15,19 +15,21 @@
   --accent: #059669;
   --border: #dcfce7;
   --text-dark: #022c22;
+  --hero-gradient: linear-gradient(135deg, #064e3b 0%, #065f46 60%, #059669 100%);
 }
 
 :root.dark {
   color-scheme: dark;
-  --primary: #0f2a1d;
-  --primary-light: #aec3b0;
-  --surface: #16291d;
-  --surface-muted: #263f2b;
-  --surface-raised: #375534;
-  --surface-hover: #466b47;
-  --accent: #aec3b0;
-  --border: rgb(107 144 113 / 0.55);
-  --text-dark: #e3eed4;
+  --primary: #1a2d42;
+  --primary-light: #aab7b7;
+  --surface: #1a2d42;
+  --surface-muted: #26394e;
+  --surface-raised: #2e4156;
+  --surface-hover: #40566e;
+  --accent: #aab7b7;
+  --border: rgb(170 183 183 / 0.38);
+  --text-dark: #d4d8dd;
+  --hero-gradient: linear-gradient(135deg, #1a2d42 0%, #2e4156 68%, #52677b 100%);
 }
 
 * {
@@ -55,7 +57,7 @@ body {
   .dark [class~="bg-slate-50/60"],
   .dark [class~="bg-slate-50/70"],
   .dark [class~="bg-slate-50/80"] {
-    background-color: rgb(38 63 43 / 0.9) !important;
+    background-color: rgb(38 57 78 / 0.9) !important;
   }
 
   .dark [class~="bg-white"] {
@@ -63,15 +65,15 @@ body {
   }
 
   .dark [class~="bg-white/80"] {
-    background-color: rgb(15 42 29 / 0.94) !important;
+    background-color: rgb(46 65 86 / 0.94) !important;
   }
 
   .dark [class~="bg-slate-100"] {
-    background-color: #466b47 !important;
+    background-color: #3a5067 !important;
   }
 
   .dark [class~="bg-slate-200"] {
-    background-color: #587a5d !important;
+    background-color: #52677b !important;
   }
 
   .dark [class~="bg-emerald-50"],
@@ -81,7 +83,7 @@ body {
   .dark [class~="bg-emerald-50/50"],
   .dark [class~="bg-emerald-50/70"],
   .dark [class~="bg-emerald-50/80"] {
-    background-color: #304c31 !important;
+    background-color: #334a61 !important;
   }
 
   .dark [class~="bg-emerald-100"],
@@ -89,20 +91,51 @@ body {
   .dark [class~="bg-emerald-100/80"],
   .dark [class~="bg-green-50"],
   .dark [class~="bg-green-100"] {
-    background-color: #3e6040 !important;
+    background-color: #384f62 !important;
+  }
+
+  .dark [class~="bg-emerald-400"] {
+    background-color: #aab7b7 !important;
+  }
+
+  .dark [class~="bg-emerald-500"] {
+    background-color: #718496 !important;
+  }
+
+  .dark [class~="bg-emerald-600"] {
+    background-color: #5b7085 !important;
+  }
+
+  .dark [class~="bg-emerald-700"] {
+    background-color: #435a70 !important;
+  }
+
+  .dark [class~="bg-emerald-800"] {
+    background-color: #2e4156 !important;
+  }
+
+  .dark [class~="bg-emerald-900"],
+  .dark [class~="bg-emerald-950"],
+  .dark [class~="bg-[#064e3b]"],
+  .dark [class~="bg-[#0f172a]"] {
+    background-color: #1a2d42 !important;
+  }
+
+  .dark [class~="hover:bg-[#065f46]"]:hover {
+    background-color: #40566e !important;
   }
 
   .dark [class~="bg-sky-50"],
   .dark [class~="bg-sky-50/60"],
   .dark [class~="bg-sky-100"],
   .dark [class~="bg-blue-50"] {
-    background-color: #142c35 !important;
+    background-color: #334a61 !important;
   }
 
   .dark [class~="bg-indigo-50"],
   .dark [class~="bg-indigo-50/50"],
   .dark [class~="bg-indigo-100"] {
-    background-color: #24283d !important;
+    background-color: #3a4d62 !important;
   }
 
   .dark [class~="bg-amber-50"],
@@ -125,36 +158,41 @@ body {
   .dark [class~="bg-purple-100"],
   .dark [class~="bg-fuchsia-50"],
   .dark [class~="bg-fuchsia-100"] {
-    background-color: #2d2236 !important;
+    background-color: #405267 !important;
   }
 
   .dark [class~="text-slate-950"],
   .dark [class~="text-slate-900"],
   .dark [class~="text-slate-800"] {
-    color: #e3eed4 !important;
+    color: #d4d8dd !important;
   }
 
   .dark [class~="text-slate-700"] {
-    color: #d1e0c6 !important;
+    color: #c0c8ca !important;
   }
 
   .dark [class~="text-slate-600"] {
-    color: #bfd1ba !important;
+    color: #b5c0c2 !important;
   }
 
   .dark [class~="text-slate-500"],
   .dark [class~="text-slate-400"] {
-    color: #b4c9b5 !important;
+    color: #aab7b7 !important;
   }
 
   .dark [class~="text-slate-300"] {
-    color: #98b09a !important;
+    color: #98a8aa !important;
   }
 
+  .dark [class~="text-emerald-100/70"],
+  .dark [class~="text-emerald-200"],
+  .dark [class~="text-emerald-300"],
+  .dark [class~="text-emerald-400"],
+  .dark [class~="text-emerald-500"],
   .dark [class~="text-emerald-800"],
   .dark [class~="text-emerald-700"],
   .dark [class~="text-emerald-600"] {
-    color: #c4ddc0 !important;
+    color: #c0c8ca !important;
   }
 
   .dark [class~="text-blue-600"],
@@ -163,7 +201,7 @@ body {
   .dark [class~="text-sky-700"],
   .dark [class~="text-indigo-600"],
   .dark [class~="text-indigo-700"] {
-    color: #8db8ff !important;
+    color: #c0c8ca !important;
   }
 
   .dark [class~="border-slate-50"],
@@ -176,6 +214,12 @@ body {
   .dark [class~="border-emerald-100/20"],
   .dark [class~="border-emerald-100/50"],
   .dark [class~="border-emerald-200"],
+  .dark [class~="border-emerald-300"],
+  .dark [class~="border-emerald-400"],
+  .dark [class~="border-emerald-500"],
+  .dark [class~="border-emerald-500/20"],
+  .dark [class~="border-emerald-900"],
+  .dark [class~="border-emerald-900/20"],
   .dark [class~="border-blue-100"],
   .dark [class~="border-blue-200"],
   .dark [class~="border-sky-100"],
@@ -200,21 +244,21 @@ body {
   .dark input:not([type="checkbox"]):not([type="radio"]),
   .dark select,
   .dark textarea {
-    background-color: #263f2b;
-    border-color: #6b9071;
-    color: #e3eed4;
+    background-color: #26394e;
+    border-color: #718496;
+    color: #d4d8dd;
   }
 
   .dark input::placeholder,
   .dark textarea::placeholder {
-    color: #9bb19d;
+    color: #95a5a7;
   }
 
   .dark input:disabled,
   .dark select:disabled,
   .dark textarea:disabled {
-    background-color: #304c31 !important;
-    color: #9bb19d !important;
+    background-color: #33485e !important;
+    color: #95a5a7 !important;
   }
 
   .dark .card {
@@ -225,16 +269,16 @@ body {
 
   .dark .card:hover {
     background-color: var(--surface-hover);
-    border-color: #8baa8f;
+    border-color: #7d9093;
     box-shadow: 0 10px 28px rgb(0 0 0 / 0.2);
   }
 
   .dark ::-webkit-scrollbar-thumb {
-    background: #6b9071;
+    background: #718496;
   }
 
   .dark ::-webkit-scrollbar-thumb:hover {
-    background: #aec3b0;
+    background: #aab7b7;
   }
 }
 

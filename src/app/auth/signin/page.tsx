@@ -33,7 +33,7 @@ export default function SignInPage() {
       </div>
       <div className="max-w-6xl w-full flex bg-white shadow-[0_32px_64px_-12px_rgba(6,78,59,0.15)] rounded-[2.5rem] overflow-hidden border border-emerald-100/50">
         {/* Left Side: Mascot/Banner */}
-        <div className="hidden lg:block w-[55%] bg-[#022c22] relative p-16 overflow-hidden">
+        <div className="hidden lg:block w-[55%] bg-[#022c22] relative p-16 overflow-hidden dark:bg-[#1a2d42]">
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
           <div className="absolute top-[-10%] left-[-10%] w-64 h-64 bg-emerald-500/20 rounded-full blur-[100px]"></div>
           <div className="absolute bottom-[10%] right-[10%] w-96 h-96 bg-emerald-400/10 rounded-full blur-[120px]"></div>
@@ -45,7 +45,7 @@ export default function SignInPage() {
                 <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Portal Access</span>
               </div>
               <h2 className="text-6xl font-display font-extrabold text-white leading-[1.1] tracking-tight">
-                Design the <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">Future</span> <br/> with CMAC.
+                Design the <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300 dark:from-[#aab7b7] dark:to-[#d4d8dd]">Future</span> <br/> with CMAC.
               </h2>
               <p className="text-emerald-100/60 text-lg leading-relaxed max-w-sm">
                 Official documentation & coverage portal of <br/> St. Paul University Philippines.
@@ -97,7 +97,7 @@ export default function SignInPage() {
                 <Aperture size={64} strokeWidth={1.5} />
               </div>
               <h1 className="text-5xl font-display font-black tracking-tighter text-slate-900 flex items-center gap-1">
-                Login<span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">.</span>
+                Login<span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400 dark:from-[#aab7b7] dark:to-[#d4d8dd]">.</span>
               </h1>
               <p className="text-slate-400 text-lg font-medium">Please enter your credentials to continue.</p>
             </div>

@@ -64,7 +64,7 @@ export default function ProfilePage() {
 
       {/* Avatar + Role card */}
       <div className="card p-8 flex items-center gap-6"
-        style={{ background: 'linear-gradient(135deg, #064e3b 0%, #065f46 100%)' }}>
+        style={{ background: 'var(--hero-gradient)' }}>
         <div className="w-20 h-20 rounded-3xl bg-white/20 backdrop-blur flex items-center justify-center text-white font-black text-3xl shadow-xl flex-shrink-0">
           {user?.name?.[0]?.toUpperCase() || 'U'}
         </div>

@@ -141,14 +141,14 @@ export default function CalendarPage() {
 
   // Deterministic color palette per event (based on ID hash)
   const EVENT_PALETTE = [
-    { bg: 'bg-[#e0f2fe] dark:bg-[#153845]', text: 'text-[#075985] dark:text-[#bae6fd]', border: 'border-[#bae6fd] dark:border-[#266177]', dot: 'bg-sky-500' },
-    { bg: 'bg-[#d1fae5] dark:bg-[#16453a]', text: 'text-[#065f46] dark:text-[#a7f3d0]', border: 'border-[#a7f3d0] dark:border-[#28705e]', dot: 'bg-emerald-500' },
-    { bg: 'bg-[#ede9fe] dark:bg-[#32284f]', text: 'text-[#5b21b6] dark:text-[#ddd6fe]', border: 'border-[#ddd6fe] dark:border-[#51427a]', dot: 'bg-violet-500' },
+    { bg: 'bg-[#e0f2fe] dark:bg-[#2e4156]', text: 'text-[#075985] dark:text-[#d4d8dd]', border: 'border-[#bae6fd] dark:border-[#aab7b7]', dot: 'bg-sky-500' },
+    { bg: 'bg-[#d1fae5] dark:bg-[#334a61]', text: 'text-[#065f46] dark:text-[#c0c8ca]', border: 'border-[#a7f3d0] dark:border-[#87999c]', dot: 'bg-emerald-500' },
+    { bg: 'bg-[#ede9fe] dark:bg-[#3a4d62]', text: 'text-[#5b21b6] dark:text-[#d4d8dd]', border: 'border-[#ddd6fe] dark:border-[#aab7b7]', dot: 'bg-violet-500' },
     { bg: 'bg-[#fef3c7] dark:bg-[#493719]', text: 'text-[#92400e] dark:text-[#fde68a]', border: 'border-[#fde68a] dark:border-[#765622]', dot: 'bg-amber-500' },
     { bg: 'bg-[#ffe4e6] dark:bg-[#49242d]', text: 'text-[#9f1239] dark:text-[#fecdd3]', border: 'border-[#fecdd3] dark:border-[#743845]', dot: 'bg-rose-500' },
-    { bg: 'bg-[#e0e7ff] dark:bg-[#262f55]', text: 'text-[#3730a3] dark:text-[#c7d2fe]', border: 'border-[#c7d2fe] dark:border-[#3f4c7f]', dot: 'bg-indigo-500' },
-    { bg: 'bg-[#fae8ff] dark:bg-[#432747]', text: 'text-[#86198f] dark:text-[#f5d0fe]', border: 'border-[#f5d0fe] dark:border-[#6b3d71]', dot: 'bg-fuchsia-500' },
-    { bg: 'bg-[#ccfbf1] dark:bg-[#16443f]', text: 'text-[#115e59] dark:text-[#99f6e4]', border: 'border-[#99f6e4] dark:border-[#276a62]', dot: 'bg-teal-500' },
+    { bg: 'bg-[#e0e7ff] dark:bg-[#2e4156]', text: 'text-[#3730a3] dark:text-[#c0c8ca]', border: 'border-[#c7d2fe] dark:border-[#87999c]', dot: 'bg-indigo-500' },
+    { bg: 'bg-[#fae8ff] dark:bg-[#405267]', text: 'text-[#86198f] dark:text-[#d4d8dd]', border: 'border-[#f5d0fe] dark:border-[#aab7b7]', dot: 'bg-fuchsia-500' },
+    { bg: 'bg-[#ccfbf1] dark:bg-[#334a61]', text: 'text-[#115e59] dark:text-[#c0c8ca]', border: 'border-[#99f6e4] dark:border-[#87999c]', dot: 'bg-teal-500' },
   ]
   function getEventColor(id: string) {
     let hash = 0
@@ -181,7 +181,7 @@ export default function CalendarPage() {
         <div className="flex bg-slate-100 p-1 rounded-xl">
           {FILTER_TYPES.map(type => (
             <button key={type} onClick={() => setFilterType(type)}
-              className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterType === type ? 'bg-[#ffffff] text-[#064e3b] shadow-sm dark:bg-[#aec3b0] dark:text-[#0f2a1d]' : 'text-slate-400 hover:text-slate-600')}
+              className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterType === type ? 'bg-[#ffffff] text-[#064e3b] shadow-sm dark:bg-[#aab7b7] dark:text-[#1a2d42]' : 'text-slate-400 hover:text-slate-600')}
             >
               {type === 'ALL' ? 'All Services' : type}
             </button>
@@ -189,12 +189,12 @@ export default function CalendarPage() {
         </div>
         <div className="flex bg-slate-100 p-1 rounded-xl">
           <button onClick={() => setFilterUser('ALL')}
-            className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterUser === 'ALL' ? 'bg-[#ffffff] text-[#064e3b] shadow-sm dark:bg-[#aec3b0] dark:text-[#0f2a1d]' : 'text-slate-400 hover:text-slate-600')}
+            className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterUser === 'ALL' ? 'bg-[#ffffff] text-[#064e3b] shadow-sm dark:bg-[#aab7b7] dark:text-[#1a2d42]' : 'text-slate-400 hover:text-slate-600')}
           >
             All Bookings
           </button>
           <button onClick={() => setFilterUser('MINE')}
-            className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterUser === 'MINE' ? 'bg-[#ffffff] text-[#064e3b] shadow-sm dark:bg-[#aec3b0] dark:text-[#0f2a1d]' : 'text-slate-400 hover:text-slate-600')}
+            className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterUser === 'MINE' ? 'bg-[#ffffff] text-[#064e3b] shadow-sm dark:bg-[#aab7b7] dark:text-[#1a2d42]' : 'text-slate-400 hover:text-slate-600')}
           >
             My Bookings
           </button>
@@ -213,7 +213,7 @@ export default function CalendarPage() {
       {/* Calendar grid */}
       <div className="card overflow-hidden shadow-xl shadow-slate-200/50">
         {/* Day headers */}
-        <div className="grid grid-cols-7 border-b border-[#e2e8f0] dark:border-[#6b9071]/55">
+        <div className="grid grid-cols-7 border-b border-[#e2e8f0] dark:border-[#aab7b7]/40">
           {DAYS.map(d => (
             <div key={d} className="py-3 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">
               {d}
@@ -241,9 +241,9 @@ export default function CalendarPage() {
             const isFullyBooked = totalMinutes >= 6 * 60; // 6 hours or more is fully booked
             const statusColor = events.length === 0 ? 'bg-green-500' : isFullyBooked ? 'bg-red-500' : 'bg-amber-400';
             const bgColor = !day
-              ? 'bg-[#f8fafc]/50 dark:bg-[#0f2a1d]'
+              ? 'bg-[#f8fafc]/50 dark:bg-[#1a2d42]'
               : events.length === 0
-                ? 'bg-[#f0fdf4] hover:bg-[#dcfce7] dark:bg-[#375534] dark:hover:bg-[#466b47]'
+                ? 'bg-[#f0fdf4] hover:bg-[#dcfce7] dark:bg-[#2e4156] dark:hover:bg-[#40566e]'
                 : isFullyBooked
                   ? 'bg-[#fef2f2] hover:bg-[#fee2e2] dark:bg-[#59363b] dark:hover:bg-[#684249]'
                   : 'bg-[#fffbeb] hover:bg-[#fef3c7] dark:bg-[#5a4b2d] dark:hover:bg-[#6b5a35]';
@@ -257,7 +257,7 @@ export default function CalendarPage() {
                 key={idx}
                 title={tooltipText}
                 className={clsx(
-                  'min-h-[120px] p-3 border-b border-r border-[#e2e8f0] last:border-r-0 transition-colors dark:border-[#6b9071]/55',
+                  'min-h-[120px] p-3 border-b border-r border-[#e2e8f0] last:border-r-0 transition-colors dark:border-[#aab7b7]/40',
                   idx % 7 === 0 && 'border-l-0',
                   bgColor
                 )}
@@ -267,7 +267,7 @@ export default function CalendarPage() {
                     <div className="flex justify-between items-start mb-1">
                       <span className={clsx(
                         'w-7 h-7 flex items-center justify-center rounded-full text-sm font-medium',
-                        isToday ? 'bg-[#1e3a8a] text-white dark:bg-[#e3eed4] dark:text-[#0f2a1d]' : 'text-slate-500'
+                        isToday ? 'bg-[#1e3a8a] text-white dark:bg-[#d4d8dd] dark:text-[#1a2d42]' : 'text-slate-500'
                       )}>
                         {day}
                       </span>
@@ -326,9 +326,9 @@ export default function CalendarPage() {
       </div>
 
       {/* Legend */}
-      <div className="mt-2 flex flex-wrap items-center justify-end rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:border-[#6b9071]/55 dark:bg-[#263f2b]">
+      <div className="mt-2 flex flex-wrap items-center justify-end rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:border-[#aab7b7]/40 dark:bg-[#26394e]">
         <div className="flex gap-4">
-          <span className="flex items-center gap-2 rounded-full bg-[#f0fdf4] px-3 py-1.5 text-green-700 dark:bg-[#375534] dark:text-[#e3eed4]"><span className="w-2 h-2 rounded-full bg-green-400" /> Available</span>
+          <span className="flex items-center gap-2 rounded-full bg-[#f0fdf4] px-3 py-1.5 text-green-700 dark:bg-[#2e4156] dark:text-[#d4d8dd]"><span className="w-2 h-2 rounded-full bg-green-400" /> Available</span>
           <span className="flex items-center gap-2 rounded-full bg-[#fffbeb] px-3 py-1.5 text-amber-700 dark:bg-[#5a4b2d] dark:text-[#fde68a]"><span className="w-2 h-2 rounded-full bg-amber-300" /> Partially Booked</span>
           <span className="flex items-center gap-2 rounded-full bg-[#fef2f2] px-3 py-1.5 text-red-700 dark:bg-[#59363b] dark:text-[#fecdd3]"><span className="w-2 h-2 rounded-full bg-red-400" /> Fully Booked</span>
         </div>
