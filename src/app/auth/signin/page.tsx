@@ -45,7 +45,7 @@ export default function SignInPage() {
                 <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Portal Access</span>
               </div>
               <h2 className="text-6xl font-display font-extrabold text-white leading-[1.1] tracking-tight">
-                Design the <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300 dark:from-[#aab7b7] dark:to-[#d4d8dd]">Future</span> <br/> with CMAC.
+                Design the <br/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300 dark:from-[#72bfc4] dark:to-[#9bc9ea]">Future</span> <br/> with CMAC.
               </h2>
               <p className="text-emerald-100/60 text-lg leading-relaxed max-w-sm">
                 Official documentation & coverage portal of <br/> St. Paul University Philippines.
@@ -97,7 +97,7 @@ export default function SignInPage() {
                 <Aperture size={64} strokeWidth={1.5} />
               </div>
               <h1 className="text-5xl font-display font-black tracking-tighter text-slate-900 flex items-center gap-1">
-                Login<span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400 dark:from-[#aab7b7] dark:to-[#d4d8dd]">.</span>
+                Login<span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400 dark:from-[#72bfc4] dark:to-[#9bc9ea]">.</span>
               </h1>
               <p className="text-slate-400 text-lg font-medium">Please enter your credentials to continue.</p>
             </div>
