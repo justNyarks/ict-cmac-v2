@@ -141,14 +141,14 @@ export default function CalendarPage() {
 
   // Deterministic color palette per event (based on ID hash)
   const EVENT_PALETTE = [
-    { bg: 'bg-sky-100',      text: 'text-sky-800',      border: 'border-sky-200',      dot: 'bg-sky-500'      },
-    { bg: 'bg-emerald-100',  text: 'text-emerald-800',  border: 'border-emerald-200',  dot: 'bg-emerald-500'  },
-    { bg: 'bg-violet-100',   text: 'text-violet-800',   border: 'border-violet-200',   dot: 'bg-violet-500'   },
-    { bg: 'bg-amber-100',    text: 'text-amber-800',    border: 'border-amber-200',    dot: 'bg-amber-500'    },
-    { bg: 'bg-rose-100',     text: 'text-rose-800',     border: 'border-rose-200',     dot: 'bg-rose-500'     },
-    { bg: 'bg-indigo-100',   text: 'text-indigo-800',   border: 'border-indigo-200',   dot: 'bg-indigo-500'   },
-    { bg: 'bg-fuchsia-100',  text: 'text-fuchsia-800',  border: 'border-fuchsia-200',  dot: 'bg-fuchsia-500'  },
-    { bg: 'bg-teal-100',     text: 'text-teal-800',     border: 'border-teal-200',     dot: 'bg-teal-500'     },
+    { bg: 'bg-[#e0f2fe] dark:bg-[#153845]', text: 'text-[#075985] dark:text-[#bae6fd]', border: 'border-[#bae6fd] dark:border-[#266177]', dot: 'bg-sky-500' },
+    { bg: 'bg-[#d1fae5] dark:bg-[#16453a]', text: 'text-[#065f46] dark:text-[#a7f3d0]', border: 'border-[#a7f3d0] dark:border-[#28705e]', dot: 'bg-emerald-500' },
+    { bg: 'bg-[#ede9fe] dark:bg-[#32284f]', text: 'text-[#5b21b6] dark:text-[#ddd6fe]', border: 'border-[#ddd6fe] dark:border-[#51427a]', dot: 'bg-violet-500' },
+    { bg: 'bg-[#fef3c7] dark:bg-[#493719]', text: 'text-[#92400e] dark:text-[#fde68a]', border: 'border-[#fde68a] dark:border-[#765622]', dot: 'bg-amber-500' },
+    { bg: 'bg-[#ffe4e6] dark:bg-[#49242d]', text: 'text-[#9f1239] dark:text-[#fecdd3]', border: 'border-[#fecdd3] dark:border-[#743845]', dot: 'bg-rose-500' },
+    { bg: 'bg-[#e0e7ff] dark:bg-[#262f55]', text: 'text-[#3730a3] dark:text-[#c7d2fe]', border: 'border-[#c7d2fe] dark:border-[#3f4c7f]', dot: 'bg-indigo-500' },
+    { bg: 'bg-[#fae8ff] dark:bg-[#432747]', text: 'text-[#86198f] dark:text-[#f5d0fe]', border: 'border-[#f5d0fe] dark:border-[#6b3d71]', dot: 'bg-fuchsia-500' },
+    { bg: 'bg-[#ccfbf1] dark:bg-[#16443f]', text: 'text-[#115e59] dark:text-[#99f6e4]', border: 'border-[#99f6e4] dark:border-[#276a62]', dot: 'bg-teal-500' },
   ]
   function getEventColor(id: string) {
     let hash = 0
@@ -181,7 +181,7 @@ export default function CalendarPage() {
         <div className="flex bg-slate-100 p-1 rounded-xl">
           {FILTER_TYPES.map(type => (
             <button key={type} onClick={() => setFilterType(type)}
-              className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterType === type ? 'bg-white text-[#064e3b] shadow-sm' : 'text-slate-400 hover:text-slate-600')}
+              className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterType === type ? 'bg-[#ffffff] text-[#064e3b] shadow-sm dark:bg-[#8eb69b] dark:text-[#051f20]' : 'text-slate-400 hover:text-slate-600')}
             >
               {type === 'ALL' ? 'All Services' : type}
             </button>
@@ -189,12 +189,12 @@ export default function CalendarPage() {
         </div>
         <div className="flex bg-slate-100 p-1 rounded-xl">
           <button onClick={() => setFilterUser('ALL')}
-            className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterUser === 'ALL' ? 'bg-white text-[#064e3b] shadow-sm' : 'text-slate-400 hover:text-slate-600')}
+            className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterUser === 'ALL' ? 'bg-[#ffffff] text-[#064e3b] shadow-sm dark:bg-[#8eb69b] dark:text-[#051f20]' : 'text-slate-400 hover:text-slate-600')}
           >
             All Bookings
           </button>
           <button onClick={() => setFilterUser('MINE')}
-            className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterUser === 'MINE' ? 'bg-white text-[#064e3b] shadow-sm' : 'text-slate-400 hover:text-slate-600')}
+            className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterUser === 'MINE' ? 'bg-[#ffffff] text-[#064e3b] shadow-sm dark:bg-[#8eb69b] dark:text-[#051f20]' : 'text-slate-400 hover:text-slate-600')}
           >
             My Bookings
           </button>
@@ -213,7 +213,7 @@ export default function CalendarPage() {
       {/* Calendar grid */}
       <div className="card overflow-hidden shadow-xl shadow-slate-200/50">
         {/* Day headers */}
-        <div className="grid grid-cols-7 border-b border-slate-100">
+        <div className="grid grid-cols-7 border-b border-[#e2e8f0] dark:border-[#235347]/70">
           {DAYS.map(d => (
             <div key={d} className="py-3 text-center text-xs font-semibold text-slate-400 uppercase tracking-wider">
               {d}
@@ -240,7 +240,13 @@ export default function CalendarPage() {
             })
             const isFullyBooked = totalMinutes >= 6 * 60; // 6 hours or more is fully booked
             const statusColor = events.length === 0 ? 'bg-green-500' : isFullyBooked ? 'bg-red-500' : 'bg-amber-400';
-            const bgColor = !day ? 'bg-slate-50/50' : events.length === 0 ? 'bg-green-50/20 hover:bg-green-50/40' : isFullyBooked ? 'bg-red-50/20 hover:bg-red-50/40' : 'bg-amber-50/20 hover:bg-amber-50/40';
+            const bgColor = !day
+              ? 'bg-[#f8fafc]/50 dark:bg-[#071f1e]'
+              : events.length === 0
+                ? 'bg-[#f0fdf4] hover:bg-[#dcfce7] dark:bg-[#123c35] dark:hover:bg-[#174a40]'
+                : isFullyBooked
+                  ? 'bg-[#fef2f2] hover:bg-[#fee2e2] dark:bg-[#3a2026] dark:hover:bg-[#47262d]'
+                  : 'bg-[#fffbeb] hover:bg-[#fef3c7] dark:bg-[#3b321e] dark:hover:bg-[#493d23]';
 
             const tooltipText = day && events.length > 0 
               ? `${events.length} booking(s):\n${events.map(event => `- ${event.eventTitle}`).join('\n')}`
@@ -251,7 +257,7 @@ export default function CalendarPage() {
                 key={idx}
                 title={tooltipText}
                 className={clsx(
-                  'min-h-[120px] p-3 border-b border-r border-slate-100 last:border-r-0 transition-colors',
+                  'min-h-[120px] p-3 border-b border-r border-[#e2e8f0] last:border-r-0 transition-colors dark:border-[#235347]/70',
                   idx % 7 === 0 && 'border-l-0',
                   bgColor
                 )}
@@ -261,7 +267,7 @@ export default function CalendarPage() {
                     <div className="flex justify-between items-start mb-1">
                       <span className={clsx(
                         'w-7 h-7 flex items-center justify-center rounded-full text-sm font-medium',
-                        isToday ? 'bg-[#1e3a8a] text-white' : 'text-slate-500'
+                        isToday ? 'bg-[#1e3a8a] text-white dark:bg-[#daf1de] dark:text-[#051f20]' : 'text-slate-500'
                       )}>
                         {day}
                       </span>
@@ -301,8 +307,8 @@ export default function CalendarPage() {
                                   </>
                                 )}
                               </div>
-                              {isApproved && req._isStart && <span className="text-[7px] bg-black/10 px-1 rounded uppercase tracking-tighter mix-blend-multiply">TAKEN</span>}
-                              {isMulti && req._isStart && <span className="text-[7px] bg-black/10 px-1 rounded uppercase tracking-tighter mix-blend-multiply">{req._span}d</span>}
+                              {isApproved && req._isStart && <span className="rounded bg-black/10 px-1 text-[7px] uppercase tracking-tighter dark:bg-black/25 dark:text-white/75">TAKEN</span>}
+                              {isMulti && req._isStart && <span className="rounded bg-black/10 px-1 text-[7px] uppercase tracking-tighter dark:bg-black/25 dark:text-white/75">{req._span}d</span>}
                             </div>
                           </button>
                         )
@@ -320,11 +326,11 @@ export default function CalendarPage() {
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap items-center justify-end text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-50 p-4 rounded-2xl border border-slate-100 mt-2">
+      <div className="mt-2 flex flex-wrap items-center justify-end rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:border-[#235347] dark:bg-[#0b2b26]">
         <div className="flex gap-4">
-          <span className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1.5 rounded-full"><span className="w-2 h-2 rounded-full bg-green-500" /> Available</span>
-          <span className="flex items-center gap-2 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-full"><span className="w-2 h-2 rounded-full bg-amber-400" /> Partially Booked</span>
-          <span className="flex items-center gap-2 bg-red-50 text-red-700 px-3 py-1.5 rounded-full"><span className="w-2 h-2 rounded-full bg-red-500" /> Fully Booked</span>
+          <span className="flex items-center gap-2 rounded-full bg-[#f0fdf4] px-3 py-1.5 text-green-700 dark:bg-[#17483d] dark:text-[#a7f3d0]"><span className="w-2 h-2 rounded-full bg-green-500" /> Available</span>
+          <span className="flex items-center gap-2 rounded-full bg-[#fffbeb] px-3 py-1.5 text-amber-700 dark:bg-[#4a3818] dark:text-[#fde68a]"><span className="w-2 h-2 rounded-full bg-amber-400" /> Partially Booked</span>
+          <span className="flex items-center gap-2 rounded-full bg-[#fef2f2] px-3 py-1.5 text-red-700 dark:bg-[#4a2328] dark:text-[#fecdd3]"><span className="w-2 h-2 rounded-full bg-red-500" /> Fully Booked</span>
         </div>
       </div>
 
