@@ -71,6 +71,7 @@ export default function TopBar() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [dismissedNotifs, setDismissedNotifs] = useState<string[]>([])
   const [showNotifs, setShowNotifs] = useState(false)
+  const [showRecentNotifs, setShowRecentNotifs] = useState(false)
   const [popNotification, setPopNotification] = useState<AppNotification | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const dismissedRef = useRef<string[]>([])
@@ -160,6 +161,9 @@ export default function TopBar() {
   }, [popNotification])
 
   const visibleNotifs = notifications.filter((notification) => !notification.isRead && !dismissedNotifs.includes(notification.id))
+  const displayedNotifs = showRecentNotifs
+    ? notifications.filter((notification) => !dismissedNotifs.includes(notification.id))
+    : visibleNotifs
   const hasHighPriorityNotification = visibleNotifs.some((notification) => (
     notification.priority === 'critical' || notification.priority === 'high'
   ))
@@ -175,10 +179,6 @@ export default function TopBar() {
   }
 
   const handleNotifClick = async (notification: AppNotification) => {
-    const updated = Array.from(new Set([...dismissedNotifs, notification.id]))
-    setDismissedNotifs(updated)
-    dismissedRef.current = updated
-    localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(updated))
     setNotifications((previous) => previous.map((item) => (
       item.id === notification.id ? { ...item, isRead: true } : item
     )))
@@ -230,10 +230,6 @@ export default function TopBar() {
                 {visibleNotifs.length > 0 && (
                   <button
                     onClick={async () => {
-                      const updated = Array.from(new Set([...dismissedNotifs, ...visibleNotifs.map((notification) => notification.id)]))
-                      setDismissedNotifs(updated)
-                      dismissedRef.current = updated
-                      localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(updated))
                       setNotifications((previous) => previous.map((notification) => ({ ...notification, isRead: true })))
                       setPopNotification(null)
                       announceNotificationsRead(visibleNotifs.map((notification) => notification.id))
@@ -244,13 +240,13 @@ export default function TopBar() {
                     }}
                     className="text-[9px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
                   >
-                    Clear all
+                    Mark all read
                   </button>
                 )}
               </div>
               <div className="max-h-96 overflow-y-auto custom-scrollbar">
-                {visibleNotifs.length > 0 ? (
-                  visibleNotifs.map((notification) => (
+                {displayedNotifs.length > 0 ? (
+                  displayedNotifs.map((notification) => (
                     <div
                       key={notification.id}
                       role="button"
@@ -262,7 +258,10 @@ export default function TopBar() {
                           handleNotifClick(notification)
                         }
                       }}
-                      className="flex w-full cursor-pointer items-start gap-3 border-b border-emerald-50/50 p-4 text-left transition-colors hover:bg-emerald-50/50 group"
+                      className={clsx(
+                        'group flex w-full cursor-pointer items-start gap-3 border-b border-emerald-50/50 p-4 text-left transition-colors hover:bg-emerald-50/50',
+                        notification.isRead && 'opacity-70',
+                      )}
                     >
                       <div className={clsx(
                         'w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5',
@@ -274,7 +273,10 @@ export default function TopBar() {
                         {getNotificationIcon(notification)}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-slate-800 line-clamp-1 group-hover:text-emerald-700 transition-colors">{notification.title}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="line-clamp-1 text-xs font-bold text-slate-800 transition-colors group-hover:text-emerald-700">{notification.title}</p>
+                          {!notification.isRead ? <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" /> : null}
+                        </div>
                         <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-2">{notification.description}</p>
                       </div>
                       <button
@@ -287,17 +289,19 @@ export default function TopBar() {
                   ))
                 ) : (
                   <div className="p-10 text-center">
-                    <p className="text-xs text-slate-400 font-medium">No new notifications</p>
+                    <p className="text-xs text-slate-400 font-medium">
+                      {showRecentNotifs ? 'No recent notifications' : 'No new notifications'}
+                    </p>
                   </div>
                 )}
               </div>
-              <Link
-                href={session?.user?.role?.startsWith('PMAC_') ? '/pmac/events' : session?.user?.role === 'CMAC_COORDINATOR' ? '/coordinator/pmac' : '/requests'}
-                onClick={() => setShowNotifs(false)}
-                className="block p-4 text-center text-[10px] font-black text-emerald-600 uppercase tracking-widest hover:bg-emerald-50 transition-colors"
+              <button
+                type="button"
+                onClick={() => setShowRecentNotifs((current) => !current)}
+                className="block w-full p-4 text-center text-[10px] font-black uppercase tracking-widest text-emerald-600 transition-colors hover:bg-emerald-50"
               >
-                View Notifications
-              </Link>
+                {showRecentNotifs ? 'Show Unread Only' : 'View Recent Notifications'}
+              </button>
             </div>
           )}
 
