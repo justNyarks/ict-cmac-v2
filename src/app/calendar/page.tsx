@@ -181,7 +181,7 @@ export default function CalendarPage() {
         <div className="flex bg-slate-100 p-1 rounded-xl">
           {FILTER_TYPES.map(type => (
             <button key={type} onClick={() => setFilterType(type)}
-              className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterType === type ? 'bg-[#ffffff] text-[#064e3b] shadow-sm dark:bg-[#2dd4bf] dark:text-[#141b2a]' : 'text-slate-400 hover:text-slate-600')}
+              className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterType === type ? 'bg-[#fafaf7] text-[#064e3b] shadow-sm dark:bg-[#2dd4bf] dark:text-[#141b2a]' : 'text-slate-400 hover:text-slate-600')}
             >
               {type === 'ALL' ? 'All Services' : type}
             </button>
@@ -189,12 +189,12 @@ export default function CalendarPage() {
         </div>
         <div className="flex bg-slate-100 p-1 rounded-xl">
           <button onClick={() => setFilterUser('ALL')}
-            className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterUser === 'ALL' ? 'bg-[#ffffff] text-[#064e3b] shadow-sm dark:bg-[#2dd4bf] dark:text-[#141b2a]' : 'text-slate-400 hover:text-slate-600')}
+            className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterUser === 'ALL' ? 'bg-[#fafaf7] text-[#064e3b] shadow-sm dark:bg-[#2dd4bf] dark:text-[#141b2a]' : 'text-slate-400 hover:text-slate-600')}
           >
             All Bookings
           </button>
           <button onClick={() => setFilterUser('MINE')}
-            className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterUser === 'MINE' ? 'bg-[#ffffff] text-[#064e3b] shadow-sm dark:bg-[#2dd4bf] dark:text-[#141b2a]' : 'text-slate-400 hover:text-slate-600')}
+            className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterUser === 'MINE' ? 'bg-[#fafaf7] text-[#064e3b] shadow-sm dark:bg-[#2dd4bf] dark:text-[#141b2a]' : 'text-slate-400 hover:text-slate-600')}
           >
             My Bookings
           </button>

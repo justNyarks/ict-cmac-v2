@@ -11,9 +11,12 @@
 
   --primary: #064e3b;
   --primary-light: #10b981;
-  --surface: #f0fdf4;
+  --surface: #f3f4f0;
+  --surface-muted: #eceee9;
+  --surface-raised: #fafaf7;
+  --surface-hover: #f0f1ec;
   --accent: #059669;
-  --border: #dcfce7;
+  --border: #dde1da;
   --text-dark: #022c22;
   --hero-gradient: linear-gradient(135deg, #064e3b 0%, #065f46 60%, #059669 100%);
 }
@@ -45,6 +48,54 @@ body {
 @media screen {
   body {
     transition: background-color 180ms ease, color 180ms ease;
+  }
+
+  :root:not(.dark) [class~="bg-white"] {
+    background-color: var(--surface-raised) !important;
+  }
+
+  :root:not(.dark) [class~="bg-white/80"] {
+    background-color: rgb(250 250 247 / 0.9) !important;
+  }
+
+  :root:not(.dark) [class~="bg-white/70"] {
+    background-color: rgb(250 250 247 / 0.82) !important;
+  }
+
+  :root:not(.dark) [class~="bg-white/50"] {
+    background-color: rgb(250 250 247 / 0.68) !important;
+  }
+
+  :root:not(.dark) [class~="bg-slate-50"] {
+    background-color: var(--surface) !important;
+  }
+
+  :root:not(.dark) [class~="bg-slate-50/30"],
+  :root:not(.dark) [class~="bg-slate-50/50"],
+  :root:not(.dark) [class~="bg-slate-50/60"],
+  :root:not(.dark) [class~="bg-slate-50/70"],
+  :root:not(.dark) [class~="bg-slate-50/80"],
+  :root:not(.dark) [class~="bg-slate-100"] {
+    background-color: var(--surface-muted) !important;
+  }
+
+  :root:not(.dark) [class~="hover:bg-slate-50"]:hover,
+  :root:not(.dark) [class~="hover:bg-slate-50/50"]:hover,
+  :root:not(.dark) [class~="hover:bg-slate-50/60"]:hover,
+  :root:not(.dark) [class~="hover:bg-slate-100"]:hover {
+    background-color: var(--surface-hover) !important;
+  }
+
+  :root:not(.dark) input:not([type="checkbox"]):not([type="radio"]),
+  :root:not(.dark) select,
+  :root:not(.dark) textarea {
+    background-color: var(--surface-raised);
+  }
+
+  :root:not(.dark) .card,
+  :root:not(.dark) .card:hover {
+    background-color: var(--surface-raised);
+    border-color: var(--border);
   }
 
   .dark body,
