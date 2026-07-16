@@ -8,6 +8,7 @@ import { useSession } from 'next-auth/react'
 import clsx from 'clsx'
 
 import { getStatusColor, getStatusLabel } from '@/lib/data'
+import { announceNotificationsRead, NOTIFICATIONS_READ_EVENT, type NotificationsReadDetail } from '@/lib/notificationEvents'
 import { getRoleLabel } from '@/lib/roles'
 import { getDashboardStats } from './dashboardActions'
 import { markAllNotificationsAsRead, markNotificationAsRead } from './notificationsActions'
@@ -102,6 +103,23 @@ export default function DashboardPageClient() {
     })
   }, [])
 
+  useEffect(() => {
+    const handleNotificationsRead = (event: Event) => {
+      const readIds = new Set((event as CustomEvent<NotificationsReadDetail>).detail?.ids ?? [])
+      if (!readIds.size) return
+
+      setStats((previous) => previous ? ({
+        ...previous,
+        notifications: previous.notifications.map((notification) => (
+          readIds.has(notification.id) ? { ...notification, isRead: true } : notification
+        )),
+      }) : previous)
+    }
+
+    window.addEventListener(NOTIFICATIONS_READ_EVENT, handleNotificationsRead)
+    return () => window.removeEventListener(NOTIFICATIONS_READ_EVENT, handleNotificationsRead)
+  }, [])
+
   const handleNotifClick = async (notification: AppNotification) => {
     setStats((previous) => previous ? ({
       ...previous,
@@ -109,6 +127,7 @@ export default function DashboardPageClient() {
         item.id === notification.id ? { ...item, isRead: true } : item
       )),
     }) : previous)
+    announceNotificationsRead([notification.id])
     await markNotificationAsRead(notification.id, notification.module)
     router.push(notification.href)
   }
@@ -118,8 +137,7 @@ export default function DashboardPageClient() {
   }
 
   const { total, pending, approved, rejected, coordApproved, recent } = stats
-  const visibleNotifications = stats.notifications
-  const unreadNotifications = visibleNotifications.filter((notification) => !notification.isRead)
+  const unreadNotifications = stats.notifications.filter((notification) => !notification.isRead)
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-fade-in">
@@ -160,7 +178,7 @@ export default function DashboardPageClient() {
         </div>
       )}
 
-      {visibleNotifications.length > 0 && (
+      {unreadNotifications.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -171,9 +189,10 @@ export default function DashboardPageClient() {
             </div>
             <button
               onClick={async () => {
-                const unread = visibleNotifications
-                  .filter((notification) => !notification.isRead)
-                  .map((notification) => ({ id: notification.id, module: notification.module }))
+                const unread = unreadNotifications.map((notification) => ({
+                  id: notification.id,
+                  module: notification.module,
+                }))
                 if (!unread.length) {
                   return
                 }
@@ -182,6 +201,7 @@ export default function DashboardPageClient() {
                   ...previous,
                   notifications: previous.notifications.map((notification) => ({ ...notification, isRead: true })),
                 }) : previous)
+                announceNotificationsRead(unread.map((notification) => notification.id))
                 await markAllNotificationsAsRead(unread)
               }}
               className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-emerald-600 transition-colors"
@@ -189,7 +209,7 @@ export default function DashboardPageClient() {
               Mark All Read
             </button>
           </div>
-          {visibleNotifications.map((notification) => {
+          {unreadNotifications.map((notification) => {
             const toneClasses = getNotificationToneClasses(notification)
 
             return (

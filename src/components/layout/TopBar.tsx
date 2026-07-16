@@ -10,6 +10,7 @@ import clsx from 'clsx'
 
 import { getNotifications, markAllNotificationsAsRead, markNotificationAsRead } from '@/app/notificationsActions'
 import { getRoleLabel } from '@/lib/roles'
+import { announceNotificationsRead, NOTIFICATIONS_READ_EVENT, type NotificationsReadDetail } from '@/lib/notificationEvents'
 import type { AppNotification } from '@/types/notifications'
 import ThemeToggle from '@/components/theme/ThemeToggle'
 
@@ -136,6 +137,21 @@ export default function TopBar() {
   }, [showNotifs])
 
   useEffect(() => {
+    const handleNotificationsRead = (event: Event) => {
+      const readIds = new Set((event as CustomEvent<NotificationsReadDetail>).detail?.ids ?? [])
+      if (!readIds.size) return
+
+      setNotifications((previous) => previous.map((notification) => (
+        readIds.has(notification.id) ? { ...notification, isRead: true } : notification
+      )))
+      setPopNotification((current) => current && readIds.has(current.id) ? null : current)
+    }
+
+    window.addEventListener(NOTIFICATIONS_READ_EVENT, handleNotificationsRead)
+    return () => window.removeEventListener(NOTIFICATIONS_READ_EVENT, handleNotificationsRead)
+  }, [])
+
+  useEffect(() => {
     if (!popNotification) {
       return
     }
@@ -167,6 +183,7 @@ export default function TopBar() {
     setNotifications((previous) => previous.map((item) => (
       item.id === notification.id ? { ...item, isRead: true } : item
     )))
+    announceNotificationsRead([notification.id])
     setPopNotification(null)
     setShowNotifs(false)
     await markNotificationAsRead(notification.id, notification.module)
@@ -220,6 +237,7 @@ export default function TopBar() {
                       localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(updated))
                       setNotifications((previous) => previous.map((notification) => ({ ...notification, isRead: true })))
                       setPopNotification(null)
+                      announceNotificationsRead(visibleNotifs.map((notification) => notification.id))
                       await markAllNotificationsAsRead(visibleNotifs.map((notification) => ({
                         id: notification.id,
                         module: notification.module,
