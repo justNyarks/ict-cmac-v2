@@ -181,7 +181,7 @@ export default function CalendarPage() {
         <div className="flex bg-slate-100 p-1 rounded-xl">
           {FILTER_TYPES.map(type => (
             <button key={type} onClick={() => setFilterType(type)}
-              className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterType === type ? 'bg-[#fafaf7] text-[#064e3b] shadow-sm dark:bg-[#2dd4bf] dark:text-[#141b2a]' : 'text-slate-400 hover:text-slate-600')}
+              className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterType === type ? 'bg-[#fafaf7] text-[#064e3b] shadow-sm dark:bg-[var(--accent)] dark:text-[var(--sidebar)]' : 'text-slate-400 hover:text-slate-600')}
             >
               {type === 'ALL' ? 'All Services' : type}
             </button>
@@ -189,12 +189,12 @@ export default function CalendarPage() {
         </div>
         <div className="flex bg-slate-100 p-1 rounded-xl">
           <button onClick={() => setFilterUser('ALL')}
-            className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterUser === 'ALL' ? 'bg-[#fafaf7] text-[#064e3b] shadow-sm dark:bg-[#2dd4bf] dark:text-[#141b2a]' : 'text-slate-400 hover:text-slate-600')}
+            className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterUser === 'ALL' ? 'bg-[#fafaf7] text-[#064e3b] shadow-sm dark:bg-[var(--accent)] dark:text-[var(--sidebar)]' : 'text-slate-400 hover:text-slate-600')}
           >
             All Bookings
           </button>
           <button onClick={() => setFilterUser('MINE')}
-            className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterUser === 'MINE' ? 'bg-[#fafaf7] text-[#064e3b] shadow-sm dark:bg-[#2dd4bf] dark:text-[#141b2a]' : 'text-slate-400 hover:text-slate-600')}
+            className={clsx('px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all', filterUser === 'MINE' ? 'bg-[#fafaf7] text-[#064e3b] shadow-sm dark:bg-[var(--accent)] dark:text-[var(--sidebar)]' : 'text-slate-400 hover:text-slate-600')}
           >
             My Bookings
           </button>
@@ -241,7 +241,7 @@ export default function CalendarPage() {
             const isFullyBooked = totalMinutes >= 6 * 60; // 6 hours or more is fully booked
             const statusColor = events.length === 0 ? 'bg-green-500' : isFullyBooked ? 'bg-red-500' : 'bg-amber-400';
             const bgColor = !day
-              ? 'bg-[#f8fafc]/50 dark:bg-[#141b2a]'
+              ? 'bg-[#f8fafc]/50 dark:bg-[var(--surface)]'
               : events.length === 0
                 ? 'bg-[#f0fdf4] hover:bg-[#dcfce7] dark:bg-[#18373c] dark:hover:bg-[#1d4548]'
                 : isFullyBooked
@@ -267,7 +267,7 @@ export default function CalendarPage() {
                     <div className="flex justify-between items-start mb-1">
                       <span className={clsx(
                         'w-7 h-7 flex items-center justify-center rounded-full text-sm font-medium',
-                        isToday ? 'bg-[#1e3a8a] text-white dark:bg-[#2dd4bf] dark:text-[#141b2a]' : 'text-slate-500'
+                        isToday ? 'bg-[#1e3a8a] text-white dark:bg-[var(--accent)] dark:text-[var(--sidebar)]' : 'text-slate-500'
                       )}>
                         {day}
                       </span>
@@ -326,7 +326,7 @@ export default function CalendarPage() {
       </div>
 
       {/* Legend */}
-      <div className="mt-2 flex flex-wrap items-center justify-end rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:border-white/[0.08] dark:bg-[#1e2a3d]">
+      <div className="mt-2 flex flex-wrap items-center justify-end rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:border-[var(--border)] dark:bg-[var(--surface-raised)]">
         <div className="flex gap-4">
           <span className="flex items-center gap-2 rounded-full bg-[#f0fdf4] px-3 py-1.5 text-green-700 dark:bg-[#18373c] dark:text-[#5eead4]"><span className="w-2 h-2 rounded-full bg-green-400" /> Available</span>
           <span className="flex items-center gap-2 rounded-full bg-[#fffbeb] px-3 py-1.5 text-amber-700 dark:bg-[#362f28] dark:text-[#f8c766]"><span className="w-2 h-2 rounded-full bg-amber-300" /> Partially Booked</span>

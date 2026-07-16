@@ -33,7 +33,7 @@ export default function SignInPage() {
       </div>
       <div className="max-w-6xl w-full flex bg-white shadow-[0_32px_64px_-12px_rgba(6,78,59,0.15)] rounded-[2.5rem] overflow-hidden border border-emerald-100/50">
         {/* Left Side: Mascot/Banner */}
-        <div className="hidden lg:block w-[55%] bg-[#022c22] relative p-16 overflow-hidden dark:bg-[#141b2a]">
+        <div className="hidden lg:block w-[55%] bg-[#022c22] relative p-16 overflow-hidden dark:bg-[var(--sidebar)]">
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
           <div className="absolute top-[-10%] left-[-10%] w-64 h-64 bg-emerald-500/20 rounded-full blur-[100px]"></div>
           <div className="absolute bottom-[10%] right-[10%] w-96 h-96 bg-emerald-400/10 rounded-full blur-[120px]"></div>

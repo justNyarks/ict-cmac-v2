@@ -197,7 +197,7 @@ export default function TopBar() {
         : 'ICT CMAC')
 
   return (
-    <header className="flex h-20 flex-shrink-0 items-center justify-between gap-3 border-b border-emerald-100/50 bg-white/80 px-4 shadow-sm backdrop-blur-md sm:px-6 lg:px-10 z-20 print:hidden">
+    <header className="app-topbar flex h-20 flex-shrink-0 items-center justify-between gap-3 border-b border-emerald-100/50 bg-white/80 px-4 shadow-sm backdrop-blur-md sm:px-6 lg:px-10 z-20 print:hidden">
       <h1 className="min-w-0 truncate font-display text-base text-[var(--text-dark)] font-extrabold uppercase tracking-tight sm:text-xl">
         {pathname === '/' ? 'Dashboard Overview' : pageTitle}
       </h1>
@@ -354,7 +354,7 @@ export default function TopBar() {
               {getRoleLabel(session?.user?.role)}
             </p>
           </div>
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform duration-300 dark:from-[#5eead4] dark:to-[#2dd4bf] dark:text-[#141b2a]">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform duration-300 dark:from-[#5eead4] dark:to-[#2dd4bf] dark:text-[var(--sidebar)]">
             {session?.user?.name?.[0] || 'U'}
           </div>
         </Link>
