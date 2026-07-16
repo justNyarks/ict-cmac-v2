@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "next dev -H localhost",
     "build": "prisma generate && next build",
+    "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "prisma generate && tsc --noEmit"
   },
   "dependencies": {
     "@prisma/client": "^5.12.1",
