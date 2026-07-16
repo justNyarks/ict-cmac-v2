@@ -1,13 +1,14 @@
 import PmacReportsPanel from '@/components/pmac/PmacReportsPanel'
-import { buildPmacReportSummary } from '@/lib/pmacReports'
 import { requireRoleAccess } from '@/lib/security'
+
+import { getPmacReportSummary } from '../reportActions'
 
 export default async function PmacReportsPage() {
   await requireRoleAccess(['PMAC_DIRECTOR', 'PMAC_ASSISTANT_DIRECTOR', 'PMAC_SECRETARY'], {
     nextPath: '/pmac/reports',
   })
 
-  const stats = await buildPmacReportSummary()
+  const stats = await getPmacReportSummary()
 
   return (
     <PmacReportsPanel

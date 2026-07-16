@@ -1,5 +1,5 @@
 import PmacReportsPanel from '@/components/pmac/PmacReportsPanel'
-import { buildPmacReportSummary } from '@/lib/pmacReports'
+import { getPmacReportSummary } from '@/app/pmac/reportActions'
 import { requireRoleAccess } from '@/lib/security'
 
 export default async function CoordinatorPmacReportsPage() {
@@ -7,7 +7,7 @@ export default async function CoordinatorPmacReportsPage() {
     nextPath: '/coordinator/pmac/reports',
   })
 
-  const stats = await buildPmacReportSummary()
+  const stats = await getPmacReportSummary()
 
   return (
     <PmacReportsPanel

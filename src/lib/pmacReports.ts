@@ -3,7 +3,7 @@ import { calculatePmacReadinessScore, getRecommendedAssignmentRoles, PMAC_EXECUT
 import { getPmacMemberEducation } from '@/lib/pmacMembers'
 import { sanitizeCsvCell } from '@/lib/sanitization'
 
-export type PmacReportType = 'members' | 'events' | 'polls' | 'activity' | 'staffing' | 'performance'
+export type PmacReportType = 'members' | 'events' | 'projects' | 'polls' | 'activity' | 'staffing' | 'performance'
 export type PmacReportSummary = {
   members: number
   activeMembers: number
@@ -19,6 +19,12 @@ export type PmacReportSummary = {
   reliableMembers: number
   overloadedMembers: number
   wrapUpsPending: number
+  projects: number
+  activeProjects: number
+  onHoldProjects: number
+  completedProjects: number
+  overdueProjects: number
+  projectCompletionRate: number
 }
 
 function joinCsv(rows: unknown[][]) {
@@ -144,6 +150,88 @@ export async function buildPmacEventsCsv() {
       event._count.assignments,
       event._count.attendance,
       event._count.attachments,
+    ]),
+  ])
+}
+
+export async function buildPmacProjectsCsv() {
+  if (!hasPmacV4Delegates()) {
+    return joinCsv([
+      ['Title', 'Branch', 'Status', 'Starts At', 'Target Date', 'Head', 'Team', 'Milestones Done', 'Milestones Total', 'Output Submitted', 'Links', 'Launched By', 'Created At'],
+    ])
+  }
+
+  const projects = await prisma.pmacProject.findMany({
+    include: {
+      launchedBy: {
+        select: {
+          name: true,
+          email: true,
+        },
+      },
+      headMember: {
+        select: {
+          fullName: true,
+        },
+      },
+      memberAssignments: {
+        include: {
+          member: {
+            select: {
+              fullName: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'asc',
+        },
+      },
+      milestones: {
+        select: {
+          title: true,
+          status: true,
+          dueDate: true,
+        },
+        orderBy: {
+          dueDate: 'asc',
+        },
+      },
+      links: {
+        select: {
+          type: true,
+          label: true,
+          url: true,
+        },
+        orderBy: {
+          createdAt: 'asc',
+        },
+      },
+    },
+    orderBy: [
+      { targetDate: 'desc' },
+      { title: 'asc' },
+    ],
+  })
+
+  return joinCsv([
+    ['Title', 'Branch', 'Status', 'Starts At', 'Target Date', 'Head', 'Team', 'Milestones Done', 'Milestones Total', 'Milestone Details', 'Output Submitted', 'Output Summary', 'Links', 'Launched By', 'Launcher Email', 'Created At'],
+    ...projects.map((project) => [
+      project.title,
+      PMAC_EXECUTIVE_TITLE_LABELS[project.branch],
+      project.status,
+      project.startDate.toISOString(),
+      project.targetDate.toISOString(),
+      project.headMember?.fullName ?? '',
+      project.memberAssignments.map((assignment) => assignment.member.fullName).join(' | '),
+      project.milestones.filter((milestone) => milestone.status === 'DONE').length,
+      project.milestones.length,
+      project.milestones.map((milestone) => `${milestone.title} (${milestone.status}, ${milestone.dueDate.toISOString()})`).join(' | '),
+      project.outputSubmittedAt?.toISOString() ?? '',
+      project.outputSummary ?? '',
+      project.links.map((link) => `${link.type}: ${link.label} (${link.url})`).join(' | '),
+      project.launchedBy.name ?? '',
+      project.launchedBy.email,
+      project.createdAt.toISOString(),
     ]),
   ])
 }
@@ -455,6 +543,11 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
     recentCompletedEvents,
     activeMemberPerformance,
     pendingWrapUps,
+    projects,
+    activeProjects,
+    onHoldProjects,
+    completedProjects,
+    overdueProjects,
   ] = await Promise.all([
     prisma.pmacMember.count(),
     prisma.user.count({
@@ -578,6 +671,18 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
         ],
       },
     }),
+    hasPmacV4Delegates() ? prisma.pmacProject.count() : Promise.resolve(0),
+    hasPmacV4Delegates() ? prisma.pmacProject.count({ where: { status: 'ACTIVE' } }) : Promise.resolve(0),
+    hasPmacV4Delegates() ? prisma.pmacProject.count({ where: { status: 'ON_HOLD' } }) : Promise.resolve(0),
+    hasPmacV4Delegates() ? prisma.pmacProject.count({ where: { status: 'COMPLETED' } }) : Promise.resolve(0),
+    hasPmacV4Delegates()
+      ? prisma.pmacProject.count({
+          where: {
+            status: { in: ['PLANNED', 'ACTIVE', 'ON_HOLD'] },
+            targetDate: { lt: now },
+          },
+        })
+      : Promise.resolve(0),
   ])
 
   const understaffedUpcoming = upcomingEvents.filter((event) => {
@@ -640,6 +745,12 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
     reliableMembers,
     overloadedMembers,
     wrapUpsPending: pendingWrapUps,
+    projects,
+    activeProjects,
+    onHoldProjects,
+    completedProjects,
+    overdueProjects,
+    projectCompletionRate: projects ? Math.round((completedProjects / projects) * 100) : 0,
   }
 }
 
@@ -649,6 +760,8 @@ export async function buildPmacReportCsv(type: PmacReportType) {
       return buildPmacMembersCsv()
     case 'events':
       return buildPmacEventsCsv()
+    case 'projects':
+      return buildPmacProjectsCsv()
     case 'polls':
       return buildPmacPollsCsv()
     case 'staffing':

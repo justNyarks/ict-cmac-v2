@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState, useTransition } from 'react'
-import { CalendarDays, ExternalLink, FolderKanban, Link as LinkIcon, Plus, RefreshCw, Users } from 'lucide-react'
+import { CalendarDays, ExternalLink, FolderKanban, Link as LinkIcon, Plus, RefreshCw, Search, Users } from 'lucide-react'
 
 import {
   assignPmacProjectMembers,
@@ -87,6 +87,7 @@ export default function PmacProjectsPageClient() {
   const [outputForms, setOutputForms] = useState<Record<string, string>>({})
   const [linkForms, setLinkForms] = useState<Record<string, typeof DEFAULT_LINK_FORM>>({})
   const [teamForms, setTeamForms] = useState<Record<string, string[]>>({})
+  const [teamQueries, setTeamQueries] = useState<Record<string, string>>({})
 
   const visibleProjects = useMemo(() => board?.projects ?? [], [board])
 
@@ -365,6 +366,14 @@ export default function PmacProjectsPageClient() {
           const teamOptionIds = new Set(teamOptions.map(member => member.id))
           const selectedTeamMemberIds = (teamForms[project.id] ?? assignedMemberIds).filter(memberId => teamOptionIds.has(memberId))
           const selectedTeamMemberIdSet = new Set(selectedTeamMemberIds)
+          const teamQuery = teamQueries[project.id]?.trim().toLowerCase() ?? ''
+          const filteredTeamOptions = teamQuery
+            ? teamOptions.filter(member => [
+                member.fullName,
+                member.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle] : '',
+                ...member.specialties.map(entry => PMAC_SPECIALTY_LABELS[entry.specialty]),
+              ].some(value => value.toLowerCase().includes(teamQuery)))
+            : teamOptions
           const statusOptions = project.canCloseProject
             ? PMAC_PROJECT_STATUSES
             : PMAC_PROJECT_STATUSES.filter(status => status !== 'COMPLETED')
@@ -442,10 +451,15 @@ export default function PmacProjectsPageClient() {
                 </p>
               </div>
 
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="mb-3 flex items-center gap-2">
-                  <Users size={16} className="text-slate-500" />
-                  <p className="text-sm font-bold text-slate-800">Project Team</p>
+              <div className="mt-5 border-t border-slate-200 pt-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Users size={16} className="text-slate-500" />
+                    <p className="text-sm font-bold text-slate-800">Project Team</p>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-500">
+                    {selectedTeamMemberIds.length} selected
+                  </span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {project.memberAssignments.length ? project.memberAssignments.map(assignment => (
@@ -459,8 +473,24 @@ export default function PmacProjectsPageClient() {
                 {project.canManageMembers ? (
                   <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
                     <div>
-                      <div className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {teamOptions.length ? teamOptions.map(member => {
+                      <label className="mb-2 flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 focus-within:border-emerald-300 focus-within:ring-2 focus-within:ring-emerald-100">
+                        <Search size={14} className="shrink-0 text-slate-400" />
+                        <input
+                          type="search"
+                          value={teamQueries[project.id] ?? ''}
+                          onChange={event => setTeamQueries(previous => ({
+                            ...previous,
+                            [project.id]: event.target.value,
+                          }))}
+                          placeholder={`Search ${PMAC_SPECIALTY_LABELS[requiredSpecialty].toLowerCase()} members`}
+                          className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                        />
+                        <span className="shrink-0 text-[11px] font-semibold text-slate-400">
+                          {filteredTeamOptions.length}/{teamOptions.length}
+                        </span>
+                      </label>
+                      <div className="grid max-h-64 gap-2 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {filteredTeamOptions.length ? filteredTeamOptions.map(member => {
                           const isSelected = selectedTeamMemberIdSet.has(member.id)
 
                           return (
@@ -480,7 +510,8 @@ export default function PmacProjectsPageClient() {
                                   [project.id]: Array.from(currentIds).filter(memberId => teamOptionIds.has(memberId)),
                                 }
                               })}
-                              className={`rounded-xl border px-3 py-2 text-left text-sm font-semibold transition ${
+                              aria-pressed={isSelected}
+                              className={`min-h-[3.25rem] rounded-lg border px-2.5 py-2 text-left text-sm font-semibold transition ${
                                 isSelected
                                   ? 'border-emerald-300 bg-emerald-50 text-emerald-800 shadow-sm'
                                   : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-200 hover:bg-emerald-50/50'
@@ -496,7 +527,7 @@ export default function PmacProjectsPageClient() {
                           )
                         }) : (
                           <p className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-4 text-center text-sm text-slate-400 sm:col-span-2 lg:col-span-3">
-                            No eligible members available for this specialty.
+                            {teamOptions.length ? 'No members match your search.' : 'No eligible members available for this specialty.'}
                           </p>
                         )}
                       </div>

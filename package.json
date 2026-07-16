@@ -15,7 +15,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "lucide-react": "^0.383.0",
-    "next": "^16.2.7",
+    "next": "^16.2.10",
     "next-auth": "^4.24.14",
     "react": "^18",
     "react-dom": "^18",
@@ -23,18 +23,18 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
-    "@types/node": "^20",
-    "@types/react": "^18",
+    "@types/node": "^20.19.43",
+    "@types/react": "^18.3.31",
     "@types/react-dom": "^18",
-    "autoprefixer": "^10.4.19",
-    "eslint": "^9.39.4",
-    "eslint-config-next": "^16.2.7",
-    "postcss": "^8",
+    "autoprefixer": "^10.5.3",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.2.10",
+    "postcss": "^8.5.19",
     "prisma": "^5.12.1",
     "tailwindcss": "^3.4.1",
-    "tsx": "^4.22.5",
+    "tsx": "^4.23.1",
     "typescript": "^5",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.7"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

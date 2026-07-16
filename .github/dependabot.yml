@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "02:00"
+      timezone: Asia/Manila
+    open-pull-requests-limit: 5
+    groups:
+      non-breaking-updates:
+        update-types:
+          - minor
+          - patch

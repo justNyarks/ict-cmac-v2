@@ -10,6 +10,7 @@ import {
   isPmacProjectLauncherRole,
   isPmacStaffingManagerRole,
 } from '@/lib/pmac'
+import { buildPmacActivityNotificationWhere, PMAC_PROJECT_NOTIFICATION_ACTIONS } from '@/lib/pmacNotificationPolicy'
 import { hasPmacV4Delegates, prisma } from '@/lib/prisma'
 import { isCoreWorkflowRole, isPmacSystemRole } from '@/lib/roles'
 import type { AppNotification } from '@/types/notifications'
@@ -291,6 +292,7 @@ async function getPmacNotificationFeed(user: SessionUser, limit: number) {
   const soon = new Date(now.getTime() + (1000 * 60 * 60 * 48))
   const recent = new Date(now.getTime() - (1000 * 60 * 60 * 24 * 7))
   const projectWhere = getPmacProjectNotificationWhere(user)
+  const activityWhere = buildPmacActivityNotificationWhere(user, new Date(now.getTime() - (1000 * 60 * 60 * 24)))
 
   const [pendingEvents, assignments, polls, activity, staffingEvents, attendanceGaps, projectActivity] = await Promise.all([
     user.role === 'CMAC_COORDINATOR'
@@ -367,31 +369,22 @@ async function getPmacNotificationFeed(user: SessionUser, limit: number) {
           take: 2,
         })
       : Promise.resolve([]),
-    prisma.pmacActivityLog.findMany({
-      where: {
-        createdAt: {
-          gte: new Date(now.getTime() - (1000 * 60 * 60 * 24)),
-        },
-        ...(user.role === 'PMAC_EXECUTIVE' || user.role === 'PMAC_MEMBER'
-          ? {
-              entityType: {
-                in: ['EVENT', 'POLL', 'ATTACHMENT'],
-              },
-            }
-          : {}),
-      },
-      select: {
-        id: true,
-        summary: true,
-        createdAt: true,
-        eventId: true,
-        pollId: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: 2,
-    }),
+    activityWhere
+      ? prisma.pmacActivityLog.findMany({
+          where: activityWhere,
+          select: {
+            id: true,
+            summary: true,
+            createdAt: true,
+            eventId: true,
+            pollId: true,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: 2,
+        })
+      : Promise.resolve([]),
     user.role === 'CMAC_COORDINATOR' || isPmacStaffingManagerRole(user.role)
       ? prisma.pmacEvent.findMany({
           where: {
@@ -457,15 +450,7 @@ async function getPmacNotificationFeed(user: SessionUser, limit: number) {
               gte: recent,
             },
             action: {
-              in: [
-                'PROJECT_LAUNCHED',
-                'PROJECT_HEAD_ASSIGNED',
-                'PROJECT_MEMBERS_ASSIGNED',
-                'PROJECT_STATUS_UPDATED',
-                'PROJECT_DEADLINE_RECONCILED',
-                'PROJECT_OUTPUT_SUBMITTED',
-                'PROJECT_LINK_ATTACHED',
-              ],
+              in: [...PMAC_PROJECT_NOTIFICATION_ACTIONS],
             },
             project: {
               is: projectWhere,

@@ -19,11 +19,18 @@ type ReportStats = {
   reliableMembers: number
   overloadedMembers: number
   wrapUpsPending: number
+  projects: number
+  activeProjects: number
+  onHoldProjects: number
+  completedProjects: number
+  overdueProjects: number
+  projectCompletionRate: number
 }
 
 const REPORT_LINKS = [
   { type: 'members', label: 'Member Directory Export', description: 'Roster, account role, active status, and password-reset flags.' },
   { type: 'events', label: 'Event Operations Export', description: 'Event lifecycle, source metadata, staffing counts, attendance, and attachments.' },
+  { type: 'projects', label: 'Project Operations Export', description: 'Project status, branch head, assigned team, milestone completion, outputs, and links.' },
   { type: 'staffing', label: 'Duty Assignment Export', description: 'Upcoming event coverage gaps, pending responses, and member workload snapshots.' },
   { type: 'performance', label: 'Member Performance Export', description: 'Attendance reliability, recent workload, and duty history for PMAC staffing decisions.' },
   { type: 'polls', label: 'Poll Governance Export', description: 'Poll status, linked events, votes cast, and attachment totals.' },
@@ -91,7 +98,7 @@ export default function PmacReportsPanel({
         <p className="text-sm text-slate-500">{description}</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4 xl:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         <div className="card p-5">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Members</p>
           <p className="mt-3 text-3xl font-bold text-slate-800">{stats.members}</p>
@@ -116,6 +123,13 @@ export default function PmacReportsPanel({
           <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Audit Trail</p>
           <p className="mt-3 text-3xl font-bold text-slate-800">{stats.attachments}</p>
           <p className="mt-1 text-xs text-slate-500">{stats.activity} activity entries · {stats.attendanceGaps} attendance gaps</p>
+        </div>
+        <div className="card p-5">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Projects</p>
+          <p className="mt-3 text-3xl font-bold text-slate-800">{stats.projectCompletionRate}%</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {stats.completedProjects}/{stats.projects} completed · {stats.activeProjects} active · {stats.onHoldProjects} on hold · {stats.overdueProjects} overdue
+          </p>
         </div>
       </div>
 
