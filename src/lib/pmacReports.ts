@@ -17,6 +17,7 @@ export type PmacReportSummary = {
   activity: number
   averageReadinessScore: number
   reliableMembers: number
+  incompleteMemberProfiles: number
   overloadedMembers: number
   wrapUpsPending: number
   projects: number
@@ -542,6 +543,7 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
     upcomingEvents,
     recentCompletedEvents,
     activeMemberPerformance,
+    incompleteMemberProfiles,
     pendingWrapUps,
     projects,
     activeProjects,
@@ -660,6 +662,16 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
         },
       },
     }),
+    prisma.pmacMember.count({
+      where: {
+        OR: [
+          { department: null },
+          { department: '' },
+          { course: null },
+          { course: '' },
+        ],
+      },
+    }),
     prisma.pmacEvent.count({
       where: {
         status: 'COMPLETED',
@@ -743,6 +755,7 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
     activity,
     averageReadinessScore,
     reliableMembers,
+    incompleteMemberProfiles,
     overloadedMembers,
     wrapUpsPending: pendingWrapUps,
     projects,

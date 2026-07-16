@@ -17,6 +17,7 @@ type ReportStats = {
   activity: number
   averageReadinessScore: number
   reliableMembers: number
+  incompleteMemberProfiles: number
   overloadedMembers: number
   wrapUpsPending: number
   projects: number
@@ -103,6 +104,9 @@ export default function PmacReportsPanel({
           <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Members</p>
           <p className="mt-3 text-3xl font-bold text-slate-800">{stats.members}</p>
           <p className="mt-1 text-xs text-slate-500">{stats.activeMembers} active accounts · {stats.reliableMembers} reliable</p>
+          {stats.incompleteMemberProfiles > 0 ? (
+            <p className="mt-1 text-xs font-semibold text-amber-700">{stats.incompleteMemberProfiles} profiles need department/course updates</p>
+          ) : null}
         </div>
         <div className="card p-5">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Events</p>
