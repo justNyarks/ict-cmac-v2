@@ -51,7 +51,7 @@ function isToday(date: Date) {
   )
 }
 
-function buildCoreNotificationWhere(user: SessionUser): Prisma.AuditLogWhereInput {
+export function buildCoreNotificationWhere(user: SessionUser): Prisma.AuditLogWhereInput {
   if (user.role === 'SECRETARY') {
     return {
       OR: [

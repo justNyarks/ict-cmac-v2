@@ -68,7 +68,7 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
       return false
     }
 
-    if (user.role === 'ICT_DIRECTOR' && (request.status === 'COORDINATOR_APPROVED' || request.status === 'PENDING')) {
+    if (user.role === 'ICT_DIRECTOR' && request.status === 'COORDINATOR_APPROVED') {
       if (!serviceType) {
         throw new Error('Service type is required for director approval')
       }
@@ -86,17 +86,11 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
         throw new Error(`Cannot approve because "${firstConflict.title}" already conflicts with this schedule at ${firstConflict.venue}.`)
       }
 
-      const isDirectBypass = request.status === 'PENDING'
-      if (isDirectBypass && !sanitizedNote) {
-        throw new Error('A bypass reason is required when the director skips coordinator review')
-      }
-
       const updatedRequest = await applyAtomicRequestTransition(tx, request, user.role, 'APPROVE', {
           directorNote: sanitizedNote,
           directorId: user.id,
           directorApprovedAt: new Date(),
           serviceType,
-          coordinatorNote: isDirectBypass && !request.coordinatorNote ? 'Bypassed by Director' : undefined,
       })
 
       const mirrored = await syncPmacEventFromServiceRequest(tx, updatedRequest, syncActor)
@@ -104,16 +98,14 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
       await tx.auditLog.create({
         data: {
           requestId: id,
-          action: isDirectBypass ? 'DIRECT_BYPASS' : 'DIRECTOR_APPROVED',
+          action: 'DIRECTOR_APPROVED',
           actorName,
           actorRole: user.role,
           details: [
             `Final service assignment: ${serviceType}.`,
             sanitizedNote
               ? `Note: ${sanitizedNote}`
-              : isDirectBypass
-                ? 'Approved directly by the ICT Director.'
-                : 'Approved without additional notes.',
+              : 'Approved without additional notes.',
           ].join(' '),
         },
       })
@@ -183,9 +175,9 @@ async function transitionWithNote(
 ) {
   const session = await assertActionAccess(allowedRoles, { zeroTrust: true })
   const sanitizedNote = sanitizeSingleLineText(note, {
-    fieldName: action === 'ARCHIVE' ? 'Archive note' : 'Reason',
+    fieldName: action === 'ARCHIVE' ? 'Archive reason' : 'Reason',
     maxLength: 191,
-    required: action !== 'ARCHIVE',
+    required: true,
   })
   const { user } = session
 
@@ -211,7 +203,7 @@ async function transitionWithNote(
         action: auditAction,
         actorName: getActorName(user.name),
         actorRole: user.role,
-        details: sanitizedNote || `Request archived by ${getActorName(user.name)}.`,
+        details: sanitizedNote,
       },
     })
 
@@ -235,7 +227,7 @@ export async function cancelRequest(id: string, note: string) {
   return transitionWithNote(id, 'CANCEL', note, ['ICT_DIRECTOR'])
 }
 
-export async function archiveRequest(id: string, note = '') {
+export async function archiveRequest(id: string, note: string) {
   return transitionWithNote(id, 'ARCHIVE', note, ['CMAC_COORDINATOR', 'ICT_DIRECTOR'])
 }
 

@@ -24,9 +24,9 @@ export function getRequestTransitionTarget(
   }
 
   if (role === 'ICT_DIRECTOR') {
-    if ((current === 'PENDING' || current === 'COORDINATOR_APPROVED') && action === 'APPROVE') return 'DIRECTOR_APPROVED'
-    if ((current === 'PENDING' || current === 'COORDINATOR_APPROVED') && action === 'REJECT') return 'REJECTED'
-    if ((current === 'PENDING' || current === 'COORDINATOR_APPROVED') && action === 'REQUEST_REVISION') return 'REVISION_REQUESTED'
+    if (current === 'COORDINATOR_APPROVED' && action === 'APPROVE') return 'DIRECTOR_APPROVED'
+    if (current === 'COORDINATOR_APPROVED' && action === 'REJECT') return 'REJECTED'
+    if (current === 'COORDINATOR_APPROVED' && action === 'REQUEST_REVISION') return 'REVISION_REQUESTED'
     if (current === 'DIRECTOR_APPROVED' && action === 'CANCEL') return 'CANCELLED'
     if (CLOSED_STATUSES.includes(current) && action === 'ARCHIVE') return 'ARCHIVED'
   }

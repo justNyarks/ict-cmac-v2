@@ -45,7 +45,6 @@ export default function RequestsPage() {
   const showLegacyLetter = false
   const selectedServiceLabel = selected?.serviceType || 'Unassigned'
   const isPrivilegedUser = !!session?.user && ['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes(session.user.role)
-  const isDirectorBypassApproval = selected?.status === 'PENDING' && session?.user.role === 'ICT_DIRECTOR'
   const receiptLetterSource =
     selected?.letterContent ||
     `Formal request for ${selectedServiceLabel} coverage for "${selected?.eventTitle || 'the event'}".`
@@ -151,11 +150,6 @@ export default function RequestsPage() {
   const schoolOptions = useMemo(() => Array.from(new Set(requests.map((request) => request.school))), [requests])
 
   async function handleApprove(id: string) {
-    if (isDirectorBypassApproval && !note.trim()) {
-      alert('A bypass reason is required when the director skips coordinator review.')
-      return
-    }
-
     try {
       await runWithReverification(() => approveRequest(id, note, selectedServiceType ?? undefined))
       await fetchRequests()
@@ -178,15 +172,18 @@ export default function RequestsPage() {
     }
   }
 
-  async function handleDelete() {
+  async function handleArchive() {
     if (!idToDelete) return;
+    if (!note.trim()) return alert('Enter an archive reason before continuing.')
     try {
       await runWithReverification(() => archiveRequest(idToDelete, note))
       await fetchRequests()
       setIdToDelete(null)
+      setIsDeleteModalOpen(false)
+      setSelected(null)
       setNote('')
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to delete')
+      alert(e instanceof Error ? e.message : 'Failed to archive the request')
     }
   }
 
@@ -585,9 +582,9 @@ export default function RequestsPage() {
 
                   {/* Action area */}
                   {((selected.status === 'PENDING' && session?.user.role === 'CMAC_COORDINATOR') ||
-                     (['PENDING', 'COORDINATOR_APPROVED'].includes(selected.status) && session?.user.role === 'ICT_DIRECTOR')) && (
+                     (selected.status === 'COORDINATOR_APPROVED' && session?.user.role === 'ICT_DIRECTOR')) && (
                     <div className="pt-6 border-t border-emerald-50 space-y-4">
-                      {/* Service Type — Director only */}
+                      {/* Coordinator recommends routing; the Director confirms it. */}
                       {['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes(session?.user.role || '') && (
                         <>
                           <div className="flex items-center justify-between mb-1">
@@ -621,14 +618,6 @@ export default function RequestsPage() {
                         <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Review Action</p>
                         <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">As {session?.user.role.replace('_', ' ')}</span>
                       </div>
-                      {isDirectorBypassApproval && (
-                        <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-amber-800">Coordinator Review Will Be Skipped</p>
-                          <p className="text-xs text-amber-700 mt-1 font-medium">
-                            A recorded bypass reason is required before this request can be approved directly by the ICT Director.
-                          </p>
-                        </div>
-                      )}
                       {conflictError && (
                         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700">
                           {conflictError}
@@ -638,13 +627,13 @@ export default function RequestsPage() {
                         rows={3}
                         value={note}
                         onChange={e => setNote(e.target.value)}
-                        placeholder={isDirectorBypassApproval ? 'Enter the bypass reason for this direct approval…' : 'Review comments or feedback…'}
+                        placeholder="Review comments or feedback"
                         className="w-full text-sm border-2 border-emerald-50 rounded-2xl p-4 focus:outline-none focus:border-emerald-500 transition-all bg-emerald-50/20 font-medium"
                       />
                       <div className="flex gap-4">
                         <button
                           onClick={() => handleApprove(selected.id)}
-                          disabled={(isDirectorBypassApproval && !note.trim()) || !!conflictError}
+                          disabled={!!conflictError}
                           className="flex-1 flex items-center justify-center gap-2 bg-[#064e3b] hover:bg-[#065f46] text-white rounded-2xl py-4 text-sm font-black shadow-lg shadow-emerald-900/20 transition-all"
                         >
                           <CheckCircle size={18} /> Approve Request
@@ -731,16 +720,27 @@ export default function RequestsPage() {
                     </div>
                   )}
 
-                  {/* Admin Delete Action */}
+                  {/* Closed-request archive action */}
                   {isPrivilegedUser && ['WITHDRAWN', 'CANCELLED', 'REJECTED'].includes(selected.status) && (
                     <div className="pt-6 border-t border-slate-100 space-y-3">
+                      <textarea
+                        rows={2}
+                        value={note}
+                        onChange={(event) => setNote(event.target.value)}
+                        placeholder="Required archive reason"
+                        className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm"
+                      />
                       <button
                         onClick={() => {
-                          setIdToDelete(selected.id);
-                          setIsDeleteModalOpen(true);
-                          setSelected(null);
+                          if (!note.trim()) {
+                            alert('Enter an archive reason before continuing.')
+                            return
+                          }
+                          setIdToDelete(selected.id)
+                          setIsDeleteModalOpen(true)
                         }}
-                        className="w-full flex items-center justify-center gap-2 bg-red-50 hover:bg-red-500 hover:text-white text-red-600 border border-red-100 rounded-2xl py-3 text-sm font-black transition-all"
+                        disabled={!note.trim()}
+                        className="w-full flex items-center justify-center gap-2 bg-red-50 hover:bg-red-500 hover:text-white text-red-600 border border-red-100 rounded-2xl py-3 text-sm font-black transition-all disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Archive size={18} /> Archive Closed Request
                       </button>
@@ -1413,8 +1413,11 @@ export default function RequestsPage() {
 
       <ConfirmModal
         isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
-        onConfirm={handleDelete}
+        onClose={() => {
+          setIsDeleteModalOpen(false)
+          setIdToDelete(null)
+        }}
+        onConfirm={handleArchive}
         title="Archive Request"
         message="Archive this closed request? Its audit history and any PMAC operational record will remain available."
         confirmText="Archive"

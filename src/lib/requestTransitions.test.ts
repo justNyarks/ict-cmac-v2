@@ -11,6 +11,9 @@ describe('CMAC request transitions', () => {
   it('enforces the coordinator, director, and secretary workflow', () => {
     expect(getRequestTransitionTarget('CMAC_COORDINATOR', 'PENDING', 'APPROVE')).toBe('COORDINATOR_APPROVED')
     expect(getRequestTransitionTarget('ICT_DIRECTOR', 'COORDINATOR_APPROVED', 'APPROVE')).toBe('DIRECTOR_APPROVED')
+    expect(getRequestTransitionTarget('ICT_DIRECTOR', 'PENDING', 'APPROVE')).toBeNull()
+    expect(getRequestTransitionTarget('ICT_DIRECTOR', 'PENDING', 'REJECT')).toBeNull()
+    expect(getRequestTransitionTarget('ICT_DIRECTOR', 'PENDING', 'REQUEST_REVISION')).toBeNull()
     expect(getRequestTransitionTarget('ICT_DIRECTOR', 'DIRECTOR_APPROVED', 'CANCEL')).toBe('CANCELLED')
     expect(getRequestTransitionTarget('SECRETARY', 'REVISION_REQUESTED', 'RESUBMIT')).toBe('PENDING')
     expect(getRequestTransitionTarget('SECRETARY', 'PENDING', 'APPROVE')).toBeNull()
