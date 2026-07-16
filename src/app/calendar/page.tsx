@@ -145,7 +145,7 @@ export default function CalendarPage() {
     { bg: 'bg-[#d1fae5] dark:bg-[#294752]', text: 'text-[#065f46] dark:text-[#96d8d4]', border: 'border-[#a7f3d0] dark:border-[#527a82]', dot: 'bg-emerald-500' },
     { bg: 'bg-[#ede9fe] dark:bg-[#3d425d]', text: 'text-[#5b21b6] dark:text-[#c4bce9]', border: 'border-[#ddd6fe] dark:border-[#706989]', dot: 'bg-violet-500' },
     { bg: 'bg-[#fef3c7] dark:bg-[#493719]', text: 'text-[#92400e] dark:text-[#fde68a]', border: 'border-[#fde68a] dark:border-[#765622]', dot: 'bg-amber-500' },
-    { bg: 'bg-[#ffe4e6] dark:bg-[#49242d]', text: 'text-[#9f1239] dark:text-[#fecdd3]', border: 'border-[#fecdd3] dark:border-[#743845]', dot: 'bg-rose-500' },
+    { bg: 'bg-[#ffe4e6] dark:bg-[#443a54]', text: 'text-[#9f1239] dark:text-[#d8c4e7]', border: 'border-[#fecdd3] dark:border-[#76668a]', dot: 'bg-rose-500' },
     { bg: 'bg-[#e0e7ff] dark:bg-[#3d425d]', text: 'text-[#3730a3] dark:text-[#c4bce9]', border: 'border-[#c7d2fe] dark:border-[#706989]', dot: 'bg-indigo-500' },
     { bg: 'bg-[#fae8ff] dark:bg-[#473d59]', text: 'text-[#86198f] dark:text-[#d8c4e7]', border: 'border-[#f5d0fe] dark:border-[#76668a]', dot: 'bg-fuchsia-500' },
     { bg: 'bg-[#ccfbf1] dark:bg-[#294752]', text: 'text-[#115e59] dark:text-[#96d8d4]', border: 'border-[#99f6e4] dark:border-[#527a82]', dot: 'bg-teal-500' },
