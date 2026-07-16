@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react'
 import Link from 'next/link'
+import clsx from 'clsx'
 
 import {
   PMAC_ACTIVITY_ENTITY_TYPES,
@@ -94,6 +95,34 @@ function getActionClassName(action: string) {
   }
 
   return 'border-slate-200 bg-slate-100 text-slate-700'
+}
+
+function getOversightActionClassName(action: string, entityType: PmacActivityEntityType) {
+  if (/(ATTENDANCE|ABSENT|PRESENT)/.test(action)) {
+    return 'border-purple-200 bg-purple-50 text-purple-700 dark:border-[#a855f7]/35 dark:bg-[#a855f7]/15 dark:text-[#d8b4fe]'
+  }
+
+  if (entityType === 'MEMBER' || entityType === 'ACCOUNT') {
+    return 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-[#6366f1]/35 dark:bg-[#6366f1]/15 dark:text-[#a5b4fc]'
+  }
+
+  if (entityType === 'REPORT' || entityType === 'ATTACHMENT') {
+    return 'border-amber-200 bg-amber-50 text-amber-800 dark:border-[#f4b328]/35 dark:bg-[#f4b328]/15 dark:text-[#f8d477]'
+  }
+
+  return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-[#2dd4bf]/35 dark:bg-[#2dd4bf]/15 dark:text-[#5eead4]'
+}
+
+function getOversightEntityClassName(entityType: PmacActivityEntityType) {
+  if (entityType === 'MEMBER' || entityType === 'ACCOUNT') {
+    return 'bg-indigo-50 text-indigo-700 dark:bg-[#6366f1]/15 dark:text-[#a5b4fc]'
+  }
+
+  if (entityType === 'REPORT' || entityType === 'ATTACHMENT') {
+    return 'bg-amber-50 text-amber-700 dark:bg-[#f4b328]/15 dark:text-[#f8d477]'
+  }
+
+  return 'bg-emerald-50 text-emerald-700 dark:bg-[#2dd4bf]/15 dark:text-[#5eead4]'
 }
 
 function formatChangeField(field: string) {
@@ -222,6 +251,8 @@ export default function PmacActivityPageClient({
   description: string
 }) {
   const groupedEntries = groupEntries(entries)
+  const isOversight = basePath === '/coordinator/pmac/activity'
+  const mostRecentEntryId = entries[0]?.id
   const hasFilters = !!(
     filters.query
     || filters.entityType
@@ -233,18 +264,18 @@ export default function PmacActivityPageClient({
   )
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 animate-fade-in">
+    <div className={clsx('mx-auto max-w-6xl space-y-5 animate-fade-in', isOversight && 'pmac-activity-oversight')}>
       <header className="space-y-1">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">PMAC Activity</p>
         <h2 className="font-display text-3xl font-bold text-slate-800">{title}</h2>
         <p className="text-sm text-slate-500">{description}</p>
       </header>
 
-      <form action={basePath} method="get" className="card p-4">
+      <form action={basePath} method="get" className={clsx('card p-4', isOversight && 'activity-filter-panel')}>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.6fr)_repeat(4,minmax(130px,1fr))_minmax(230px,1.3fr)]">
           <label className="md:col-span-2 xl:col-span-1">
             <span className="mb-1 block text-xs font-semibold text-slate-500">Search</span>
-            <span className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100">
+            <span className={clsx('flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100', isOversight && 'activity-filter-control')}>
               <Search size={15} className="shrink-0 text-slate-400" />
               <input
                 type="search"
@@ -262,7 +293,7 @@ export default function PmacActivityPageClient({
             <select
               name="subject"
               defaultValue={filters.subject ?? ''}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+              className={clsx('h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100', isOversight && 'activity-filter-control')}
             >
               <option value="">All records</option>
               {subjects.map((subject) => (
@@ -278,7 +309,7 @@ export default function PmacActivityPageClient({
             <select
               name="entityType"
               defaultValue={filters.entityType ?? ''}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+              className={clsx('h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100', isOversight && 'activity-filter-control')}
             >
               <option value="">All types</option>
               {PMAC_ACTIVITY_ENTITY_TYPES.map((type) => (
@@ -292,7 +323,7 @@ export default function PmacActivityPageClient({
             <select
               name="action"
               defaultValue={filters.action ?? ''}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+              className={clsx('h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100', isOversight && 'activity-filter-control')}
             >
               <option value="">All actions</option>
               {actions.map((action) => (
@@ -306,7 +337,7 @@ export default function PmacActivityPageClient({
             <select
               name="actorId"
               defaultValue={filters.actorId ?? ''}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+              className={clsx('h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100', isOversight && 'activity-filter-control')}
             >
               <option value="">All actors</option>
               {actors.map((actor) => (
@@ -322,7 +353,7 @@ export default function PmacActivityPageClient({
                 type="date"
                 name="from"
                 defaultValue={filters.from ?? ''}
-                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                className={clsx('h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100', isOversight && 'activity-filter-control')}
               />
             </label>
             <label>
@@ -331,7 +362,7 @@ export default function PmacActivityPageClient({
                 type="date"
                 name="to"
                 defaultValue={filters.to ?? ''}
-                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                className={clsx('h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100', isOversight && 'activity-filter-control')}
               />
             </label>
           </div>
@@ -362,8 +393,8 @@ export default function PmacActivityPageClient({
         </div>
       </form>
 
-      <section className="card overflow-hidden" aria-labelledby="activity-timeline-heading">
-        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+      <section className={clsx('card overflow-hidden', isOversight && 'activity-timeline')} aria-labelledby="activity-timeline-heading">
+        <div className={clsx('flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4', isOversight && 'activity-timeline-header')}>
           <div>
             <h3 id="activity-timeline-heading" className="font-semibold text-slate-800">Activity Timeline</h3>
             <p className="mt-0.5 text-xs text-slate-400">Page {pagination.page} of {pagination.totalPages}</p>
@@ -375,11 +406,11 @@ export default function PmacActivityPageClient({
           <div>
             {groupedEntries.map(([dateLabel, dateEntries]) => (
               <div key={dateLabel}>
-                <div className="border-y border-slate-100 bg-slate-50 px-5 py-2 text-xs font-bold text-slate-500 first:border-t-0">
+                <div className={clsx('border-y border-slate-100 bg-slate-50 px-5 py-2 text-xs font-bold text-slate-500 first:border-t-0', isOversight && 'activity-date-heading')}>
                   {dateLabel}
                 </div>
                 <div className="divide-y divide-slate-100">
-                  {dateEntries.map((entry) => {
+                  {dateEntries.map((entry, entryIndex) => {
                     const presentation = ENTITY_PRESENTATION[entry.entityType]
                     const EntityIcon = presentation.icon
                     const changeRows = getChangeRows(entry.changes)
@@ -388,9 +419,14 @@ export default function PmacActivityPageClient({
                       <Link
                         key={entry.id}
                         href={entry.href}
-                        className="grid gap-3 px-5 py-4 transition-colors hover:bg-slate-50 md:grid-cols-[36px_minmax(0,1fr)_auto] md:items-start"
+                        className={clsx(
+                          'grid gap-3 border-l-2 border-l-transparent px-5 py-4 transition-colors hover:bg-slate-50 md:grid-cols-[36px_minmax(0,1fr)_auto] md:items-start',
+                          isOversight && 'activity-entry',
+                          isOversight && (entryIndex % 2 === 0 ? 'activity-entry-base' : 'activity-entry-alternate'),
+                          isOversight && entry.id === mostRecentEntryId && 'activity-entry-recent'
+                        )}
                       >
-                        <span className={`hidden h-9 w-9 items-center justify-center rounded-full md:flex ${presentation.iconClassName}`}>
+                        <span className={`hidden h-9 w-9 items-center justify-center rounded-full md:flex ${isOversight ? getOversightEntityClassName(entry.entityType) : presentation.iconClassName}`}>
                           <EntityIcon size={17} />
                         </span>
 
@@ -399,11 +435,11 @@ export default function PmacActivityPageClient({
                             <span className="text-xs font-bold text-slate-600">
                               {presentation.label}{entry.entityLabel ? `: ${entry.entityLabel}` : ''}
                             </span>
-                            <span className={`status-badge ${getActionClassName(entry.action)}`}>
+                            <span className={`status-badge ${isOversight ? getOversightActionClassName(entry.action, entry.entityType) : getActionClassName(entry.action)}`}>
                               {getPmacActivityActionLabel(entry.action)}
                             </span>
                           </span>
-                          <span className="block text-sm font-semibold text-slate-800">{entry.summary}</span>
+                          <span className={clsx('block text-sm font-semibold text-slate-800', isOversight && 'activity-primary-text')}>{entry.summary}</span>
                           {entry.details ? (
                             <span className="block text-sm leading-6 text-slate-500">{entry.details}</span>
                           ) : null}
@@ -417,15 +453,15 @@ export default function PmacActivityPageClient({
                               ))}
                             </span>
                           ) : null}
-                          <span className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+                          <span className={clsx('flex flex-wrap items-center gap-1.5 text-xs text-slate-400', isOversight && 'activity-metadata')}>
                             <CircleUserRound size={13} />
                             {entry.actorName}
-                            <span aria-hidden="true">·</span>
+                            <span aria-hidden="true">|</span>
                             {entry.actorRoleLabel}
                           </span>
                         </span>
 
-                        <span className="text-xs font-medium text-slate-400 md:pt-1">
+                        <span className={clsx('text-xs font-medium text-slate-400 md:pt-1', isOversight && 'activity-metadata')}>
                           {formatDateTime(entry.createdAt)}
                         </span>
                       </Link>

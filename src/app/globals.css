@@ -421,6 +421,67 @@ body {
     box-shadow: 0 10px 28px rgb(0 0 0 / 0.2);
   }
 
+  .dark .pmac-activity-oversight .activity-filter-panel,
+  .dark .pmac-activity-oversight .activity-filter-panel:hover,
+  .dark .pmac-activity-oversight .activity-timeline,
+  .dark .pmac-activity-oversight .activity-timeline:hover,
+  .dark .pmac-activity-oversight .activity-timeline-header {
+    background-color: #1e2a3d !important;
+    border-color: rgb(255 255 255 / 0.08) !important;
+  }
+
+  .dark .pmac-activity-oversight .activity-filter-control {
+    background-color: #141b2a !important;
+    border-color: rgb(255 255 255 / 0.1) !important;
+    color: #f1f5f9 !important;
+  }
+
+  .dark .pmac-activity-oversight .activity-filter-control:focus,
+  .dark .pmac-activity-oversight .activity-filter-control:focus-within {
+    border-color: #2dd4bf !important;
+  }
+
+  .dark .pmac-activity-oversight .activity-filter-control input {
+    background-color: transparent !important;
+    border: 0 !important;
+  }
+
+  .dark .pmac-activity-oversight .activity-date-heading {
+    background-color: #192438 !important;
+    border-color: rgb(255 255 255 / 0.06) !important;
+    color: #8b98a9 !important;
+  }
+
+  .dark .pmac-activity-oversight .activity-entry {
+    border-top-color: rgb(255 255 255 / 0.06) !important;
+    border-bottom-color: rgb(255 255 255 / 0.06) !important;
+  }
+
+  .dark .pmac-activity-oversight .activity-entry-base {
+    background-color: #1a2536 !important;
+  }
+
+  .dark .pmac-activity-oversight .activity-entry-alternate {
+    background-color: #1e2a3d !important;
+  }
+
+  .dark .pmac-activity-oversight .activity-entry:hover {
+    background-color: #26364d !important;
+  }
+
+  .dark .pmac-activity-oversight .activity-entry-recent {
+    background-color: #20383f !important;
+    border-left-color: #2dd4bf !important;
+  }
+
+  .dark .pmac-activity-oversight .activity-primary-text {
+    color: #f1f5f9 !important;
+  }
+
+  .dark .pmac-activity-oversight .activity-metadata {
+    color: #7c8798 !important;
+  }
+
   .dark ::-webkit-scrollbar-thumb {
     background: #33465f;
   }
