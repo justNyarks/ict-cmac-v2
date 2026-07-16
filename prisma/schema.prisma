@@ -511,6 +511,9 @@ model PmacActivityLog {
   createdAt  DateTime               @default(now())
 
   @@index([entityType, entityId, createdAt])
+  @@index([entityType, createdAt])
+  @@index([action, createdAt])
+  @@index([createdAt])
   @@index([eventId, createdAt])
   @@index([pollId, createdAt])
   @@index([projectId, createdAt])
