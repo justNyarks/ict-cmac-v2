@@ -99,7 +99,7 @@ export default function SignInPage() {
               <h1 className="text-5xl font-display font-black tracking-tighter text-slate-900 flex items-center gap-1">
                 Login<span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400 dark:from-[#2dd4bf] dark:to-[#93c5fd]">.</span>
               </h1>
-              <p className="text-slate-400 text-lg font-medium">Please enter your credentials to continue.</p>
+              <p className="text-slate-600 text-lg font-medium">Please enter your credentials to continue.</p>
             </div>
             
             {error && (
@@ -111,8 +111,9 @@ export default function SignInPage() {
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Work Email</label>
+                <label htmlFor="signin-email" className="text-xs font-black text-slate-600 uppercase tracking-widest ml-1">Work Email</label>
                 <input 
+                  id="signin-email"
                   type="email" 
                   value={email}
                   onChange={e => setEmail(e.target.value)}
@@ -123,9 +124,10 @@ export default function SignInPage() {
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between items-center px-1">
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Security Code</label>
+                  <label htmlFor="signin-password" className="text-xs font-black text-slate-600 uppercase tracking-widest">Security Code</label>
                 </div>
                 <input 
+                  id="signin-password"
                   type="password" 
                   value={password}
                   onChange={e => setPassword(e.target.value)}
@@ -144,8 +146,8 @@ export default function SignInPage() {
             </form>
             
             <div className="pt-6 border-t border-slate-100">
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Authorized access only. By continuing, you agree to the <span className="text-emerald-600 font-bold hover:underline cursor-pointer">Security Protocol</span> and <span className="text-emerald-600 font-bold hover:underline cursor-pointer">Privacy Policy</span>.
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Authorized access only. By continuing, you agree to the <span className="text-emerald-700 font-bold">Security Protocol</span> and <span className="text-emerald-700 font-bold">Privacy Policy</span>.
               </p>
             </div>
           </div>

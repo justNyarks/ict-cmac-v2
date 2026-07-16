@@ -6,36 +6,45 @@ import clsx from 'clsx'
 import Portal from '@/components/Portal'
 import ConfirmModal from '@/components/ConfirmModal'
 import { runWithReverification } from '@/lib/reverificationClient'
-import { SCHOOL_LABELS } from '@/lib/schools'
+import type { ServiceType } from '@/types'
 
 const FILTERS = ['ALL', 'PENDING', 'COORDINATOR_APPROVED', 'DIRECTOR_APPROVED', 'REJECTED'] as const
 
 import { approveRequest, rejectRequest, deleteRequest, getRequests, checkConflict } from './actions'
 import { useSession } from 'next-auth/react'
 import { useEffect } from 'react'
+import {
+  getRequesterName,
+  getSecretaryTitle,
+  getSlaLabel,
+  type ConflictItem,
+  type RequestItem,
+  type SameDayEventItem,
+} from './requestPageSupport'
 
 export default function RequestsPage() {
   const { data: session } = useSession()
-  const [requests, setRequests] = useState<any[]>([])
+  const [requests, setRequests] = useState<RequestItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<typeof FILTERS[number]>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
   const [schoolFilter, setSchoolFilter] = useState<'ALL' | string>('ALL')
   const [serviceFilter, setServiceFilter] = useState<'ALL' | 'CMAC' | 'PMAC' | 'UNASSIGNED'>('ALL')
   const [dateFilter, setDateFilter] = useState<'ALL' | 'TODAY' | 'NEXT7' | 'THIS_MONTH'>('ALL')
-  const [selected, setSelected] = useState<any | null>(null)
+  const [selected, setSelected] = useState<RequestItem | null>(null)
   const [note, setNote] = useState('')
-  const [conflicts, setConflicts] = useState<{title: string, date: string, startTime: string | null, venue: string}[]>([])
-  const [sameDayEvents, setSameDayEvents] = useState<{title: string, date: string, startTime: string | null, endTime: string | null, venue: string}[]>([])
+  const [conflicts, setConflicts] = useState<ConflictItem[]>([])
+  const [sameDayEvents, setSameDayEvents] = useState<SameDayEventItem[]>([])
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [idToDelete, setIdToDelete] = useState<string | null>(null)
   const [printMode, setPrintMode] = useState<'LETTER' | 'RECEIPT'>('LETTER')
-  const [selectedServiceType, setSelectedServiceType] = useState<any>(null)
+  const [selectedServiceType, setSelectedServiceType] = useState<ServiceType | null>(null)
   const [isDownloadingPastEvents, setIsDownloadingPastEvents] = useState(false)
   const [slaReferenceTime] = useState(() => Date.now())
+  const showLegacyLetter = false
   const selectedServiceLabel = selected?.serviceType || 'Unassigned'
-  const isPrivilegedUser = ['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes((session?.user as any)?.role)
-  const isDirectorBypassApproval = selected?.status === 'PENDING' && (session?.user as any)?.role === 'ICT_DIRECTOR'
+  const isPrivilegedUser = !!session?.user && ['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes(session.user.role)
+  const isDirectorBypassApproval = selected?.status === 'PENDING' && session?.user.role === 'ICT_DIRECTOR'
   const receiptLetterSource =
     selected?.letterContent ||
     `Formal request for ${selectedServiceLabel} coverage for "${selected?.eventTitle || 'the event'}".`
@@ -47,23 +56,6 @@ export default function RequestsPage() {
       : receiptLetterSource.length > 900
         ? 'text-[8.6px] leading-[1.5]'
         : 'text-[9.2px] leading-[1.6]'
-
-  function getRequesterName(request: any) {
-    const letterContent = request?.letterContent
-    if (typeof letterContent === 'string') {
-      const match = letterContent.match(/Sincerely,\s*\n+\s*(.+?)\s*\n(?:Secretary|Director),/i)
-      if (match?.[1]?.trim()) {
-        return match[1].trim()
-      }
-    }
-
-    return request?.secretary?.name || 'Authorized Personnel'
-  }
-
-  function getSecretaryTitle(school?: string) {
-    if (!school) return 'School Secretary'
-    return `${SCHOOL_LABELS[school as keyof typeof SCHOOL_LABELS] || school} Secretary`
-  }
 
   const fetchRequests = async () => {
     setLoading(true)
@@ -82,12 +74,12 @@ export default function RequestsPage() {
   }, [])
 
   useEffect(() => {
-    if (selected && ['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes((session?.user as any)?.role)) {
+    if (selected && session?.user && ['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes(session.user.role)) {
       checkConflict(
-        selected.eventDate, 
-        selected.startTime, 
-        selected.endDate, 
-        selected.endTime, 
+        selected.eventDate.toISOString().slice(0, 10),
+        selected.startTime ?? undefined,
+        selected.endDate?.toISOString().slice(0, 10),
+        selected.endTime ?? undefined,
         selected.eventVenue,
         selected.id
       ).then(res => {
@@ -136,19 +128,6 @@ export default function RequestsPage() {
 
   const schoolOptions = useMemo(() => Array.from(new Set(requests.map((request) => request.school))), [requests])
 
-  function getSlaLabel(request: any) {
-    const createdAt = new Date(request.createdAt)
-    const eventDate = new Date(request.eventDate)
-    const ageHours = Math.floor((slaReferenceTime - createdAt.getTime()) / 3600000)
-    const daysUntilEvent = Math.ceil((eventDate.getTime() - slaReferenceTime) / 86400000)
-
-    if (request.status === 'PENDING' && ageHours >= 24) return 'Needs coordinator review'
-    if (request.status === 'COORDINATOR_APPROVED' && ageHours >= 48) return 'Needs director sign-off'
-    if (request.status === 'DIRECTOR_APPROVED' && daysUntilEvent <= 2) return 'Upcoming soon'
-    if (request.status === 'REJECTED') return 'Closed'
-    return 'On track'
-  }
-
   async function handleApprove(id: string) {
     if (isDirectorBypassApproval && !note.trim()) {
       alert('A bypass reason is required when the director skips coordinator review.')
@@ -156,7 +135,7 @@ export default function RequestsPage() {
     }
 
     try {
-      await runWithReverification(() => approveRequest(id, note, selectedServiceType))
+      await runWithReverification(() => approveRequest(id, note, selectedServiceType ?? undefined))
       await fetchRequests()
 
       setSelected(null)
@@ -343,16 +322,16 @@ export default function RequestsPage() {
                   <td className="px-4 py-5 xl:px-6">
                     <span className={clsx(
                       'text-[10px] font-black uppercase tracking-widest',
-                      getSlaLabel(req).includes('Needs') || getSlaLabel(req).includes('Upcoming') ? 'text-amber-600' : getSlaLabel(req) === 'Closed' ? 'text-red-500' : 'text-emerald-600'
+                      getSlaLabel(req, slaReferenceTime).includes('Needs') || getSlaLabel(req, slaReferenceTime).includes('Upcoming') ? 'text-amber-600' : getSlaLabel(req, slaReferenceTime) === 'Closed' ? 'text-red-500' : 'text-emerald-600'
                     )}>
-                      {getSlaLabel(req)}
+                      {getSlaLabel(req, slaReferenceTime)}
                     </span>
                   </td>
                   <td className="px-4 py-5 text-right xl:px-6">
                     <div className="flex items-center justify-end gap-2">
                       {req.status === 'DIRECTOR_APPROVED' && (
                         <>
-                          {(session?.user as any)?.role === 'SECRETARY' && (
+                          {session?.user.role === 'SECRETARY' && (
                             <button
                               onClick={() => { setPrintMode('RECEIPT'); setSelected(req); setTimeout(() => window.print(), 100); }}
                               className="p-2.5 rounded-xl bg-slate-900 text-white hover:bg-black transition-all shadow-sm flex items-center gap-2 text-[10px] font-black uppercase px-4"
@@ -361,7 +340,7 @@ export default function RequestsPage() {
                               <Printer size={14} /> Receipt
                             </button>
                           )}
-                          {(session?.user as any)?.role === 'ICT_DIRECTOR' && (
+                          {session?.user.role === 'ICT_DIRECTOR' && (
                             <button
                               onClick={() => { setPrintMode('LETTER'); setSelected(req); setTimeout(() => window.print(), 100); }}
                               className="p-2.5 rounded-xl bg-[#064e3b] text-white hover:bg-[#065f46] transition-all shadow-sm flex items-center gap-2 text-[10px] font-black uppercase px-4"
@@ -430,7 +409,7 @@ export default function RequestsPage() {
                       ['School', selected.school],
                       ['Service', selectedServiceLabel],
                       ['Doc Type', selected.documentationType === 'BOTH' ? 'Photo + Video' : selected.documentationType],
-                      ['Location', (selected as any).campusType === 'IN_CAMPUS' ? 'In-Campus' : 'Off-Campus'],
+                      ['Location', selected.campusType === 'IN_CAMPUS' ? 'In-Campus' : 'Off-Campus'],
                       ['Status', getStatusLabel(selected.status)],
                     ].map(([k, v]) => (
                       <div key={k}>
@@ -447,7 +426,7 @@ export default function RequestsPage() {
                       <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-4">
                         {[
                           { label: 'Same Day Edit (Video)', value: selected.needsSameDayEdit },
-                          { label: 'Same-Day Photo Delivery', value: (selected as any).needsSameDayPhoto },
+                          { label: 'Same-Day Photo Delivery', value: selected.needsSameDayPhoto },
                         ].map(item => (
                           <div key={item.label} className="flex items-center justify-between">
                             <span className="text-xs font-bold text-slate-600">{item.label}</span>
@@ -543,18 +522,18 @@ export default function RequestsPage() {
                   </div>
 
                   {/* Action area */}
-                  {((selected.status === 'PENDING' && (session?.user as any)?.role === 'CMAC_COORDINATOR') || 
-                     (['PENDING', 'COORDINATOR_APPROVED'].includes(selected.status) && (session?.user as any)?.role === 'ICT_DIRECTOR')) && (
+                  {((selected.status === 'PENDING' && session?.user.role === 'CMAC_COORDINATOR') ||
+                     (['PENDING', 'COORDINATOR_APPROVED'].includes(selected.status) && session?.user.role === 'ICT_DIRECTOR')) && (
                     <div className="pt-6 border-t border-emerald-50 space-y-4">
                       {/* Service Type — Director only */}
-                      {(session?.user as any)?.role === 'ICT_DIRECTOR' && (
+                      {session?.user.role === 'ICT_DIRECTOR' && (
                         <>
                           <div className="flex items-center justify-between mb-1">
                             <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Assign Service Type</p>
                             <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">Director Only</span>
                           </div>
                           <div className="grid grid-cols-2 gap-4 mb-4">
-                            {['CMAC', 'PMAC'].map(type => (
+                            {(['CMAC', 'PMAC'] as const).map(type => (
                               <button
                                 key={type}
                                 onClick={() => setSelectedServiceType(type)}
@@ -574,7 +553,7 @@ export default function RequestsPage() {
 
                       <div className="flex items-center justify-between mb-1">
                         <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Review Action</p>
-                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">As {(session?.user as any)?.role.replace('_', ' ')}</span>
+                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">As {session?.user.role.replace('_', ' ')}</span>
                       </div>
                       {isDirectorBypassApproval && (
                         <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
@@ -613,7 +592,7 @@ export default function RequestsPage() {
                   {selected.status === 'DIRECTOR_APPROVED' && (
                     <div className="pt-6 border-t border-emerald-50 space-y-3">
                       <div className="flex gap-4">
-                        {(session?.user as any)?.role === 'SECRETARY' && (
+                        {session?.user.role === 'SECRETARY' && (
                           <button
                             onClick={() => { setPrintMode('RECEIPT'); window.print(); }}
                             className="flex-1 flex items-center justify-center gap-2 bg-slate-900 hover:bg-black text-white rounded-2xl py-4 text-sm font-black transition-all shadow-xl shadow-slate-900/10"
@@ -621,7 +600,7 @@ export default function RequestsPage() {
                             <Printer size={18} /> Print Event Receipt
                           </button>
                         )}
-                        {(session?.user as any)?.role === 'ICT_DIRECTOR' && (
+                        {session?.user.role === 'ICT_DIRECTOR' && (
                           <button
                             onClick={() => { setPrintMode('LETTER'); window.print(); }}
                             className="flex-1 flex items-center justify-center gap-2 bg-[#064e3b] hover:bg-[#065f46] text-white rounded-2xl py-4 text-sm font-black transition-all shadow-xl shadow-emerald-900/10"
@@ -631,7 +610,7 @@ export default function RequestsPage() {
                         )}
                       </div>
                       <p className="text-[10px] text-slate-400 text-center font-bold uppercase tracking-widest">
-                        {(session?.user as any)?.role === 'SECRETARY' ? 'For event documentation and admin submission' : 'For official documentation and hard copy filing'}
+                        {session?.user.role === 'SECRETARY' ? 'For event documentation and admin submission' : 'For official documentation and hard copy filing'}
                       </p>
                     </div>
                   )}
@@ -701,7 +680,7 @@ export default function RequestsPage() {
                             Other events are scheduled for this date in different venues:
                           </p>
                           <ul className="mt-3 space-y-2">
-                            {sameDayEvents.map((c: any, i: number) => (
+                            {sameDayEvents.map((c, i) => (
                               <li key={i} className="text-[10px] font-bold text-amber-800 bg-amber-50/50 border border-amber-100 p-3 rounded-xl flex flex-col gap-1 shadow-sm">
                                 <span className="truncate">{c.title}</span>
                                 <div className="flex justify-between items-center opacity-60">
@@ -834,7 +813,7 @@ export default function RequestsPage() {
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-medium leading-tight text-slate-700">Same-Day Photo Delivery</span>
-                            <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] ${(selected as any).needsSameDayPhoto ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-400'}`}>{(selected as any).needsSameDayPhoto ? 'Required' : 'Not Needed'}</span>
+                            <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] ${selected.needsSameDayPhoto ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-400'}`}>{selected.needsSameDayPhoto ? 'Required' : 'Not Needed'}</span>
                           </div>
                         </div>
                       </div>
@@ -948,7 +927,7 @@ export default function RequestsPage() {
           )}
 
           {/* 1. OFFICIAL LETTER LAYOUT (LEGACY, DISABLED) */}
-          {false && printMode === 'LETTER' && (
+          {selected && printMode === 'LETTER' && showLegacyLetter && (
             <div className="relative w-full min-h-[13in] flex flex-col font-serif px-8 py-6 overflow-hidden">
               {/* Header */}
               <div className="text-center space-y-2 border-b-4 border-double border-black pb-6">
@@ -1003,7 +982,7 @@ export default function RequestsPage() {
                       <span>Same Day Edit (Video)</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 border border-black flex items-center justify-center text-[8px]">{(selected as any).needsSameDayPhoto ? 'X' : ''}</div>
+                      <div className="w-3 h-3 border border-black flex items-center justify-center text-[8px]">{selected.needsSameDayPhoto ? 'X' : ''}</div>
                       <span>Same-Day Photo Delivery</span>
                     </div>
                   </div>
@@ -1197,7 +1176,7 @@ export default function RequestsPage() {
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-medium leading-tight text-slate-700">Same-Day Photo Delivery</span>
-                          <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] ${(selected as any).needsSameDayPhoto ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-400'}`}>{(selected as any).needsSameDayPhoto ? 'Required' : 'Not Needed'}</span>
+                          <span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] ${selected.needsSameDayPhoto ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-400'}`}>{selected.needsSameDayPhoto ? 'Required' : 'Not Needed'}</span>
                         </div>
                       </div>
                     </div>

@@ -217,7 +217,7 @@ export default function PmacCoordinatorPollsClient() {
 
               {workspace.metrics.resultsVisible && workspace.poll.votes.length ? (
                 <div className="space-y-3">
-                  {workspace.poll.votes.map((vote: any) => (
+                  {workspace.poll.votes.map((vote) => (
                     <div key={vote.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>

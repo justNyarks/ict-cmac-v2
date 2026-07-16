@@ -54,138 +54,23 @@ import { runWithReverification } from '@/lib/reverificationClient'
 import { PMAC_CLUB_ROLE_LABELS } from '@/lib/roles'
 import type { PmacEventSourceType, PmacExecutiveTitle, PmacSpecialty } from '@/types'
 
-type WorkspaceData = Awaited<ReturnType<typeof getPmacEventWorkspace>>
-
-type AssignmentRow = {
-  memberId: string
-  assignmentRole: (typeof PMAC_EVENT_DUTY_ROLES)[number]
-  assignmentNotes: string
-}
-
-type AttendanceRow = {
-  memberId: string
-  fullName: string
-  status: (typeof PMAC_ATTENDANCE_STATUSES)[number]
-  notes: string
-}
-
-type WrapUpFields = {
-  deliveredOutputs: string
-  issuesEncountered: string
-  attachmentAuditNotes: string
-  wrapUpNotes: string
-}
-
-const EMPTY_ASSIGNMENT: AssignmentRow = {
-  memberId: '',
-  assignmentRole: 'PHOTOGRAPHER',
-  assignmentNotes: '',
-}
-
-const EMPTY_WRAP_UP: WrapUpFields = {
-  deliveredOutputs: '',
-  issuesEncountered: '',
-  attachmentAuditNotes: '',
-  wrapUpNotes: '',
-}
-
-function buildTemplateRows(roles: readonly AssignmentRow['assignmentRole'][]) {
-  return roles.map((role) => ({
-    memberId: '',
-    assignmentRole: role,
-    assignmentNotes: '',
-  }))
-}
-
-function getMemberDutyRoles(member?: { specialties?: Array<{ specialty: PmacSpecialty }> | null }) {
-  const specialtyValues = member?.specialties?.map(entry => entry.specialty) ?? []
-  return getDutyRolesForSpecialties(specialtyValues)
-}
-
-function formatDateTime(value: string | Date | null | undefined) {
-  if (!value) {
-    return 'Not set'
-  }
-
-  return new Date(value).toLocaleString('en-PH', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-}
-
-function formatDateTimeInput(value: string | Date) {
-  const date = new Date(value)
-  const year = date.getFullYear()
-  const month = `${date.getMonth() + 1}`.padStart(2, '0')
-  const day = `${date.getDate()}`.padStart(2, '0')
-  const hours = `${date.getHours()}`.padStart(2, '0')
-  const minutes = `${date.getMinutes()}`.padStart(2, '0')
-  return `${year}-${month}-${day}T${hours}:${minutes}`
-}
-
-function renderSourceBadge(sourceType: PmacEventSourceType) {
-  return (
-    <span className={`status-badge ${getPmacEventSourceBadgeClass(sourceType)}`}>
-      {PMAC_EVENT_SOURCE_LABELS[sourceType]}
-    </span>
-  )
-}
-
-function WorkspaceMetric({ icon, label, value }: { icon: ReactNode; label: string; value: string | number }) {
-  return (
-    <div className="flex min-w-[9rem] items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2.5">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-sm">
-        {icon}
-      </span>
-      <div>
-        <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{label}</p>
-        <p className="mt-0.5 text-sm font-bold text-slate-800">{value}</p>
-      </div>
-    </div>
-  )
-}
-
-function SectionHeader({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-        {icon}
-      </span>
-      <div className="min-w-0">
-        <h3 className="font-display text-lg font-bold leading-tight text-slate-800">{title}</h3>
-        <p className="mt-1 text-sm leading-5 text-slate-500">{description}</p>
-      </div>
-    </div>
-  )
-}
-
-function buildAttendanceRows(workspace: NonNullable<WorkspaceData>): AttendanceRow[] {
-  const memberMap = new Map<string, AttendanceRow>()
-
-  for (const assignment of workspace.event.assignments) {
-    memberMap.set(assignment.member.id, {
-      memberId: assignment.member.id,
-      fullName: assignment.member.fullName,
-      status: 'PRESENT',
-      notes: '',
-    })
-  }
-
-  for (const record of workspace.event.attendance) {
-    memberMap.set(record.member.id, {
-      memberId: record.member.id,
-      fullName: record.member.fullName,
-      status: record.status,
-      notes: record.notes || '',
-    })
-  }
-
-  return Array.from(memberMap.values()).sort((left, right) => left.fullName.localeCompare(right.fullName))
-}
-
+import {
+  buildAttendanceRows,
+  buildTemplateRows,
+  EMPTY_ASSIGNMENT,
+  EMPTY_WRAP_UP,
+  formatDateTime,
+  formatDateTimeInput,
+  getMemberDutyRoles,
+  renderSourceBadge,
+  SectionHeader,
+  WorkspaceMetric,
+  type AssignmentRow,
+  type AssignmentSuggestion,
+  type AttendanceRow,
+  type WorkspaceData,
+  type WrapUpFields,
+} from './PmacEventWorkspaceSupport'
 export default function PmacEventWorkspaceClient({ eventId }: { eventId: string }) {
   const [workspace, setWorkspace] = useState<WorkspaceData>(null)
   const [loading, setLoading] = useState(true)
@@ -229,7 +114,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
     setApprovalRemarks(workspace.event.approvalRemarks || '')
     setAssignmentRows(
       workspace.event.assignments.length
-        ? workspace.event.assignments.map((assignment: any) => {
+        ? workspace.event.assignments.map((assignment) => {
             const currentRole = assignment.assignmentRole as AssignmentRow['assignmentRole']
             const allowedRoles = getMemberDutyRoles(workspace.roster.find(member => member.id === assignment.memberId))
 
@@ -277,7 +162,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
     [assignmentRows]
   )
   const suggestedAssignmentMemberIds = useMemo(
-    () => new Set((workspace?.assignmentSuggestions ?? []).map((suggestion: any) => suggestion.memberId)),
+    () => new Set((workspace?.assignmentSuggestions ?? []).map((suggestion) => suggestion.memberId)),
     [workspace?.assignmentSuggestions]
   )
   const otherAssignableMembers = useMemo(
@@ -288,10 +173,10 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
     fullName: string
     clubRole: string
     executiveTitle?: PmacExecutiveTitle | null
-    specialties?: Array<{ specialty: PmacSpecialty }> | null
+    specialties?: Array<PmacSpecialty | { specialty: PmacSpecialty }> | null
   }) => {
     const query = memberPickerQuery.trim().toLowerCase()
-    const specialties = member.specialties?.map(entry => entry.specialty) ?? []
+    const specialties = member.specialties?.map(entry => typeof entry === 'string' ? entry : entry.specialty) ?? []
     const matchesSpecialty = memberPickerSpecialty === 'ALL' || specialties.includes(memberPickerSpecialty)
 
     if (!matchesSpecialty) {
@@ -310,7 +195,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
     ].some(value => value.toLowerCase().includes(query))
   }, [memberPickerQuery, memberPickerSpecialty])
   const filteredAssignmentSuggestions = useMemo(
-    () => (workspace?.assignmentSuggestions ?? []).filter((suggestion: any) => memberMatchesPickerFilters(suggestion)),
+    () => (workspace?.assignmentSuggestions ?? []).filter((suggestion) => memberMatchesPickerFilters(suggestion)),
     [memberMatchesPickerFilters, workspace?.assignmentSuggestions]
   )
   const filteredOtherAssignableMembers = useMemo(
@@ -353,7 +238,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
     excused: attendanceRows.filter(row => row.status === 'EXCUSED').length,
   }
 
-  const selectSuggestedMember = (suggestion: any) => {
+  const selectSuggestedMember = (suggestion: Pick<AssignmentSuggestion, 'memberId' | 'matchedRoles'>) => {
     if (selectedAssignmentMemberIds.has(suggestion.memberId)) {
       return
     }
@@ -636,7 +521,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                     <p className="text-sm text-slate-500">Start with a role layout based on coverage needs, then assign members to each slot.</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {workspace.assignmentTemplates.map((template: any) => (
+                    {workspace.assignmentTemplates.map((template) => (
                       <button
                         key={template.id}
                         type="button"
@@ -684,7 +569,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                       <div>
                         <p className="mb-2 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Suggested Members ({filteredAssignmentSuggestions.length})</p>
                         <div className="grid max-h-[22rem] gap-2 overflow-y-auto pr-1 lg:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                          {filteredAssignmentSuggestions.map((suggestion: any) => {
+                          {filteredAssignmentSuggestions.map((suggestion) => {
                             const isSelected = selectedAssignmentMemberIds.has(suggestion.memberId)
 
                             return (
@@ -767,7 +652,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                                 </div>
                                 {member.specialties?.length ? (
                                   <div className="mt-2 flex flex-wrap gap-1.5">
-                                    {member.specialties.slice(0, 3).map((entry: any) => (
+                                    {member.specialties.slice(0, 3).map((entry) => (
                                       <span key={`${member.id}-${entry.specialty}`} className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
                                         {PMAC_SPECIALTY_LABELS[entry.specialty as PmacSpecialty]}
                                       </span>
@@ -905,7 +790,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                 description="Assigned PMAC coverage for this event."
               />
               <div className="space-y-3">
-                {event.assignments.map((assignment: any) => (
+                {event.assignments.map((assignment) => (
                   <div key={assignment.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
@@ -994,7 +879,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                 title="My Coverage Response"
                 description="Confirm whether you can cover your assigned duty."
               />
-              {event.assignments.map((assignment: any) => (
+              {event.assignments.map((assignment) => (
                 <div key={assignment.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="status-badge bg-sky-50 text-sky-700 border-sky-200">
@@ -1157,7 +1042,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
                 </div>
               ) : event.attendance.length ? (
                 <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
-                  {event.attendance.map((record: any) => (
+                  {event.attendance.map((record) => (
                     <div key={record.id} className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <p className="text-sm font-semibold text-slate-800">{record.member.fullName}</p>
@@ -1297,7 +1182,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
 
             {event.attachments.length ? (
               <div className="space-y-3">
-                {event.attachments.map((attachment: any) => (
+                {event.attachments.map((attachment) => (
                   <div key={attachment.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="min-w-0">
@@ -1342,7 +1227,7 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
 
             {event.activityLogs.length ? (
               <div className="space-y-3">
-                {event.activityLogs.map((entry: any) => (
+                {event.activityLogs.map((entry) => (
                   <div key={entry.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>

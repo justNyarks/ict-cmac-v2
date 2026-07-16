@@ -286,7 +286,7 @@ export default function PmacCoordinatorEventsClient() {
 
               {workspace.event.assignments.length ? (
                 <div className="space-y-3">
-                  {workspace.event.assignments.map((assignment: any) => (
+                  {workspace.event.assignments.map((assignment) => (
                     <div key={assignment.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
@@ -318,7 +318,7 @@ export default function PmacCoordinatorEventsClient() {
 
               {workspace.event.attendance.length ? (
                 <div className="space-y-3">
-                  {workspace.event.attendance.map((record: any) => (
+                  {workspace.event.attendance.map((record) => (
                     <div key={record.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>

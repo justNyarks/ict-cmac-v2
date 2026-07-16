@@ -47,10 +47,44 @@
   box-sizing: border-box;
 }
 
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 1000;
+  transform: translateY(-160%);
+  border-radius: 0.5rem;
+  background: var(--surface-raised);
+  color: var(--text-dark);
+  padding: 0.65rem 0.9rem;
+  font-weight: 700;
+  box-shadow: 0 10px 30px rgb(15 23 42 / 0.18);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
 body {
   font-family: var(--font-body);
   background: var(--surface);
   color: var(--text-dark);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @media screen {

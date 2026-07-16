@@ -110,7 +110,7 @@ export async function getPmacPollWorkspace(pollId: string) {
   }
 
   const now = new Date()
-  const viewerVote = poll.votes.find((vote: any) => vote.voterId === session.user.id) ?? null
+  const viewerVote = poll.votes.find((vote) => vote.voterId === session.user.id) ?? null
   const permissions = buildPollWorkspacePermissions(session.user, poll, viewerVote, now)
 
   const [totalEligibleVoters, linkableEvents] = await Promise.all([
@@ -133,7 +133,7 @@ export async function getPmacPollWorkspace(pollId: string) {
   ])
 
   const voteSummary = PMAC_VOTE_CHOICES.reduce((summary, choice) => {
-    summary[choice] = poll.votes.filter((vote: any) => vote.selectedOption === choice).length
+    summary[choice] = poll.votes.filter((vote) => vote.selectedOption === choice).length
     return summary
   }, {} as Record<PmacVoteChoice, number>)
 

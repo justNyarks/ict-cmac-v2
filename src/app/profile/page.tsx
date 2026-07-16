@@ -10,7 +10,7 @@ import clsx from 'clsx'
 export default function ProfilePage() {
   const { data: session, update } = useSession()
   const router = useRouter()
-  const user = session?.user as any
+  const user = session?.user
 
   const [name, setName] = useState('')
   const [currentPassword, setCurrentPassword] = useState('')

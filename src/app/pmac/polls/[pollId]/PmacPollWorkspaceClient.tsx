@@ -270,7 +270,7 @@ export default function PmacPollWorkspaceClient({ pollId }: { pollId: string }) 
           }}
           submitLabel="Save Draft Changes"
           helperText="Draft polls can be refined here before you open them to PMAC voters."
-          eventOptions={linkableEvents.map((event: any) => ({
+          eventOptions={linkableEvents.map((event) => ({
             id: event.id,
             title: event.title,
             status: event.status,
@@ -470,7 +470,7 @@ export default function PmacPollWorkspaceClient({ pollId }: { pollId: string }) 
 
             {poll.attachments.length ? (
               <div className="space-y-3">
-                {poll.attachments.map((attachment: any) => (
+                {poll.attachments.map((attachment) => (
                   <div key={attachment.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
@@ -548,7 +548,7 @@ export default function PmacPollWorkspaceClient({ pollId }: { pollId: string }) 
               </div>
 
               <div className="space-y-3">
-                {poll.votes.map((vote: any) => (
+                {poll.votes.map((vote) => (
                   <div key={vote.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
@@ -572,7 +572,7 @@ export default function PmacPollWorkspaceClient({ pollId }: { pollId: string }) 
 
             {poll.activityLogs.length ? (
               <div className="space-y-3">
-                {poll.activityLogs.map((entry: any) => (
+                {poll.activityLogs.map((entry) => (
                   <div key={entry.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>

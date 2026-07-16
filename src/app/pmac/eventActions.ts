@@ -286,11 +286,11 @@ export async function getPmacEventWorkspace(eventId: string) {
     : []
 
   const filteredAssignments = isPmacAssignmentResponderRole(session.user.role) && session.user.pmacMemberId
-    ? event.assignments.filter((assignment: any) => assignment.memberId === session.user.pmacMemberId)
+    ? event.assignments.filter((assignment) => assignment.memberId === session.user.pmacMemberId)
     : event.assignments
 
   const filteredAttendance = isPmacAssignmentResponderRole(session.user.role) && session.user.pmacMemberId
-    ? event.attendance.filter((record: any) => record.memberId === session.user.pmacMemberId)
+    ? event.attendance.filter((record) => record.memberId === session.user.pmacMemberId)
     : event.attendance
 
   const wrapUpFilledCount = buildWrapUpFilledCount(event)
@@ -303,7 +303,7 @@ export async function getPmacEventWorkspace(eventId: string) {
   })
   const assignmentSuggestions = buildAssignmentSuggestions({
     sourceDocumentationType: event.sourceDocumentationType ?? null,
-    assignedMemberIds: event.assignments.map((assignment: any) => assignment.memberId),
+    assignedMemberIds: event.assignments.map((assignment) => assignment.memberId),
       members: rosterInsights as Array<{
         id: string
         fullName: string
@@ -324,9 +324,9 @@ export async function getPmacEventWorkspace(eventId: string) {
       }>
     }>,
   })
-  const confirmedAssignments = event.assignments.filter((assignment: any) => assignment.availabilityResponse === 'YES').length
-  const declinedAssignments = event.assignments.filter((assignment: any) => assignment.availabilityResponse === 'NO').length
-  const pendingResponses = event.assignments.filter((assignment: any) => assignment.availabilityResponse === 'PENDING').length
+  const confirmedAssignments = event.assignments.filter((assignment) => assignment.availabilityResponse === 'YES').length
+  const declinedAssignments = event.assignments.filter((assignment) => assignment.availabilityResponse === 'NO').length
+  const pendingResponses = event.assignments.filter((assignment) => assignment.availabilityResponse === 'PENDING').length
   const recommendedRoles = getRecommendedAssignmentRoles(event.sourceDocumentationType ?? null)
 
   return {
@@ -351,7 +351,7 @@ export async function getPmacEventWorkspace(eventId: string) {
       confirmedAssignments,
       declinedAssignments,
       recommendedRoleCount: recommendedRoles.length,
-      assignedRoleCount: new Set(event.assignments.map((assignment: any) => assignment.assignmentRole)).size,
+      assignedRoleCount: new Set(event.assignments.map((assignment) => assignment.assignmentRole)).size,
       attendancePrepared: event.attendance.length,
       wrapUpFilledCount,
     },

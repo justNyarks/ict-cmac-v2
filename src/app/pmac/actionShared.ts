@@ -137,6 +137,7 @@ export const PMAC_EVENT_LIST_SELECT = {
   createdBy: {
     select: {
       name: true,
+      email: true,
       role: true,
     },
   },
@@ -152,6 +153,7 @@ export const PMAC_EVENT_WORKSPACE_INCLUDE_BASE = {
   createdBy: {
     select: {
       name: true,
+      email: true,
       role: true,
     },
   },
@@ -224,6 +226,15 @@ export const PMAC_EVENT_WORKSPACE_INCLUDE_V4 = {
   },
 } satisfies Prisma.PmacEventInclude
 
+const PMAC_EVENT_WORKSPACE_INCLUDE = {
+  ...PMAC_EVENT_WORKSPACE_INCLUDE_BASE,
+  ...PMAC_EVENT_WORKSPACE_INCLUDE_V4,
+} satisfies Prisma.PmacEventInclude
+
+export type PmacEventWorkspaceRecord = Prisma.PmacEventGetPayload<{
+  include: typeof PMAC_EVENT_WORKSPACE_INCLUDE
+}>
+
 export const PMAC_POLL_WORKSPACE_INCLUDE_BASE = {
   createdBy: {
     select: {
@@ -295,27 +306,14 @@ export const PMAC_POLL_WORKSPACE_INCLUDE_V4 = {
   },
 } satisfies Prisma.PmacPollInclude
 
-export function getPmacEventWorkspaceInclude(): Prisma.PmacEventInclude {
-  if (!hasPmacV4Delegates()) {
-    return PMAC_EVENT_WORKSPACE_INCLUDE_BASE
-  }
+const PMAC_POLL_WORKSPACE_INCLUDE = {
+  ...PMAC_POLL_WORKSPACE_INCLUDE_BASE,
+  ...PMAC_POLL_WORKSPACE_INCLUDE_V4,
+} satisfies Prisma.PmacPollInclude
 
-  return {
-    ...PMAC_EVENT_WORKSPACE_INCLUDE_BASE,
-    ...PMAC_EVENT_WORKSPACE_INCLUDE_V4,
-  }
-}
-
-export function getPmacPollWorkspaceInclude(): Prisma.PmacPollInclude {
-  if (!hasPmacV4Delegates()) {
-    return PMAC_POLL_WORKSPACE_INCLUDE_BASE
-  }
-
-  return {
-    ...PMAC_POLL_WORKSPACE_INCLUDE_BASE,
-    ...PMAC_POLL_WORKSPACE_INCLUDE_V4,
-  }
-}
+export type PmacPollWorkspaceRecord = Prisma.PmacPollGetPayload<{
+  include: typeof PMAC_POLL_WORKSPACE_INCLUDE
+}>
 
 export function isPmacV4RelationValidationError(error: unknown) {
   if (!(error instanceof Error)) {
@@ -535,27 +533,32 @@ export function getActivityActor(user: SessionUser) {
   }
 }
 
-export async function findPmacEventForUser(eventId: string, user: SessionUser): Promise<any> {
+export async function findPmacEventForUser(
+  eventId: string,
+  user: SessionUser,
+): Promise<PmacEventWorkspaceRecord | null> {
   try {
     return await prisma.pmacEvent.findFirst({
       where: {
         id: eventId,
         ...getPmacEventWhere(user),
       },
-      include: getPmacEventWorkspaceInclude(),
+      include: PMAC_EVENT_WORKSPACE_INCLUDE,
     })
   } catch (error) {
     if (!isPmacV4RelationValidationError(error)) {
       throw error
     }
 
-    return prisma.pmacEvent.findFirst({
+    const event = await prisma.pmacEvent.findFirst({
       where: {
         id: eventId,
         ...getPmacEventWhere(user),
       },
       include: PMAC_EVENT_WORKSPACE_INCLUDE_BASE,
     })
+
+    return event ? { ...event, attachments: [], activityLogs: [] } : null
   }
 }
 
@@ -612,21 +615,26 @@ export function getPmacPollWhere(user: SessionUser): Prisma.PmacPollWhereInput {
   }
 }
 
-export async function findPmacPollForUser(pollId: string, user: SessionUser): Promise<any> {
+export async function findPmacPollForUser(
+  pollId: string,
+  user: SessionUser,
+): Promise<PmacPollWorkspaceRecord | null> {
   try {
     return await prisma.pmacPoll.findFirst({
       where: { id: pollId, ...getPmacPollWhere(user) },
-      include: getPmacPollWorkspaceInclude(),
+      include: PMAC_POLL_WORKSPACE_INCLUDE,
     })
   } catch (error) {
     if (!isPmacV4RelationValidationError(error)) {
       throw error
     }
 
-    return prisma.pmacPoll.findFirst({
+    const poll = await prisma.pmacPoll.findFirst({
       where: { id: pollId, ...getPmacPollWhere(user) },
       include: PMAC_POLL_WORKSPACE_INCLUDE_BASE,
     })
+
+    return poll ? { ...poll, attachments: [], activityLogs: [] } : null
   }
 }
 

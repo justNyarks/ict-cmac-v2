@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import type { School, ServiceType, DocumentationType } from '@/types'
+import type { CampusType, School, ServiceType, DocumentationType } from '@/types'
 import { CheckCircle2, Upload, ChevronRight } from 'lucide-react'
 import clsx from 'clsx'
 import { useSession } from 'next-auth/react'
@@ -60,11 +60,41 @@ type Step = 1 | 2 | 3 | 4
 
 import { createServiceRequest, checkConflict } from './actions'
 
+type ConflictResult = Awaited<ReturnType<typeof checkConflict>>
+type RequestForm = {
+  school: School | ''
+  eventTitle: string
+  eventDate: string
+  endDate: string
+  startTime: string
+  endTime: string
+  eventVenue: string
+  letterContent: string
+  serviceType: ServiceType | null
+  documentationType: DocumentationType | ''
+  letterFile: File | null
+  requestedBy: string
+  needsSameDayEdit: boolean
+  needsSameDayPhoto: boolean
+  campusType: CampusType | ''
+  directorBypassReason: string
+}
+
+const CAMPUS_OPTIONS = [
+  { id: 'IN_CAMPUS', label: 'In-Campus' },
+  { id: 'OFF_CAMPUS', label: 'Off-Campus' },
+] as const
+
+const ADDITIONAL_REQUIREMENTS = [
+  { id: 'needsSameDayEdit', label: 'Same Day Edit (Video)', desc: 'Quick video edit to be shown during the event' },
+  { id: 'needsSameDayPhoto', label: 'Same-Day Photo Delivery', desc: 'Photos delivered within the same day' },
+] as const
+
 export default function NewRequestPage() {
   const { data: session } = useSession()
   const minDateStr = getMinimumAdvanceRequestDate()
-  const buildInitialForm = () => ({
-    school: ((session?.user as any)?.role === 'ICT_DIRECTOR' ? '' : ((session?.user as any)?.school || '')) as School | '',
+  const buildInitialForm = (): RequestForm => ({
+    school: session?.user.role === 'ICT_DIRECTOR' ? '' : (session?.user.school || ''),
     eventTitle: '',
     eventDate: '',
     endDate: '',
@@ -87,14 +117,14 @@ export default function NewRequestPage() {
   const [stepError, setStepError] = useState<string>('')
   const [submissionMethod, setSubmissionMethod] = useState<'upload' | 'generate'>('generate')
   const [submitted, setSubmitted] = useState(false)
-  const [conflicts, setConflicts] = useState<{title: string, startTime: string | null, endTime: string | null}[]>([])
-  const [step1Conflicts, setStep1Conflicts] = useState<{title: string, startTime: string | null, endTime: string | null, status: string}[]>([])
-  const [sameDayEvents, setSameDayEvents] = useState<{title: string, startTime: string | null, endTime: string | null, status: string}[]>([])
+  const [conflicts, setConflicts] = useState<ConflictResult['conflicts']>([])
+  const [step1Conflicts, setStep1Conflicts] = useState<ConflictResult['conflicts']>([])
+  const [sameDayEvents, setSameDayEvents] = useState<ConflictResult['sameDayEvents']>([])
   const [qualityReferenceTime] = useState(() => Date.now())
-  const isDirector = (session?.user as any)?.role === 'ICT_DIRECTOR'
+  const isDirector = session?.user.role === 'ICT_DIRECTOR'
 
   const buildSharedQualityAssessment = (maxStep: Step) => buildRequestQualityAssessment(form, {
-    role: (session?.user as any)?.role,
+    role: session?.user.role,
     submissionMethod,
     maxStep,
     now: new Date(qualityReferenceTime),
@@ -103,7 +133,7 @@ export default function NewRequestPage() {
 
   function getBlockingErrorForStep(maxStep: Step) {
     return getRequestBlockingError(form, {
-      role: (session?.user as any)?.role,
+      role: session?.user.role,
       submissionMethod,
       maxStep,
       now: new Date(qualityReferenceTime),
@@ -155,8 +185,8 @@ export default function NewRequestPage() {
   }, [form.eventDate, form.startTime, form.endTime, form.eventVenue, form.endDate])
 
   useEffect(() => {
-    if (session?.user && (session.user as any).school) {
-      setForm(prev => ({ ...prev, school: (session.user as any).school }));
+    if (session?.user.school) {
+      setForm(prev => ({ ...prev, school: session.user.school || '' }));
     }
   }, [session])
 
@@ -222,7 +252,7 @@ Thank you for your continuous support.
 Sincerely,
 
 ${form.requestedBy || (session?.user?.name || '[Your Name]')}
-${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, ${form.school || '[School/Department]'}`
+${isDirector ? 'Director' : 'Secretary'}, ${form.school || '[School/Department]'}`
     
     set('letterContent', template)
   }
@@ -236,6 +266,10 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
     if (e2) { setStep(2); setStepError(e2); return }
     if (e3) { setStep(3); setStepError(e3); return }
     if (e4) { setStep(4); setStepError(e4); return }
+    if (!form.school || !form.documentationType || !form.campusType) {
+      setStepError('Complete the required request details before submitting.')
+      return
+    }
     setStepError('')
 
     if (loading) return
@@ -243,7 +277,7 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
     
     try {
       // Create a timeout promise
-      const timeout = new Promise((_, reject) => 
+      const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Submission timed out. The server might be busy.')), 15000)
       )
 
@@ -257,26 +291,26 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
           endTime: form.endTime,
           eventVenue: form.eventVenue,
           letterContent: submissionMethod === 'generate' ? form.letterContent : null,
-          school: form.school as any,
-          serviceType: form.serviceType as any,
-          documentationType: form.documentationType as any,
+          school: form.school,
+          serviceType: form.serviceType,
+          documentationType: form.documentationType,
           letterUrl: submissionMethod === 'upload' ? (form.letterFile?.name || null) : 'generated-letter.pdf',
           needsSameDayEdit: form.needsSameDayEdit,
           needsSameDayPhoto: form.needsSameDayPhoto,
-          campusType: form.campusType as any,
+          campusType: form.campusType,
           directorBypassReason: form.directorBypassReason,
         }),
         timeout
-      ]) as any
+      ])
       
       if (res.success) {
         setSubmitted(true)
       } else {
         alert(`Submission Failed: ${res.error}`)
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Submission Error:', e)
-      alert('A technical error occurred: ' + (e.message || 'Unknown error'))
+      alert('A technical error occurred: ' + (e instanceof Error ? e.message : 'Unknown error'))
     } finally {
       setLoading(false)
     }
@@ -363,7 +397,7 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
               <div>
                 <p className="text-sm font-black text-orange-900 tracking-tight">Booking Policy</p>
                 <p className="text-[11px] font-bold text-orange-700/80 uppercase tracking-widest mt-0.5">
-                  {(session?.user as any)?.role === 'ICT_DIRECTOR' ? (
+                  {isDirector ? (
                     <span className="text-emerald-600 font-black">DIRECTOR BYPASS MODE: Your event will be automatically approved and added to the calendar.</span>
                   ) : (
                     <>Requests must be submitted at least <span className="text-orange-600 underline decoration-2 underline-offset-4">3 days prior</span> to the event.</>
@@ -376,11 +410,8 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">Event Location</label>
               <div className="grid grid-cols-2 gap-4">
-                {[
-                  { id: 'IN_CAMPUS', label: 'In-Campus' },
-                  { id: 'OFF_CAMPUS', label: 'Off-Campus' },
-                ].map(c => (
-                  <button key={c.id} onClick={() => set('campusType', c.id as any)}
+                {CAMPUS_OPTIONS.map(c => (
+                  <button key={c.id} onClick={() => set('campusType', c.id)}
                     className={clsx(
                       'py-5 rounded-2xl border-2 font-black text-lg transition-all shadow-sm',
                       form.campusType === c.id
@@ -394,10 +425,10 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">School / Department</label>
-              {(session?.user as any)?.role === 'ICT_DIRECTOR' ? (
+              {isDirector ? (
                 <select 
                   value={form.school} 
-                  onChange={e => set('school', e.target.value as any)}
+                  onChange={e => set('school', e.target.value as School | '')}
                   className="w-full border-2 border-slate-100 rounded-2xl px-5 py-3.5 text-sm font-bold text-slate-700 focus:outline-none focus:border-emerald-500"
                 >
                   <option value="">Select Department...</option>
@@ -522,7 +553,7 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
                           Other events are scheduled for this date in different venues:
                         </p>
                         <ul className="mt-3 space-y-1.5">
-                          {sameDayEvents.map((c: any, i: number) => (
+                          {sameDayEvents.map((c, i) => (
                             <li key={i} className="text-[10px] font-bold text-amber-800 bg-white/50 border border-amber-100 px-3 py-1.5 rounded-lg flex justify-between items-center">
                               <span className="truncate pr-2">{c.title} <span className="opacity-40 ml-1">@ {c.venue}</span></span>
                               <span className="whitespace-nowrap tabular-nums opacity-60">{c.startTime} - {c.endTime}</span>
@@ -586,7 +617,7 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
             <div className="space-y-6">
               <h2 className="font-display text-2xl text-slate-800 font-bold">Service Selection</h2>
 
-              {(session?.user as any)?.role === 'ICT_DIRECTOR' && (
+              {isDirector && (
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">Service Type</label>
                   <div className="grid grid-cols-2 gap-4">
@@ -627,18 +658,15 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
               <div>
                 <h3 className="text-sm font-bold text-slate-800 uppercase tracking-widest mb-4">Additional Requirements</h3>
                 <div className="grid grid-cols-1 gap-4">
-                  {[
-                    { id: 'needsSameDayEdit', label: 'Same Day Edit (Video)', desc: 'Quick video edit to be shown during the event' },
-                    { id: 'needsSameDayPhoto', label: 'Same-Day Photo Delivery', desc: 'Photos delivered within the same day' },
-                  ].map(item => (
+                  {ADDITIONAL_REQUIREMENTS.map(item => (
                     <label key={item.id} className={clsx(
                       "flex items-start gap-4 p-5 rounded-2xl border-2 transition-all cursor-pointer group",
-                      (form as any)[item.id] ? "border-emerald-500 bg-emerald-50/50" : "border-slate-100 hover:border-emerald-200"
+                      form[item.id] ? "border-emerald-500 bg-emerald-50/50" : "border-slate-100 hover:border-emerald-200"
                     )}>
                       <input 
                         type="checkbox" 
-                        checked={(form as any)[item.id]} 
-                        onChange={e => set(item.id as any, e.target.checked)}
+                        checked={form[item.id]}
+                        onChange={e => set(item.id, e.target.checked)}
                         className="w-5 h-5 mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                       />
                       <div className="flex-1">
@@ -746,7 +774,7 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
               ) : null}
             </div>
 
-            {(session?.user as any)?.role === 'ICT_DIRECTOR' && (
+            {isDirector && (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5 space-y-3">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Director Bypass Reason</p>
@@ -798,7 +826,7 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
                 ...(form.serviceType ? [['Service', form.serviceType]] : []),
                 ['Documentation', form.documentationType === 'BOTH' ? 'Photo + Video' : form.documentationType],
                 ['Document', submissionMethod === 'generate' ? 'In-App Generated Letter' : (form.letterFile?.name ?? 'Not uploaded')],
-                ...((session?.user as any)?.role === 'ICT_DIRECTOR' ? [['Bypass Reason', form.directorBypassReason]] : []),
+                ...(isDirector ? [['Bypass Reason', form.directorBypassReason]] : []),
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between px-6 py-4 text-sm">
                   <span className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">{k}</span>
@@ -875,9 +903,9 @@ ${(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Director' : 'Secretary'}, $
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <span>{(session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Adding to Calendar...' : 'Processing Requisition...'}</span>
+                    <span>{isDirector ? 'Adding to Calendar...' : 'Processing Requisition...'}</span>
                   </>
-                ) : (session?.user as any)?.role === 'ICT_DIRECTOR' ? 'Confirm & Add to Calendar' : 'Confirm Submission'}
+                ) : isDirector ? 'Confirm & Add to Calendar' : 'Confirm Submission'}
               </button>
           }
         </div>

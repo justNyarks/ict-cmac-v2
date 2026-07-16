@@ -8,15 +8,16 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   const isAuthPage = pathname.startsWith('/auth')
 
   if (isAuthPage) {
-    return <main className="app-paper-surface min-h-screen bg-slate-50">{children}</main>
+    return <main id="main-content" className="app-paper-surface min-h-screen bg-slate-50">{children}</main>
   }
 
   return (
     <div className="app-paper-surface flex h-screen overflow-hidden bg-slate-50 print:block print:h-auto print:overflow-visible">
+      <a className="skip-link" href="#main-content">Skip to main content</a>
       <Sidebar />
       <div className="flex flex-col flex-1 overflow-hidden print:block print:overflow-visible">
         <TopBar />
-        <main className="flex-1 overflow-y-auto p-6 print:p-0 print:overflow-visible">
+        <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto p-6 print:p-0 print:overflow-visible">
           {children}
         </main>
       </div>
