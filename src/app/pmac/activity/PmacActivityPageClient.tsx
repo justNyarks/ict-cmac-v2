@@ -66,38 +66,17 @@ type ActivitySubject = {
 const ENTITY_PRESENTATION: Record<PmacActivityEntityType, {
   label: string
   icon: LucideIcon
-  iconClassName: string
 }> = {
-  EVENT: { label: 'Event', icon: CalendarDays, iconClassName: 'bg-sky-50 text-sky-700' },
-  POLL: { label: 'Poll', icon: ListChecks, iconClassName: 'bg-violet-50 text-violet-700' },
-  PROJECT: { label: 'Project', icon: FolderKanban, iconClassName: 'bg-emerald-50 text-emerald-700' },
-  MEMBER: { label: 'Member', icon: Users, iconClassName: 'bg-cyan-50 text-cyan-700' },
-  ACCOUNT: { label: 'Account', icon: ShieldCheck, iconClassName: 'bg-indigo-50 text-indigo-700' },
-  ATTACHMENT: { label: 'Attachment', icon: Paperclip, iconClassName: 'bg-amber-50 text-amber-700' },
-  REPORT: { label: 'Report', icon: FileText, iconClassName: 'bg-slate-100 text-slate-700' },
+  EVENT: { label: 'Event', icon: CalendarDays },
+  POLL: { label: 'Poll', icon: ListChecks },
+  PROJECT: { label: 'Project', icon: FolderKanban },
+  MEMBER: { label: 'Member', icon: Users },
+  ACCOUNT: { label: 'Account', icon: ShieldCheck },
+  ATTACHMENT: { label: 'Attachment', icon: Paperclip },
+  REPORT: { label: 'Report', icon: FileText },
 }
 
-function getActionClassName(action: string) {
-  if (/(DELETED|DECLINED|REJECTED|REMOVED|CANCELLED)/.test(action)) {
-    return 'border-red-200 bg-red-50 text-red-700'
-  }
-
-  if (/(HOLD|DEADLINE|PENDING|OVERDUE)/.test(action)) {
-    return 'border-amber-200 bg-amber-50 text-amber-800'
-  }
-
-  if (/(APPROVED|COMPLETED|CLOSED|DONE|SUBMITTED|CONFIRMED)/.test(action)) {
-    return 'border-emerald-200 bg-emerald-50 text-emerald-700'
-  }
-
-  if (/(ASSIGNED|TAGGED|INVITED|LAUNCHED|CREATED|UPLOADED|ATTACHED)/.test(action)) {
-    return 'border-sky-200 bg-sky-50 text-sky-700'
-  }
-
-  return 'border-slate-200 bg-slate-100 text-slate-700'
-}
-
-function getOversightActionClassName(action: string, entityType: PmacActivityEntityType) {
+function getActivityActionClassName(action: string, entityType: PmacActivityEntityType) {
   if (/(ATTENDANCE|ABSENT|PRESENT)/.test(action)) {
     return 'border-purple-200 bg-purple-50 text-purple-700 dark:border-[#a855f7]/35 dark:bg-[#a855f7]/15 dark:text-[#d8b4fe]'
   }
@@ -113,7 +92,7 @@ function getOversightActionClassName(action: string, entityType: PmacActivityEnt
   return 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-[#2dd4bf]/35 dark:bg-[#2dd4bf]/15 dark:text-[#5eead4]'
 }
 
-function getOversightEntityClassName(entityType: PmacActivityEntityType) {
+function getActivityEntityClassName(entityType: PmacActivityEntityType) {
   if (entityType === 'MEMBER' || entityType === 'ACCOUNT') {
     return 'bg-indigo-50 text-indigo-700 dark:bg-[#6366f1]/15 dark:text-[#a5b4fc]'
   }
@@ -251,7 +230,6 @@ export default function PmacActivityPageClient({
   description: string
 }) {
   const groupedEntries = groupEntries(entries)
-  const isOversight = basePath === '/coordinator/pmac/activity'
   const mostRecentEntryId = entries[0]?.id
   const hasFilters = !!(
     filters.query
@@ -264,18 +242,18 @@ export default function PmacActivityPageClient({
   )
 
   return (
-    <div className={clsx('mx-auto max-w-6xl space-y-5 animate-fade-in', isOversight && 'pmac-activity-oversight')}>
+    <div className="pmac-activity-feed mx-auto max-w-6xl space-y-5 animate-fade-in">
       <header className="space-y-1">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">PMAC Activity</p>
         <h2 className="font-display text-3xl font-bold text-slate-800">{title}</h2>
         <p className="text-sm text-slate-500">{description}</p>
       </header>
 
-      <form action={basePath} method="get" className={clsx('card p-4', isOversight && 'activity-filter-panel')}>
+      <form action={basePath} method="get" className="card activity-filter-panel p-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.6fr)_repeat(4,minmax(130px,1fr))_minmax(230px,1.3fr)]">
           <label className="md:col-span-2 xl:col-span-1">
             <span className="mb-1 block text-xs font-semibold text-slate-500">Search</span>
-            <span className={clsx('flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100', isOversight && 'activity-filter-control')}>
+            <span className="activity-filter-control flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100">
               <Search size={15} className="shrink-0 text-slate-400" />
               <input
                 type="search"
@@ -293,7 +271,7 @@ export default function PmacActivityPageClient({
             <select
               name="subject"
               defaultValue={filters.subject ?? ''}
-              className={clsx('h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100', isOversight && 'activity-filter-control')}
+              className="activity-filter-control h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
             >
               <option value="">All records</option>
               {subjects.map((subject) => (
@@ -309,7 +287,7 @@ export default function PmacActivityPageClient({
             <select
               name="entityType"
               defaultValue={filters.entityType ?? ''}
-              className={clsx('h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100', isOversight && 'activity-filter-control')}
+              className="activity-filter-control h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
             >
               <option value="">All types</option>
               {PMAC_ACTIVITY_ENTITY_TYPES.map((type) => (
@@ -323,7 +301,7 @@ export default function PmacActivityPageClient({
             <select
               name="action"
               defaultValue={filters.action ?? ''}
-              className={clsx('h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100', isOversight && 'activity-filter-control')}
+              className="activity-filter-control h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
             >
               <option value="">All actions</option>
               {actions.map((action) => (
@@ -337,7 +315,7 @@ export default function PmacActivityPageClient({
             <select
               name="actorId"
               defaultValue={filters.actorId ?? ''}
-              className={clsx('h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100', isOversight && 'activity-filter-control')}
+              className="activity-filter-control h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
             >
               <option value="">All actors</option>
               {actors.map((actor) => (
@@ -353,7 +331,7 @@ export default function PmacActivityPageClient({
                 type="date"
                 name="from"
                 defaultValue={filters.from ?? ''}
-                className={clsx('h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100', isOversight && 'activity-filter-control')}
+                className="activity-filter-control h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
               />
             </label>
             <label>
@@ -362,7 +340,7 @@ export default function PmacActivityPageClient({
                 type="date"
                 name="to"
                 defaultValue={filters.to ?? ''}
-                className={clsx('h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100', isOversight && 'activity-filter-control')}
+                className="activity-filter-control h-10 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
               />
             </label>
           </div>
@@ -393,8 +371,8 @@ export default function PmacActivityPageClient({
         </div>
       </form>
 
-      <section className={clsx('card overflow-hidden', isOversight && 'activity-timeline')} aria-labelledby="activity-timeline-heading">
-        <div className={clsx('flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4', isOversight && 'activity-timeline-header')}>
+      <section className="card activity-timeline overflow-hidden" aria-labelledby="activity-timeline-heading">
+        <div className="activity-timeline-header flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <div>
             <h3 id="activity-timeline-heading" className="font-semibold text-slate-800">Activity Timeline</h3>
             <p className="mt-0.5 text-xs text-slate-400">Page {pagination.page} of {pagination.totalPages}</p>
@@ -406,7 +384,7 @@ export default function PmacActivityPageClient({
           <div>
             {groupedEntries.map(([dateLabel, dateEntries]) => (
               <div key={dateLabel}>
-                <div className={clsx('border-y border-slate-100 bg-slate-50 px-5 py-2 text-xs font-bold text-slate-500 first:border-t-0', isOversight && 'activity-date-heading')}>
+                <div className="activity-date-heading border-y border-slate-100 bg-slate-50 px-5 py-2 text-xs font-bold text-slate-500 first:border-t-0">
                   {dateLabel}
                 </div>
                 <div className="divide-y divide-slate-100">
@@ -421,12 +399,12 @@ export default function PmacActivityPageClient({
                         href={entry.href}
                         className={clsx(
                           'grid gap-3 border-l-2 border-l-transparent px-5 py-4 transition-colors hover:bg-slate-50 md:grid-cols-[36px_minmax(0,1fr)_auto] md:items-start',
-                          isOversight && 'activity-entry',
-                          isOversight && (entryIndex % 2 === 0 ? 'activity-entry-base' : 'activity-entry-alternate'),
-                          isOversight && entry.id === mostRecentEntryId && 'activity-entry-recent'
+                          'activity-entry',
+                          entryIndex % 2 === 0 ? 'activity-entry-base' : 'activity-entry-alternate',
+                          entry.id === mostRecentEntryId && 'activity-entry-recent'
                         )}
                       >
-                        <span className={`hidden h-9 w-9 items-center justify-center rounded-full md:flex ${isOversight ? getOversightEntityClassName(entry.entityType) : presentation.iconClassName}`}>
+                        <span className={`hidden h-9 w-9 items-center justify-center rounded-full md:flex ${getActivityEntityClassName(entry.entityType)}`}>
                           <EntityIcon size={17} />
                         </span>
 
@@ -435,11 +413,11 @@ export default function PmacActivityPageClient({
                             <span className="text-xs font-bold text-slate-600">
                               {presentation.label}{entry.entityLabel ? `: ${entry.entityLabel}` : ''}
                             </span>
-                            <span className={`status-badge ${isOversight ? getOversightActionClassName(entry.action, entry.entityType) : getActionClassName(entry.action)}`}>
+                            <span className={`status-badge ${getActivityActionClassName(entry.action, entry.entityType)}`}>
                               {getPmacActivityActionLabel(entry.action)}
                             </span>
                           </span>
-                          <span className={clsx('block text-sm font-semibold text-slate-800', isOversight && 'activity-primary-text')}>{entry.summary}</span>
+                          <span className="activity-primary-text block text-sm font-semibold text-slate-800">{entry.summary}</span>
                           {entry.details ? (
                             <span className="block text-sm leading-6 text-slate-500">{entry.details}</span>
                           ) : null}
@@ -453,7 +431,7 @@ export default function PmacActivityPageClient({
                               ))}
                             </span>
                           ) : null}
-                          <span className={clsx('flex flex-wrap items-center gap-1.5 text-xs text-slate-400', isOversight && 'activity-metadata')}>
+                          <span className="activity-metadata flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
                             <CircleUserRound size={13} />
                             {entry.actorName}
                             <span aria-hidden="true">|</span>
@@ -461,7 +439,7 @@ export default function PmacActivityPageClient({
                           </span>
                         </span>
 
-                        <span className={clsx('text-xs font-medium text-slate-400 md:pt-1', isOversight && 'activity-metadata')}>
+                        <span className="activity-metadata text-xs font-medium text-slate-400 md:pt-1">
                           {formatDateTime(entry.createdAt)}
                         </span>
                       </Link>
