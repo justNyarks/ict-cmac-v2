@@ -85,16 +85,16 @@ export default function Sidebar() {
   })
 
   return (
-    <aside className="w-64 flex-shrink-0 bg-[var(--primary)] flex flex-col h-full border-r border-emerald-900/20 dark:border-[#52738a]/45 print:hidden">
+    <aside className="w-64 flex-shrink-0 bg-[var(--primary)] flex flex-col h-full border-r border-emerald-900/20 dark:border-white/[0.08] print:hidden">
       {/* Logo */}
       <div className="px-6 py-8 border-b border-white/5">
         <div className="flex flex-col items-center text-center gap-3">
-          <div className="w-16 h-16 rounded-2xl bg-white p-2 flex items-center justify-center shadow-xl border border-emerald-100/20 text-emerald-800 dark:border-[#527a82] dark:bg-[#24394e] dark:text-[#96d8d4]">
+          <div className="w-16 h-16 rounded-2xl bg-white p-2 flex items-center justify-center shadow-xl border border-emerald-100/20 text-emerald-800 dark:border-white/[0.08] dark:bg-[#1e2a3d] dark:text-[#2dd4bf]">
             <Aperture size={32} />
           </div>
           <div>
             <p className="font-display text-white text-lg leading-tight font-bold tracking-tight">ICT CMAC</p>
-            <p className="text-emerald-400 text-[8px] font-bold tracking-[0.2em] uppercase mt-1 dark:text-[#72bfc4]">
+            <p className="text-emerald-400 text-[8px] font-bold tracking-[0.2em] uppercase mt-1 dark:text-[#2dd4bf]">
               St. Paul University Philippines
             </p>
           </div>
@@ -110,10 +110,10 @@ export default function Sidebar() {
               key={href}
               href={href}
               className={clsx(
-                'flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-sm font-medium',
+                'flex items-center gap-3 border-l-2 px-4 py-2.5 rounded-xl transition-all duration-200 text-sm font-medium',
                 active
-                  ? 'bg-white/10 text-white shadow-inner dark:bg-[#72bfc4]/20 dark:text-[#e5eaee]'
-                  : 'text-emerald-100/70 hover:bg-white/5 hover:text-white dark:text-[#b8c5ce] dark:hover:bg-[#52738a]/25 dark:hover:text-white'
+                  ? 'border-transparent bg-white/10 text-white shadow-inner dark:border-[#2dd4bf] dark:bg-[#2dd4bf]/15 dark:text-[#f1f5f9]'
+                  : 'border-transparent text-emerald-100/70 hover:bg-white/5 hover:text-white dark:text-[#8b98a9] dark:hover:bg-white/[0.05] dark:hover:text-[#f1f5f9]'
               )}
             >
               <Icon size={17} />
@@ -127,17 +127,17 @@ export default function Sidebar() {
       <div className="px-4 py-5 border-t border-white/5">
         <div className="flex items-center justify-between group">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-xs font-bold dark:bg-[#72bfc4] dark:text-[#17283a]">
+            <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-xs font-bold dark:bg-[#2dd4bf] dark:text-[#141b2a]">
               {user?.name?.split(' ').map((n: string) => n[0]).join('') || 'U'}
             </div>
             <div>
               <p className="text-white text-xs font-semibold">{user?.name || 'Loading...'}</p>
-              <p className="text-emerald-300 text-[10px] dark:text-[#96d8d4]">{getRoleLabel(user?.role)}</p>
+              <p className="text-emerald-300 text-[10px] dark:text-[#8b98a9]">{getRoleLabel(user?.role)}</p>
             </div>
           </div>
           <button 
             onClick={() => signOut({ callbackUrl: '/auth/signin' })}
-            className="p-1.5 rounded-lg text-emerald-300 hover:bg-white/10 hover:text-white transition-colors dark:text-[#96d8d4]"
+            className="p-1.5 rounded-lg text-emerald-300 hover:bg-white/10 hover:text-white transition-colors dark:text-[#8b98a9] dark:hover:text-[#f1f5f9]"
             title="Logout"
           >
             <LogOut size={16} />
