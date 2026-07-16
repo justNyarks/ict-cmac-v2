@@ -1,12 +1,19 @@
 import type { Prisma } from '@prisma/client'
 import type { Session } from 'next-auth'
 
+import {
+  redactPmacActivityText,
+  sanitizePmacActivityChanges,
+  type PmacActivityChangeSet,
+} from '@/lib/pmacActivityAudit'
 import { hasPmacV4Delegates, prisma } from '@/lib/prisma'
 import { buildPmacProjectWhere } from '@/lib/pmacProjects'
 import { getRoleLabel } from '@/lib/roles'
 
 type SessionUser = Session['user']
 type PmacDbClient = Prisma.TransactionClient | typeof prisma
+
+const PMAC_ACTIVITY_RETENTION_DAYS = 365
 
 export const PMAC_ACTIVITY_ENTITY_TYPES = [
   'EVENT',
@@ -27,6 +34,7 @@ export type PmacActivityFeedOptions = {
   entityType?: string
   action?: string
   actorId?: string
+  subject?: string
   from?: string
   to?: string
 }
@@ -44,6 +52,7 @@ export function parsePmacActivitySearchParams(searchParams: PmacActivitySearchPa
     entityType: getSingleSearchParam(searchParams.entityType),
     action: getSingleSearchParam(searchParams.action),
     actorId: getSingleSearchParam(searchParams.actorId),
+    subject: getSingleSearchParam(searchParams.subject),
     from: getSingleSearchParam(searchParams.from),
     to: getSingleSearchParam(searchParams.to),
   }
@@ -62,6 +71,7 @@ export type PmacActivityInput = {
   action: string
   summary: string
   details?: string | null
+  changes?: PmacActivityChangeSet | null
 }
 
 const NO_ACTIVITY_ACCESS = { id: '__missing_activity_access__' } as const
@@ -132,6 +142,8 @@ function buildPmacActivityFilterWhere(options: PmacActivityFeedOptions): Prisma.
     : null
   const action = options.action?.trim().slice(0, 100) ?? ''
   const actorId = options.actorId?.trim().slice(0, 191) ?? ''
+  const [subjectType, ...subjectIdParts] = options.subject?.trim().split(':') ?? []
+  const subjectId = subjectIdParts.join(':').slice(0, 191)
   const from = parseActivityDate(options.from)
   const to = parseActivityDate(options.to, true)
 
@@ -139,6 +151,8 @@ function buildPmacActivityFilterWhere(options: PmacActivityFeedOptions): Prisma.
     ...(entityType ? { entityType } : {}),
     ...(action ? { action } : {}),
     ...(actorId ? { actorId } : {}),
+    ...(subjectType === 'EVENT' && subjectId ? { eventId: subjectId } : {}),
+    ...(subjectType === 'PROJECT' && subjectId ? { projectId: subjectId } : {}),
     ...(from || to
       ? {
           createdAt: {
@@ -221,6 +235,7 @@ export async function recordPmacActivity(db: PmacDbClient, input: PmacActivityIn
         action: string
         summary: string
         details: string | null
+        changes: Record<string, unknown> | null
       }
     }) => Promise<unknown>
   } | undefined
@@ -241,8 +256,25 @@ export async function recordPmacActivity(db: PmacDbClient, input: PmacActivityIn
       actorName: input.actorName,
       actorRole: input.actorRole,
       action: input.action,
-      summary: input.summary,
-      details: input.details ?? null,
+      summary: redactPmacActivityText(input.summary),
+      details: input.details ? redactPmacActivityText(input.details) : null,
+      changes: sanitizePmacActivityChanges(input.changes),
+    },
+  })
+}
+
+export async function archiveExpiredPmacActivity(now = new Date()) {
+  const cutoff = new Date(now.getTime() - (PMAC_ACTIVITY_RETENTION_DAYS * 24 * 60 * 60 * 1_000))
+
+  return prisma.pmacActivityLog.updateMany({
+    where: {
+      archivedAt: null,
+      createdAt: {
+        lt: cutoff,
+      },
+    },
+    data: {
+      archivedAt: now,
     },
   })
 }
@@ -253,6 +285,7 @@ export async function getPmacActivityFeed(user: SessionUser, options: PmacActivi
       entries: [],
       actions: [],
       actors: [],
+      subjects: [],
       pagination: {
         page: 1,
         pageSize: 25,
@@ -262,18 +295,26 @@ export async function getPmacActivityFeed(user: SessionUser, options: PmacActivi
     }
   }
 
+  await archiveExpiredPmacActivity()
+
   const accessWhere = buildPmacActivityWhere(user)
+  const activeAccessWhere: Prisma.PmacActivityLogWhereInput = {
+    AND: [
+      accessWhere,
+      { archivedAt: null },
+    ],
+  }
   const filterWhere = buildPmacActivityFilterWhere(options)
   const where: Prisma.PmacActivityLogWhereInput = {
-    AND: [accessWhere, filterWhere],
+    AND: [activeAccessWhere, filterWhere],
   }
   const requestedPage = normalizePositiveInteger(options.page, 1, 100_000)
   const pageSize = normalizePositiveInteger(options.pageSize, 25, 50)
 
-  const [total, actionRows, actorRows] = await Promise.all([
+  const [total, actionRows, actorRows, eventRows, projectRows] = await Promise.all([
     prisma.pmacActivityLog.count({ where }),
     prisma.pmacActivityLog.findMany({
-      where: accessWhere,
+      where: activeAccessWhere,
       distinct: ['action'],
       orderBy: { action: 'asc' },
       select: { action: true },
@@ -281,7 +322,7 @@ export async function getPmacActivityFeed(user: SessionUser, options: PmacActivi
     prisma.pmacActivityLog.findMany({
       where: {
         AND: [
-          accessWhere,
+          activeAccessWhere,
           { actorId: { not: null } },
         ],
       },
@@ -290,6 +331,40 @@ export async function getPmacActivityFeed(user: SessionUser, options: PmacActivi
       select: {
         actorId: true,
         actorName: true,
+      },
+    }),
+    prisma.pmacActivityLog.findMany({
+      where: {
+        AND: [
+          activeAccessWhere,
+          { eventId: { not: null } },
+        ],
+      },
+      distinct: ['eventId'],
+      select: {
+        eventId: true,
+        event: {
+          select: {
+            title: true,
+          },
+        },
+      },
+    }),
+    prisma.pmacActivityLog.findMany({
+      where: {
+        AND: [
+          activeAccessWhere,
+          { projectId: { not: null } },
+        ],
+      },
+      distinct: ['projectId'],
+      select: {
+        projectId: true,
+        project: {
+          select: {
+            title: true,
+          },
+        },
       },
     }),
   ])
@@ -317,18 +392,48 @@ export async function getPmacActivityFeed(user: SessionUser, options: PmacActivi
       action: true,
       summary: true,
       details: true,
+      changes: true,
       createdAt: true,
+      event: {
+        select: {
+          title: true,
+        },
+      },
+      poll: {
+        select: {
+          title: true,
+        },
+      },
+      project: {
+        select: {
+          title: true,
+        },
+      },
+      member: {
+        select: {
+          fullName: true,
+        },
+      },
     },
   })
 
   return {
-    entries: entries.map((entry) => ({
+    entries: entries.map(({ event, poll, project, member, ...entry }) => ({
       ...entry,
+      entityLabel: event?.title ?? poll?.title ?? project?.title ?? member?.fullName ?? null,
       actorRoleLabel: getRoleLabel(entry.actorRole),
       href: getPmacActivityHref(user, entry),
     })),
     actions: actionRows.map((entry) => entry.action),
     actors: actorRows.flatMap((entry) => entry.actorId ? [{ id: entry.actorId, name: entry.actorName }] : []),
+    subjects: [
+      ...eventRows.flatMap((entry) => entry.eventId && entry.event
+        ? [{ value: `EVENT:${entry.eventId}`, label: entry.event.title, type: 'EVENT' as const }]
+        : []),
+      ...projectRows.flatMap((entry) => entry.projectId && entry.project
+        ? [{ value: `PROJECT:${entry.projectId}`, label: entry.project.title, type: 'PROJECT' as const }]
+        : []),
+    ].sort((left, right) => left.label.localeCompare(right.label)),
     pagination: {
       page,
       pageSize,

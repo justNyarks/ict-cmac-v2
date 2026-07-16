@@ -508,11 +508,14 @@ model PmacActivityLog {
   action     String
   summary    String
   details    String?                @db.Text
+  changes    Json?
+  archivedAt DateTime?
   createdAt  DateTime               @default(now())
 
   @@index([entityType, entityId, createdAt])
   @@index([entityType, createdAt])
   @@index([action, createdAt])
+  @@index([archivedAt, createdAt])
   @@index([createdAt])
   @@index([eventId, createdAt])
   @@index([pollId, createdAt])

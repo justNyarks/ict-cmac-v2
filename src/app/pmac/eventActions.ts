@@ -529,6 +529,9 @@ export async function submitPmacEvent(eventId: string) {
         ...getActivityActor(session.user),
         action: 'EVENT_SUBMITTED',
         summary: 'Submitted a PMAC event for CMAC approval.',
+        changes: {
+          status: { before: event.status, after: 'PENDING_APPROVAL' },
+        },
       })
     })
 
@@ -591,6 +594,9 @@ export async function approvePmacEvent(eventId: string, remarks?: string) {
         action: 'EVENT_APPROVED',
         summary: 'Approved a PMAC event.',
         details: approvalRemarks || null,
+        changes: {
+          status: { before: event.status, after: 'APPROVED' },
+        },
       })
     })
 
@@ -655,6 +661,9 @@ export async function rejectPmacEvent(eventId: string, remarks: string) {
         action: 'EVENT_REJECTED',
         summary: 'Rejected a PMAC event.',
         details: rejectionRemarks,
+        changes: {
+          status: { before: event.status, after: 'REJECTED' },
+        },
       })
     })
 
@@ -710,6 +719,9 @@ export async function markPmacEventCompleted(eventId: string) {
         ...getActivityActor(session.user),
         action: 'EVENT_COMPLETED',
         summary: 'Marked a PMAC event as completed.',
+        changes: {
+          status: { before: event.status, after: 'COMPLETED' },
+        },
       })
     })
 

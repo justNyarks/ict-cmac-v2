@@ -105,6 +105,7 @@ describe('parsePmacActivitySearchParams', () => {
       entityType: 'PROJECT',
       action: 'PROJECT_STATUS_UPDATED',
       actorId: 'user-2',
+      subject: 'PROJECT:project-1',
       from: '2026-07-01',
       to: '2026-07-31',
     })).toEqual({
@@ -113,6 +114,7 @@ describe('parsePmacActivitySearchParams', () => {
       entityType: 'PROJECT',
       action: 'PROJECT_STATUS_UPDATED',
       actorId: 'user-2',
+      subject: 'PROJECT:project-1',
       from: '2026-07-01',
       to: '2026-07-31',
     })

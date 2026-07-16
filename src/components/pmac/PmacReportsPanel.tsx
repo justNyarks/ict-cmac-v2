@@ -15,6 +15,7 @@ type ReportStats = {
   attendanceGaps: number
   attachments: number
   activity: number
+  archivedActivity: number
   averageReadinessScore: number
   reliableMembers: number
   incompleteMemberProfiles: number
@@ -35,7 +36,7 @@ const REPORT_LINKS = [
   { type: 'staffing', label: 'Duty Assignment Export', description: 'Upcoming event coverage gaps, pending responses, and member workload snapshots.' },
   { type: 'performance', label: 'Member Performance Export', description: 'Attendance reliability, recent workload, and duty history for PMAC staffing decisions.' },
   { type: 'polls', label: 'Poll Governance Export', description: 'Poll status, linked events, votes cast, and attachment totals.' },
-  { type: 'activity', label: 'Activity Audit Export', description: 'Recent PMAC actions for oversight, governance, and reliability tracking.' },
+  { type: 'activity', label: 'Activity Audit Export', description: 'Current and archived PMAC actions with structured change history.' },
 ] as const
 
 export default function PmacReportsPanel({
@@ -125,8 +126,10 @@ export default function PmacReportsPanel({
         </div>
         <div className="card p-5">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Audit Trail</p>
-          <p className="mt-3 text-3xl font-bold text-slate-800">{stats.attachments}</p>
-          <p className="mt-1 text-xs text-slate-500">{stats.activity} activity entries · {stats.attendanceGaps} attendance gaps</p>
+          <p className="mt-3 text-3xl font-bold text-slate-800">{stats.activity}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {Math.max(0, stats.activity - stats.archivedActivity)} current · {stats.archivedActivity} archived · {stats.attachments} attachments
+          </p>
         </div>
         <div className="card p-5">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Projects</p>

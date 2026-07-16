@@ -15,6 +15,7 @@ export type PmacReportSummary = {
   attendanceGaps: number
   attachments: number
   activity: number
+  archivedActivity: number
   averageReadinessScore: number
   reliableMembers: number
   incompleteMemberProfiles: number
@@ -499,7 +500,7 @@ export async function buildPmacPerformanceCsv() {
 export async function buildPmacActivityCsv() {
   if (!hasPmacV4Delegates()) {
     return joinCsv([
-      ['Timestamp', 'Entity Type', 'Entity ID', 'Action', 'Actor Name', 'Actor Role', 'Summary', 'Details'],
+      ['Timestamp', 'Entity Type', 'Entity ID', 'Action', 'Actor Name', 'Actor Role', 'Summary', 'Details', 'Changes', 'Archived At'],
     ])
   }
 
@@ -507,11 +508,10 @@ export async function buildPmacActivityCsv() {
     orderBy: {
       createdAt: 'desc',
     },
-    take: 500,
   })
 
   return joinCsv([
-    ['Timestamp', 'Entity Type', 'Entity ID', 'Action', 'Actor Name', 'Actor Role', 'Summary', 'Details'],
+    ['Timestamp', 'Entity Type', 'Entity ID', 'Action', 'Actor Name', 'Actor Role', 'Summary', 'Details', 'Changes', 'Archived At'],
     ...entries.map((entry) => [
       entry.createdAt.toISOString(),
       entry.entityType,
@@ -521,6 +521,8 @@ export async function buildPmacActivityCsv() {
       entry.actorRole,
       entry.summary,
       entry.details ?? '',
+      entry.changes ? JSON.stringify(entry.changes) : '',
+      entry.archivedAt?.toISOString() ?? '',
     ]),
   ])
 }
@@ -539,6 +541,7 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
     openPolls,
     attachments,
     activity,
+    archivedActivity,
     pendingResponses,
     upcomingEvents,
     recentCompletedEvents,
@@ -573,6 +576,7 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
     }),
     hasPmacV4Delegates() ? prisma.pmacAttachment.count() : Promise.resolve(0),
     hasPmacV4Delegates() ? prisma.pmacActivityLog.count() : Promise.resolve(0),
+    hasPmacV4Delegates() ? prisma.pmacActivityLog.count({ where: { archivedAt: { not: null } } }) : Promise.resolve(0),
     prisma.pmacEventAssignment.count({
       where: {
         availabilityResponse: 'PENDING',
@@ -753,6 +757,7 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
     attendanceGaps,
     attachments,
     activity,
+    archivedActivity,
     averageReadinessScore,
     reliableMembers,
     incompleteMemberProfiles,

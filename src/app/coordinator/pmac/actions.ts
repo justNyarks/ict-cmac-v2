@@ -258,6 +258,8 @@ export async function savePmacMember(payload: PmacMemberPayload) {
               select: {
                 id: true,
                 email: true,
+                role: true,
+                isActive: true,
               },
             },
           },
@@ -382,6 +384,16 @@ export async function savePmacMember(payload: PmacMemberPayload) {
           specialties.length ? `Specialties: ${specialties.join(', ')}.` : null,
           password ? 'Credentials were issued or reset and the account will be asked to change its password.' : null,
         ].filter(Boolean).join(' ') || null,
+        changes: {
+          fullName: { before: existing?.fullName ?? null, after: fullName },
+          email: { before: existing?.email ?? null, after: email },
+          department: { before: existing?.department ?? null, after: department },
+          course: { before: existing?.course ?? null, after: course },
+          clubRole: { before: existing?.clubRole ?? null, after: clubRole },
+          systemRole: { before: existing?.account?.role ?? null, after: payload.systemRole },
+          status: { before: existing?.status ?? null, after: payload.status },
+          executiveTitle: { before: existing?.executiveTitle ?? null, after: executiveTitle },
+        },
       })
     })
 
@@ -433,6 +445,8 @@ export async function assignPmacOfficerRole(payload: PmacOfficerAssignmentPayloa
         account: {
           select: {
             id: true,
+            role: true,
+            isActive: true,
           },
         },
       },
@@ -442,7 +456,8 @@ export async function assignPmacOfficerRole(payload: PmacOfficerAssignmentPayloa
       return { success: false, error: 'PMAC member account is missing.' }
     }
 
-    const accountId = member.account.id
+    const account = member.account
+    const accountId = account.id
 
     await prisma.$transaction(async (tx) => {
       await tx.pmacMember.update({
@@ -470,6 +485,13 @@ export async function assignPmacOfficerRole(payload: PmacOfficerAssignmentPayloa
         action: 'OFFICER_ASSIGNMENT_UPDATED',
         summary: `Updated PMAC leadership assignment to ${payload.clubRole}.`,
         details: `System role set to ${payload.systemRole}, status set to ${payload.status}, executive title set to ${executiveTitle ?? 'none'}.`,
+        changes: {
+          clubRole: { before: member.clubRole, after: payload.clubRole },
+          systemRole: { before: account.role, after: payload.systemRole },
+          status: { before: member.status, after: payload.status },
+          executiveTitle: { before: member.executiveTitle, after: executiveTitle },
+          accountActive: { before: account.isActive, after: payload.status === 'ACTIVE' },
+        },
       })
     })
 

@@ -522,6 +522,11 @@ export async function savePmacAssignments(eventId: string, assignments: PmacAssi
         id: true,
         memberId: true,
         assignmentRole: true,
+        member: {
+          select: {
+            fullName: true,
+          },
+        },
       },
     })
 
@@ -686,6 +691,12 @@ export async function savePmacAssignments(eventId: string, assignments: PmacAssi
         ...getActivityActor(session.user),
         action: 'ASSIGNMENTS_UPDATED',
         summary: `Updated PMAC staffing assignments for ${normalizedAssignments.length} duty slot(s).`,
+        changes: {
+          team: {
+            before: existingAssignments.map((assignment) => `${assignment.member.fullName} - ${assignment.assignmentRole}`),
+            after: normalizedAssignments.map((assignment) => `${activeMemberById.get(assignment.memberId)?.fullName ?? 'PMAC member'} - ${assignment.assignmentRole}`),
+          },
+        },
       })
     })
 

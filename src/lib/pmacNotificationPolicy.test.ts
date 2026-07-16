@@ -48,6 +48,7 @@ describe('PMAC notification recipient policy', () => {
       'PROJECT_MILESTONE_CREATED',
       'PROJECT_MILESTONE_UPDATED',
       'PROJECT_MILESTONE_STATUS_UPDATED',
+      'PROJECT_UPDATED',
     ]))
   })
 })

@@ -163,6 +163,7 @@ async function reconcilePmacProjectDeadlines(db: Prisma.TransactionClient | type
     select: {
       id: true,
       title: true,
+      status: true,
       outputSubmittedAt: true,
       outputSummary: true,
     },
@@ -190,6 +191,9 @@ async function reconcilePmacProjectDeadlines(db: Prisma.TransactionClient | type
       summary: nextStatus === 'COMPLETED'
         ? `Marked project "${project.title}" completed at deadline because output was submitted.`
         : `Placed project "${project.title}" on hold because no output was submitted by the deadline.`,
+      changes: {
+        status: { before: project.status, after: nextStatus },
+      },
     })
   }
 }
@@ -562,7 +566,19 @@ export async function savePmacProject(payload: PmacProjectPayload) {
       await prisma.$transaction(async (tx) => {
         const current = await tx.pmacProject.findUnique({
           where: { id: projectId },
-          select: { status: true, headMemberId: true },
+          select: {
+            title: true,
+            branch: true,
+            startDate: true,
+            targetDate: true,
+            status: true,
+            headMemberId: true,
+            headMember: {
+              select: {
+                fullName: true,
+              },
+            },
+          },
         })
 
         await tx.pmacProject.update({
@@ -587,6 +603,9 @@ export async function savePmacProject(payload: PmacProjectPayload) {
             ...getActivityActor(session.user),
             action: 'PROJECT_STATUS_UPDATED',
             summary: `Updated project "${title}" status from ${current.status} to ${status}.`,
+            changes: {
+              status: { before: current.status, after: status },
+            },
           })
         }
 
@@ -598,6 +617,32 @@ export async function savePmacProject(payload: PmacProjectPayload) {
             ...getActivityActor(session.user),
             action: 'PROJECT_HEAD_ASSIGNED',
             summary: `Assigned "${title}" to ${headMember.fullName} (${formatExecutiveTitle(headBranch)}).`,
+            changes: {
+              assignedHead: { before: current.headMember?.fullName ?? null, after: headMember.fullName },
+              branch: { before: current.branch, after: headBranch },
+            },
+          })
+        }
+
+        if (current && (
+          current.title !== title
+          || current.branch !== headBranch
+          || current.startDate.getTime() !== startDate.getTime()
+          || current.targetDate.getTime() !== targetDate.getTime()
+        )) {
+          await recordPmacActivity(tx, {
+            entityType: 'PROJECT',
+            entityId: projectId,
+            projectId,
+            ...getActivityActor(session.user),
+            action: 'PROJECT_UPDATED',
+            summary: `Updated project details for "${title}".`,
+            changes: {
+              title: { before: current.title, after: title },
+              branch: { before: current.branch, after: headBranch },
+              startDate: { before: current.startDate, after: startDate },
+              targetDate: { before: current.targetDate, after: targetDate },
+            },
           })
         }
       })
@@ -623,6 +668,11 @@ export async function savePmacProject(payload: PmacProjectPayload) {
           ...getActivityActor(session.user),
           action: 'PROJECT_LAUNCHED',
           summary: `Launched project "${created.title}" for ${headMember.fullName} (${formatExecutiveTitle(created.branch) || 'a PMAC branch'}).`,
+          changes: {
+            status: { before: null, after: created.status },
+            assignedHead: { before: null, after: headMember.fullName },
+            targetDate: { before: null, after: created.targetDate },
+          },
         })
       })
     }
@@ -678,6 +728,9 @@ export async function updatePmacProjectStatus(projectId: string, status: PmacPro
           ...getActivityActor(session.user),
           action: 'PROJECT_STATUS_UPDATED',
           summary: `Updated project "${project.title}" status from ${project.status} to ${status}.`,
+          changes: {
+            status: { before: project.status, after: status },
+          },
         })
       }
     })
@@ -914,6 +967,22 @@ export async function assignPmacProjectMembers(payload: PmacProjectMemberPayload
       throw new Error(`All selected project members must be active PMAC members with ${PMAC_SPECIALTY_LABELS[requiredSpecialty]} specialty.`)
     }
 
+    const existingMembers = await prisma.pmacProjectAssignment.findMany({
+      where: {
+        projectId,
+      },
+      select: {
+        member: {
+          select: {
+            fullName: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    })
+
     await prisma.$transaction(async (tx) => {
       await tx.pmacProjectAssignment.deleteMany({
         where: {
@@ -941,6 +1010,12 @@ export async function assignPmacProjectMembers(payload: PmacProjectMemberPayload
           ? `Assigned ${assignableMemberIds.length} member(s) to project "${project.title}".`
           : `Cleared member assignments for project "${project.title}".`,
         details: members.map(member => member.fullName).join(', ') || null,
+        changes: {
+          team: {
+            before: existingMembers.map((assignment) => assignment.member.fullName),
+            after: members.map((member) => member.fullName),
+          },
+        },
       })
     })
 
@@ -982,18 +1057,27 @@ export async function savePmacProjectMilestone(payload: PmacProjectMilestonePayl
     const project = await assertPmacProjectAccess(projectId, session.user)
 
     await prisma.$transaction(async (tx) => {
+      let previousMilestone: { title: string; dueDate: Date; status: string } | null = null
+
       if (milestoneId) {
         const existingMilestone = await tx.pmacProjectMilestone.findFirst({
           where: {
             id: milestoneId,
             projectId,
           },
-          select: { id: true },
+          select: {
+            id: true,
+            title: true,
+            dueDate: true,
+            status: true,
+          },
         })
 
         if (!existingMilestone) {
           throw new Error('Milestone not found for this project.')
         }
+
+        previousMilestone = existingMilestone
 
         await tx.pmacProjectMilestone.update({
           where: { id: milestoneId },
@@ -1026,6 +1110,11 @@ export async function savePmacProjectMilestone(payload: PmacProjectMilestonePayl
           ? `Updated milestone "${title}" for project "${project.title}".`
           : `Added milestone "${title}" to project "${project.title}".`,
         details: `Due ${dueDate.toLocaleDateString('en-PH')} - ${status}.`,
+        changes: {
+          title: { before: previousMilestone?.title ?? null, after: title },
+          dueDate: { before: previousMilestone?.dueDate ?? null, after: dueDate },
+          status: { before: previousMilestone?.status ?? null, after: status },
+        },
       })
     })
 
@@ -1082,6 +1171,9 @@ export async function updatePmacProjectMilestoneStatus(milestoneId: string, stat
           ...getActivityActor(session.user),
           action: 'PROJECT_MILESTONE_STATUS_UPDATED',
           summary: `Updated milestone "${milestone.title}" in project "${milestone.project.title}" from ${milestone.status} to ${status}.`,
+          changes: {
+            milestoneStatus: { before: milestone.status, after: status },
+          },
         })
       }
     })

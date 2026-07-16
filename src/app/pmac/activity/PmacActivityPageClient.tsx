@@ -22,6 +22,7 @@ import {
   type PmacActivityEntityType,
   type PmacActivityFeedOptions,
 } from '@/lib/pmacActivity'
+import { getPmacActivityActionLabel } from '@/lib/pmacActivityAudit'
 
 type ActivityEntry = {
   id: string
@@ -37,6 +38,8 @@ type ActivityEntry = {
   action: string
   summary: string
   details: string | null
+  changes: unknown
+  entityLabel: string | null
   createdAt: Date
   href: string
 }
@@ -53,6 +56,12 @@ type ActivityPagination = {
   totalPages: number
 }
 
+type ActivitySubject = {
+  value: string
+  label: string
+  type: 'EVENT' | 'PROJECT'
+}
+
 const ENTITY_PRESENTATION: Record<PmacActivityEntityType, {
   label: string
   icon: LucideIcon
@@ -65,18 +74,6 @@ const ENTITY_PRESENTATION: Record<PmacActivityEntityType, {
   ACCOUNT: { label: 'Account', icon: ShieldCheck, iconClassName: 'bg-indigo-50 text-indigo-700' },
   ATTACHMENT: { label: 'Attachment', icon: Paperclip, iconClassName: 'bg-amber-50 text-amber-700' },
   REPORT: { label: 'Report', icon: FileText, iconClassName: 'bg-slate-100 text-slate-700' },
-}
-
-const ACRONYMS = new Set(['CMAC', 'CSV', 'ID', 'PMAC', 'URL'])
-
-function formatAction(action: string) {
-  return action.split('_').map((part) => {
-    if (ACRONYMS.has(part)) {
-      return part
-    }
-
-    return `${part.charAt(0)}${part.slice(1).toLowerCase()}`
-  }).join(' ')
 }
 
 function getActionClassName(action: string) {
@@ -97,6 +94,53 @@ function getActionClassName(action: string) {
   }
 
   return 'border-slate-200 bg-slate-100 text-slate-700'
+}
+
+function formatChangeField(field: string) {
+  const spaced = field
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replaceAll('_', ' ')
+
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase()
+}
+
+function formatChangeValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') {
+    return 'None'
+  }
+
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No'
+  }
+
+  if (Array.isArray(value)) {
+    return value.length ? value.map((entry) => formatChangeValue(entry)).join(', ') : 'None'
+  }
+
+  if (typeof value === 'object') {
+    return JSON.stringify(value).slice(0, 180)
+  }
+
+  return String(value).slice(0, 180)
+}
+
+function getChangeRows(changes: unknown) {
+  if (!changes || typeof changes !== 'object' || Array.isArray(changes)) {
+    return []
+  }
+
+  return Object.entries(changes as Record<string, unknown>).flatMap(([field, change]) => {
+    if (!change || typeof change !== 'object' || Array.isArray(change)) {
+      return []
+    }
+
+    const values = change as { before?: unknown; after?: unknown }
+    return [{
+      field: formatChangeField(field),
+      before: formatChangeValue(values.before),
+      after: formatChangeValue(values.after),
+    }]
+  }).slice(0, 6)
 }
 
 function formatDateTime(value: Date | string) {
@@ -137,6 +181,7 @@ function buildPageHref(basePath: string, filters: PmacActivityFeedOptions, page:
     entityType: filters.entityType,
     action: filters.action,
     actorId: filters.actorId,
+    subject: filters.subject,
     from: filters.from,
     to: filters.to,
   }
@@ -159,6 +204,7 @@ export default function PmacActivityPageClient({
   entries,
   actions,
   actors,
+  subjects,
   pagination,
   filters,
   basePath,
@@ -168,6 +214,7 @@ export default function PmacActivityPageClient({
   entries: ActivityEntry[]
   actions: string[]
   actors: ActivityActor[]
+  subjects: ActivitySubject[]
   pagination: ActivityPagination
   filters: PmacActivityFeedOptions
   basePath: string
@@ -180,6 +227,7 @@ export default function PmacActivityPageClient({
     || filters.entityType
     || filters.action
     || filters.actorId
+    || filters.subject
     || filters.from
     || filters.to
   )
@@ -193,8 +241,8 @@ export default function PmacActivityPageClient({
       </header>
 
       <form action={basePath} method="get" className="card p-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-          <label className="md:col-span-2 xl:col-span-2">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.6fr)_repeat(4,minmax(130px,1fr))_minmax(230px,1.3fr)]">
+          <label className="md:col-span-2 xl:col-span-1">
             <span className="mb-1 block text-xs font-semibold text-slate-500">Search</span>
             <span className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-100">
               <Search size={15} className="shrink-0 text-slate-400" />
@@ -207,6 +255,22 @@ export default function PmacActivityPageClient({
                 className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 outline-none"
               />
             </span>
+          </label>
+
+          <label>
+            <span className="mb-1 block text-xs font-semibold text-slate-500">Event or project</span>
+            <select
+              name="subject"
+              defaultValue={filters.subject ?? ''}
+              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+            >
+              <option value="">All records</option>
+              {subjects.map((subject) => (
+                <option key={subject.value} value={subject.value}>
+                  {subject.type === 'EVENT' ? 'Event' : 'Project'}: {subject.label}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label>
@@ -232,7 +296,7 @@ export default function PmacActivityPageClient({
             >
               <option value="">All actions</option>
               {actions.map((action) => (
-                <option key={action} value={action}>{formatAction(action)}</option>
+                <option key={action} value={action}>{getPmacActivityActionLabel(action)}</option>
               ))}
             </select>
           </label>
@@ -318,6 +382,7 @@ export default function PmacActivityPageClient({
                   {dateEntries.map((entry) => {
                     const presentation = ENTITY_PRESENTATION[entry.entityType]
                     const EntityIcon = presentation.icon
+                    const changeRows = getChangeRows(entry.changes)
 
                     return (
                       <Link
@@ -331,14 +396,26 @@ export default function PmacActivityPageClient({
 
                         <span className="min-w-0 space-y-2">
                           <span className="flex flex-wrap items-center gap-2">
-                            <span className="text-xs font-bold text-slate-500">{presentation.label}</span>
+                            <span className="text-xs font-bold text-slate-600">
+                              {presentation.label}{entry.entityLabel ? `: ${entry.entityLabel}` : ''}
+                            </span>
                             <span className={`status-badge ${getActionClassName(entry.action)}`}>
-                              {formatAction(entry.action)}
+                              {getPmacActivityActionLabel(entry.action)}
                             </span>
                           </span>
                           <span className="block text-sm font-semibold text-slate-800">{entry.summary}</span>
                           {entry.details ? (
                             <span className="block text-sm leading-6 text-slate-500">{entry.details}</span>
+                          ) : null}
+                          {changeRows.length ? (
+                            <span className="grid gap-1 border-l-2 border-slate-200 pl-3 text-xs text-slate-500 sm:grid-cols-2">
+                              {changeRows.map((change) => (
+                                <span key={change.field} className="min-w-0">
+                                  <strong className="font-semibold text-slate-600">{change.field}:</strong>{' '}
+                                  {change.before} {'->'} {change.after}
+                                </span>
+                              ))}
+                            </span>
                           ) : null}
                           <span className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
                             <CircleUserRound size={13} />

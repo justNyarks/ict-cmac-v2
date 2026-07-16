@@ -312,6 +312,9 @@ export async function openPmacPoll(pollId: string) {
         ...getActivityActor(session.user),
         action: 'POLL_OPENED',
         summary: 'Opened a PMAC poll for voting.',
+        changes: {
+          status: { before: poll.status, after: 'OPEN' },
+        },
       })
     })
 
@@ -363,6 +366,9 @@ export async function closePmacPoll(pollId: string) {
         ...getActivityActor(session.user),
         action: 'POLL_CLOSED',
         summary: 'Closed a PMAC poll.',
+        changes: {
+          status: { before: poll.status, after: 'CLOSED' },
+        },
       })
     })
 
@@ -414,6 +420,9 @@ export async function archivePmacPoll(pollId: string) {
         ...getActivityActor(session.user),
         action: 'POLL_ARCHIVED',
         summary: 'Archived a PMAC poll.',
+        changes: {
+          status: { before: poll.status, after: 'ARCHIVED' },
+        },
       })
     })
 
