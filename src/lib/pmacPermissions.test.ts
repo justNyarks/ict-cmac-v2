@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  PMAC_EXECUTIVE_BRANCH_SPECIALTY,
+  PMAC_EXECUTIVE_TITLE_LABELS,
+  PMAC_EXECUTIVE_TITLES,
   isPmacAssignmentResponderRole,
   isPmacAttendanceManagerRole,
   isPmacCreatorRole,
@@ -13,6 +16,13 @@ import {
 } from './pmac'
 
 describe('PMAC role permissions', () => {
+  it('treats the public relations officer as an executive-level PMAC title', () => {
+    expect(PMAC_EXECUTIVE_TITLES).toContain('PUBLIC_RELATIONS_OFFICER')
+    expect(PMAC_EXECUTIVE_TITLE_LABELS.PUBLIC_RELATIONS_OFFICER).toBe('Public Relations Officer (PRO)')
+    expect(PMAC_EXECUTIVE_BRANCH_SPECIALTY.PUBLIC_RELATIONS_OFFICER).toBe('JOURNALISM')
+    expect(isPmacAssignmentResponderRole('PMAC_EXECUTIVE')).toBe(true)
+  })
+
   it('keeps event creation and event management with PMAC leadership', () => {
     expect(isPmacCreatorRole('PMAC_DIRECTOR')).toBe(true)
     expect(isPmacCreatorRole('PMAC_ASSISTANT_DIRECTOR')).toBe(true)

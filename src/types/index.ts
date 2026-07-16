@@ -22,6 +22,7 @@ export type PmacExecutiveTitle =
   | 'HEAD_GRAPHIC_DESIGNER'
   | 'HEAD_JOURNALIST'
   | 'TECHNICAL_HEAD'
+  | 'PUBLIC_RELATIONS_OFFICER'
 export type PmacSpecialty =
   | 'PHOTOGRAPHY'
   | 'VIDEOGRAPHY'

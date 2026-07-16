@@ -31,6 +31,7 @@ export const PMAC_EXECUTIVE_TITLES = [
   'HEAD_GRAPHIC_DESIGNER',
   'HEAD_JOURNALIST',
   'TECHNICAL_HEAD',
+  'PUBLIC_RELATIONS_OFFICER',
 ] as const satisfies readonly PmacExecutiveTitle[]
 export const PMAC_SPECIALTIES = [
   'PHOTOGRAPHY',
@@ -82,6 +83,7 @@ export const PMAC_EXECUTIVE_TITLE_LABELS: Record<PmacExecutiveTitleValue, string
   HEAD_GRAPHIC_DESIGNER: 'Head Graphic Designer',
   HEAD_JOURNALIST: 'Head Journalist',
   TECHNICAL_HEAD: 'Technical Head',
+  PUBLIC_RELATIONS_OFFICER: 'Public Relations Officer (PRO)',
 }
 
 export const PMAC_SPECIALTY_LABELS: Record<PmacSpecialtyValue, string> = {
@@ -99,6 +101,7 @@ export const PMAC_EXECUTIVE_BRANCH_SPECIALTY: Record<PmacExecutiveTitleValue, Pm
   HEAD_GRAPHIC_DESIGNER: 'GRAPHIC_DESIGN',
   HEAD_JOURNALIST: 'JOURNALISM',
   TECHNICAL_HEAD: 'TECHNICAL_SUPPORT',
+  PUBLIC_RELATIONS_OFFICER: 'JOURNALISM',
 }
 
 const PMAC_SPECIALTY_DUTY_ROLE_MAP: Record<PmacSpecialtyValue, readonly DutyRoleType[]> = {

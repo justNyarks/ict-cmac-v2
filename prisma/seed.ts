@@ -23,6 +23,7 @@ type SeedPmacExecutiveTitle =
   | 'HEAD_GRAPHIC_DESIGNER'
   | 'HEAD_JOURNALIST'
   | 'TECHNICAL_HEAD'
+  | 'PUBLIC_RELATIONS_OFFICER'
 
 type SeedPmacSpecialty =
   | 'PHOTOGRAPHY'
@@ -433,12 +434,12 @@ async function main() {
       key: 'member_support',
       email: 'pmac.member.support@spup.edu.ph',
       fullName: 'Nina Garcia',
-      role: 'PMAC_MEMBER',
-      clubRole: 'MEMBER',
+      role: 'PMAC_EXECUTIVE',
+      clubRole: 'EXECUTIVE',
       department: 'SITE',
       course: 'BS Information Technology',
-      executiveTitle: null,
-      specialties: ['GRAPHIC_DESIGN', 'VIDEOGRAPHY'],
+      executiveTitle: 'PUBLIC_RELATIONS_OFFICER',
+      specialties: ['JOURNALISM', 'GRAPHIC_DESIGN', 'VIDEOGRAPHY'],
     },
   ]
   const legacySharedExecutiveEmail = 'pmac.executive@spup.edu.ph'
