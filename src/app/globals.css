@@ -11,12 +11,12 @@
 
   --primary: #064e3b;
   --primary-light: #10b981;
-  --surface: #f3f4f0;
-  --surface-muted: #eceee9;
-  --surface-raised: #fafaf7;
-  --surface-hover: #f0f1ec;
+  --surface: #f8f9f6;
+  --surface-muted: #f1f3ee;
+  --surface-raised: #ffffff;
+  --surface-hover: #f4f6f1;
   --accent: #059669;
-  --border: #dde1da;
+  --border: #e1e6de;
   --text-dark: #022c22;
   --hero-gradient: linear-gradient(135deg, #064e3b 0%, #065f46 60%, #059669 100%);
 }
@@ -50,20 +50,28 @@ body {
     transition: background-color 180ms ease, color 180ms ease;
   }
 
+  :root:not(.dark) .app-paper-surface {
+    background-color: var(--surface) !important;
+    background-image: url('/textures/paper-light.jpg');
+    background-repeat: repeat;
+    background-size: 640px 640px;
+    background-attachment: fixed;
+  }
+
   :root:not(.dark) [class~="bg-white"] {
     background-color: var(--surface-raised) !important;
   }
 
   :root:not(.dark) [class~="bg-white/80"] {
-    background-color: rgb(250 250 247 / 0.9) !important;
+    background-color: rgb(255 255 255 / 0.92) !important;
   }
 
   :root:not(.dark) [class~="bg-white/70"] {
-    background-color: rgb(250 250 247 / 0.82) !important;
+    background-color: rgb(255 255 255 / 0.86) !important;
   }
 
   :root:not(.dark) [class~="bg-white/50"] {
-    background-color: rgb(250 250 247 / 0.68) !important;
+    background-color: rgb(255 255 255 / 0.72) !important;
   }
 
   :root:not(.dark) [class~="bg-slate-50"] {
