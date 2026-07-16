@@ -1,21 +1,40 @@
 import { hasPmacV4Delegates, hasUserSecurityFields, prisma } from '@/lib/prisma'
-import { calculatePmacReadinessScore, getRecommendedAssignmentRoles, PMAC_EXECUTIVE_TITLE_LABELS, PMAC_SPECIALTY_LABELS } from '@/lib/pmac'
+import {
+  calculatePmacReadinessScore,
+  getRecommendedAssignmentRoles,
+  PMAC_ATTENDANCE_STATUSES,
+  PMAC_EVENT_STATUSES,
+  PMAC_EXECUTIVE_TITLE_LABELS,
+  PMAC_POLL_STATUSES,
+  PMAC_PROJECT_STATUSES,
+  PMAC_SPECIALTY_LABELS,
+} from '@/lib/pmac'
 import { getPmacMemberEducation } from '@/lib/pmacMembers'
+import {
+  describePmacReportPeriod,
+  getPmacReportDateRange,
+  getPmacReportSubject,
+  type PmacReportFilters,
+} from '@/lib/pmacReportFilters'
 import { sanitizeCsvCell } from '@/lib/sanitization'
 
-export type PmacReportType = 'members' | 'events' | 'projects' | 'polls' | 'activity' | 'staffing' | 'performance'
+export type PmacReportType = 'members' | 'events' | 'projects' | 'polls' | 'activity' | 'staffing' | 'performance' | 'attendance'
 export type PmacReportSummary = {
   members: number
   activeMembers: number
   events: number
   importedEvents: number
   openPolls: number
+  polls: number
   pendingResponses: number
+  upcomingEvents: number
   understaffedUpcoming: number
   attendanceGaps: number
   attachments: number
   activity: number
   archivedActivity: number
+  attendanceRecords: number
+  attendanceRate: number
   averageReadinessScore: number
   reliableMembers: number
   incompleteMemberProfiles: number
@@ -29,12 +48,61 @@ export type PmacReportSummary = {
   projectCompletionRate: number
 }
 
+export type PmacReportFilterOptions = {
+  events: Array<{ id: string; title: string }>
+  projects: Array<{ id: string; title: string }>
+}
+
 function joinCsv(rows: unknown[][]) {
   return rows.map((row) => row.map((cell) => sanitizeCsvCell(cell)).join(',')).join('\n')
 }
 
-export async function buildPmacMembersCsv() {
+function withReportMetadata(type: PmacReportType, filters: PmacReportFilters, csv: string) {
+  return `${joinCsv([
+    ['PMAC Report', type.toUpperCase()],
+    ['Generated At', new Date().toISOString()],
+    ['Reporting Period', describePmacReportPeriod(filters)],
+    ['Status Filter', filters.status ?? 'All'],
+    ['Department Filter', filters.department ?? 'All'],
+    ['Executive Branch Filter', filters.branch ? PMAC_EXECUTIVE_TITLE_LABELS[filters.branch] : 'All'],
+    ['Event / Project Filter', filters.subject ?? 'All'],
+    [],
+  ])}\n${csv}`
+}
+
+function hasStatus<T extends string>(statuses: readonly T[], status: string | undefined): status is T {
+  return !!status && statuses.includes(status as T)
+}
+
+export async function buildPmacReportFilterOptions(): Promise<PmacReportFilterOptions> {
+  if (!hasPmacV4Delegates()) {
+    return { events: [], projects: [] }
+  }
+
+  const [events, projects] = await Promise.all([
+    prisma.pmacEvent.findMany({
+      orderBy: [{ startDateTime: 'desc' }, { title: 'asc' }],
+      take: 250,
+      select: { id: true, title: true },
+    }),
+    prisma.pmacProject.findMany({
+      orderBy: [{ targetDate: 'desc' }, { title: 'asc' }],
+      take: 250,
+      select: { id: true, title: true },
+    }),
+  ])
+
+  return { events, projects }
+}
+
+export async function buildPmacMembersCsv(filters: PmacReportFilters = {}) {
+  const dateRange = getPmacReportDateRange(filters)
   const members = await prisma.pmacMember.findMany({
+    where: {
+      ...(filters.department ? { department: filters.department } : {}),
+      ...(hasStatus(['ACTIVE', 'INACTIVE'] as const, filters.status) ? { status: filters.status } : {}),
+      ...(dateRange ? { joinedAt: dateRange } : {}),
+    },
     include: {
       account: {
         select: {
@@ -99,14 +167,21 @@ export async function buildPmacMembersCsv() {
   ])
 }
 
-export async function buildPmacEventsCsv() {
+export async function buildPmacEventsCsv(filters: PmacReportFilters = {}) {
   if (!hasPmacV4Delegates()) {
     return joinCsv([
       ['Title', 'Status', 'Venue', 'Starts At', 'Ends At', 'Created By', 'Creator Email', 'Approved By', 'Assignments', 'Attendance Records', 'Attachments'],
     ])
   }
 
+  const dateRange = getPmacReportDateRange(filters)
+  const subject = getPmacReportSubject(filters)
   const events = await prisma.pmacEvent.findMany({
+    where: {
+      ...(hasStatus(PMAC_EVENT_STATUSES, filters.status) ? { status: filters.status } : {}),
+      ...(dateRange ? { startDateTime: dateRange } : {}),
+      ...(subject?.type === 'EVENT' ? { id: subject.id } : {}),
+    },
     include: {
       createdBy: {
         select: {
@@ -156,14 +231,22 @@ export async function buildPmacEventsCsv() {
   ])
 }
 
-export async function buildPmacProjectsCsv() {
+export async function buildPmacProjectsCsv(filters: PmacReportFilters = {}) {
   if (!hasPmacV4Delegates()) {
     return joinCsv([
       ['Title', 'Branch', 'Status', 'Starts At', 'Target Date', 'Head', 'Team', 'Milestones Done', 'Milestones Total', 'Output Submitted', 'Links', 'Launched By', 'Created At'],
     ])
   }
 
+  const dateRange = getPmacReportDateRange(filters)
+  const subject = getPmacReportSubject(filters)
   const projects = await prisma.pmacProject.findMany({
+    where: {
+      ...(hasStatus(PMAC_PROJECT_STATUSES, filters.status) ? { status: filters.status } : {}),
+      ...(filters.branch ? { branch: filters.branch } : {}),
+      ...(dateRange ? { startDate: dateRange } : {}),
+      ...(subject?.type === 'PROJECT' ? { id: subject.id } : {}),
+    },
     include: {
       launchedBy: {
         select: {
@@ -238,18 +321,18 @@ export async function buildPmacProjectsCsv() {
   ])
 }
 
-export async function buildPmacStaffingCsv() {
+export async function buildPmacStaffingCsv(filters: PmacReportFilters = {}) {
   const now = new Date()
   const soon = new Date(now.getTime() + (1000 * 60 * 60 * 24 * 14))
+  const dateRange = getPmacReportDateRange(filters) ?? { gte: now, lte: soon }
+  const subject = getPmacReportSubject(filters)
 
   const [upcomingEvents, memberWorkloads] = await Promise.all([
     prisma.pmacEvent.findMany({
       where: {
         status: 'APPROVED',
-        startDateTime: {
-          gte: now,
-          lte: soon,
-        },
+        startDateTime: dateRange,
+        ...(subject?.type === 'EVENT' ? { id: subject.id } : {}),
       },
       include: {
         assignments: {
@@ -269,6 +352,8 @@ export async function buildPmacStaffingCsv() {
     prisma.pmacMember.findMany({
       where: {
         status: 'ACTIVE',
+        ...(filters.department ? { department: filters.department } : {}),
+        ...(subject?.type === 'EVENT' ? { eventAssignments: { some: { eventId: subject.id } } } : {}),
       },
       select: {
         fullName: true,
@@ -289,9 +374,9 @@ export async function buildPmacStaffingCsv() {
                 in: ['APPROVED', 'COMPLETED'],
               },
               startDateTime: {
-                gte: now,
-                lte: soon,
+                ...dateRange,
               },
+              ...(subject?.type === 'EVENT' ? { id: subject.id } : {}),
             },
           },
           select: {
@@ -351,14 +436,21 @@ export async function buildPmacStaffingCsv() {
   ])
 }
 
-export async function buildPmacPollsCsv() {
+export async function buildPmacPollsCsv(filters: PmacReportFilters = {}) {
   if (!hasPmacV4Delegates()) {
     return joinCsv([
       ['Title', 'Type', 'Status', 'Results Visibility', 'Opens At', 'Closes At', 'Created By', 'Creator Email', 'Linked Event', 'Votes Cast', 'Attachments'],
     ])
   }
 
+  const dateRange = getPmacReportDateRange(filters)
+  const subject = getPmacReportSubject(filters)
   const polls = await prisma.pmacPoll.findMany({
+    where: {
+      ...(hasStatus(PMAC_POLL_STATUSES, filters.status) ? { status: filters.status } : {}),
+      ...(dateRange ? { createdAt: dateRange } : {}),
+      ...(subject?.type === 'EVENT' ? { linkedEventId: subject.id } : {}),
+    },
     include: {
       createdBy: {
         select: {
@@ -402,14 +494,26 @@ export async function buildPmacPollsCsv() {
   ])
 }
 
-export async function buildPmacPerformanceCsv() {
+export async function buildPmacPerformanceCsv(filters: PmacReportFilters = {}) {
   const now = new Date()
   const soon = new Date(now.getTime() + (1000 * 60 * 60 * 24 * 14))
   const attendanceWindow = new Date(now.getTime() - (1000 * 60 * 60 * 24 * 90))
+  const dateRange = getPmacReportDateRange(filters) ?? { gte: attendanceWindow, lte: soon }
+  const attendanceDateRange = getPmacReportDateRange(filters) ?? { gte: attendanceWindow }
+  const subject = getPmacReportSubject(filters)
 
   const members = await prisma.pmacMember.findMany({
     where: {
       status: 'ACTIVE',
+      ...(filters.department ? { department: filters.department } : {}),
+      ...(subject?.type === 'EVENT'
+        ? {
+            OR: [
+              { eventAssignments: { some: { eventId: subject.id } } },
+              { attendanceRecords: { some: { eventId: subject.id } } },
+            ],
+          }
+        : {}),
       account: {
         is: {
           isActive: true,
@@ -435,9 +539,9 @@ export async function buildPmacPerformanceCsv() {
               in: ['APPROVED', 'COMPLETED'],
             },
             startDateTime: {
-              gte: attendanceWindow,
-              lte: soon,
+              ...dateRange,
             },
+            ...(subject?.type === 'EVENT' ? { id: subject.id } : {}),
           },
         },
         select: {
@@ -453,8 +557,9 @@ export async function buildPmacPerformanceCsv() {
       attendanceRecords: {
         where: {
           recordedAt: {
-            gte: attendanceWindow,
+            ...attendanceDateRange,
           },
+          ...(subject?.type === 'EVENT' ? { eventId: subject.id } : {}),
         },
         select: {
           status: true,
@@ -497,18 +602,112 @@ export async function buildPmacPerformanceCsv() {
   ])
 }
 
-export async function buildPmacActivityCsv() {
+export async function buildPmacAttendanceCsv(filters: PmacReportFilters = {}) {
+  if (!hasPmacV4Delegates()) {
+    return joinCsv([
+      ['Event', 'Event Date', 'Member', 'Department', 'Course', 'Assigned Duties', 'Attendance Status', 'Notes', 'Recorded By', 'Recorded At'],
+    ])
+  }
+
+  const dateRange = getPmacReportDateRange(filters)
+  const subject = getPmacReportSubject(filters)
+  const attendance = await prisma.pmacAttendance.findMany({
+    where: {
+      ...(hasStatus(PMAC_ATTENDANCE_STATUSES, filters.status) ? { status: filters.status } : {}),
+      ...(filters.department ? { member: { is: { department: filters.department } } } : {}),
+      ...(subject?.type === 'EVENT' ? { eventId: subject.id } : {}),
+      ...(subject?.type === 'PROJECT' ? { id: '__project_scope_not_applicable__' } : {}),
+      ...(dateRange ? { event: { is: { startDateTime: dateRange } } } : {}),
+    },
+    select: {
+      status: true,
+      notes: true,
+      recordedAt: true,
+      event: {
+        select: {
+          id: true,
+          title: true,
+          startDateTime: true,
+          assignments: {
+            select: {
+              memberId: true,
+              assignmentRole: true,
+            },
+          },
+        },
+      },
+      member: {
+        select: {
+          id: true,
+          fullName: true,
+          department: true,
+          course: true,
+          courseOrDepartment: true,
+        },
+      },
+      recordedBy: {
+        select: {
+          name: true,
+          email: true,
+        },
+      },
+    },
+    orderBy: [
+      { event: { startDateTime: 'desc' } },
+      { member: { fullName: 'asc' } },
+    ],
+  })
+
+  return joinCsv([
+    ['Event', 'Event Date', 'Member', 'Department', 'Course', 'Assigned Duties', 'Attendance Status', 'Notes', 'Recorded By', 'Recorded At'],
+    ...attendance.map((record) => {
+      const education = getPmacMemberEducation(record.member)
+      const duties = record.event.assignments
+        .filter((assignment) => assignment.memberId === record.member.id)
+        .map((assignment) => assignment.assignmentRole)
+
+      return [
+        record.event.title,
+        record.event.startDateTime.toISOString(),
+        record.member.fullName,
+        education.department,
+        education.course,
+        duties.join(' | '),
+        record.status,
+        record.notes ?? '',
+        record.recordedBy.name ?? record.recordedBy.email,
+        record.recordedAt.toISOString(),
+      ]
+    }),
+  ])
+}
+
+const PMAC_ACTIVITY_EXPORT_LIMIT = 10_000
+
+export async function buildPmacActivityCsv(filters: PmacReportFilters = {}) {
   if (!hasPmacV4Delegates()) {
     return joinCsv([
       ['Timestamp', 'Entity Type', 'Entity ID', 'Action', 'Actor Name', 'Actor Role', 'Summary', 'Details', 'Changes', 'Archived At'],
     ])
   }
 
+  const dateRange = getPmacReportDateRange(filters)
+  const subject = getPmacReportSubject(filters)
   const entries = await prisma.pmacActivityLog.findMany({
+    where: {
+      ...(dateRange ? { createdAt: dateRange } : {}),
+      ...(subject?.type === 'EVENT' ? { eventId: subject.id } : {}),
+      ...(subject?.type === 'PROJECT' ? { projectId: subject.id } : {}),
+    },
     orderBy: {
       createdAt: 'desc',
     },
+    take: PMAC_ACTIVITY_EXPORT_LIMIT + 1,
   })
+
+  if (entries.length > PMAC_ACTIVITY_EXPORT_LIMIT) {
+    throw new Error(`Report is too large. Select a shorter date range to export ${PMAC_ACTIVITY_EXPORT_LIMIT.toLocaleString()} activity records or fewer.`)
+  }
 
   return joinCsv([
     ['Timestamp', 'Entity Type', 'Entity ID', 'Action', 'Actor Name', 'Actor Role', 'Summary', 'Details', 'Changes', 'Archived At'],
@@ -539,13 +738,18 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
     events,
     importedEvents,
     openPolls,
+    polls,
     attachments,
     activity,
     archivedActivity,
+    attendanceRecords,
+    reliableAttendanceRecords,
     pendingResponses,
     upcomingEvents,
     recentCompletedEvents,
-    activeMemberPerformance,
+    activeMemberIds,
+    memberAttendanceGroups,
+    memberUpcomingWorkloads,
     incompleteMemberProfiles,
     pendingWrapUps,
     projects,
@@ -574,9 +778,16 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
         status: 'OPEN',
       },
     }),
+    prisma.pmacPoll.count(),
     hasPmacV4Delegates() ? prisma.pmacAttachment.count() : Promise.resolve(0),
     hasPmacV4Delegates() ? prisma.pmacActivityLog.count() : Promise.resolve(0),
     hasPmacV4Delegates() ? prisma.pmacActivityLog.count({ where: { archivedAt: { not: null } } }) : Promise.resolve(0),
+    prisma.pmacAttendance.count(),
+    prisma.pmacAttendance.count({
+      where: {
+        status: { in: ['PRESENT', 'LATE'] },
+      },
+    }),
     prisma.pmacEventAssignment.count({
       where: {
         availabilityResponse: 'PENDING',
@@ -634,37 +845,40 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
         },
       },
       select: {
-        eventAssignments: {
-          where: {
-            event: {
-              status: {
-                in: ['APPROVED', 'COMPLETED'],
-              },
-              startDateTime: {
-                gte: attendanceWindow,
-                lte: soon,
-              },
-            },
-          },
-          select: {
-            event: {
-              select: {
-                startDateTime: true,
-              },
-            },
-          },
-        },
-        attendanceRecords: {
-          where: {
-            recordedAt: {
-              gte: attendanceWindow,
-            },
-          },
-          select: {
-            status: true,
+        id: true,
+      },
+    }),
+    prisma.pmacAttendance.groupBy({
+      by: ['memberId', 'status'],
+      where: {
+        recordedAt: { gte: attendanceWindow },
+        member: {
+          status: 'ACTIVE',
+          account: {
+            is: { isActive: true },
           },
         },
       },
+      _count: { _all: true },
+    }),
+    prisma.pmacEventAssignment.groupBy({
+      by: ['memberId'],
+      where: {
+        member: {
+          status: 'ACTIVE',
+          account: {
+            is: { isActive: true },
+          },
+        },
+        event: {
+          status: 'APPROVED',
+          startDateTime: {
+            gte: now,
+            lte: soon,
+          },
+        },
+      },
+      _count: { _all: true },
     }),
     prisma.pmacMember.count({
       where: {
@@ -735,16 +949,21 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
         })
       }, 0) / upcomingEvents.length)
     : 0
-  const reliableMembers = activeMemberPerformance.filter((member) => {
-    if (!member.attendanceRecords.length) {
-      return true
+  const attendanceByMember = new Map<string, { total: number; reliable: number }>()
+  for (const group of memberAttendanceGroups) {
+    const current = attendanceByMember.get(group.memberId) ?? { total: 0, reliable: 0 }
+    current.total += group._count._all
+    if (group.status === 'PRESENT' || group.status === 'LATE') {
+      current.reliable += group._count._all
     }
-    const reliableRate = member.attendanceRecords.filter((record) => record.status === 'PRESENT' || record.status === 'LATE').length / member.attendanceRecords.length
-    return reliableRate >= 0.85
+    attendanceByMember.set(group.memberId, current)
+  }
+
+  const reliableMembers = activeMemberIds.filter((member) => {
+    const attendance = attendanceByMember.get(member.id)
+    return !attendance?.total || attendance.reliable / attendance.total >= 0.85
   }).length
-  const overloadedMembers = activeMemberPerformance.filter((member) => (
-    member.eventAssignments.filter((assignment) => assignment.event.startDateTime >= now).length >= 4
-  )).length
+  const overloadedMembers = memberUpcomingWorkloads.filter((member) => member._count._all >= 4).length
 
   return {
     members,
@@ -752,12 +971,16 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
     events,
     importedEvents,
     openPolls,
+    polls,
     pendingResponses,
+    upcomingEvents: upcomingEvents.length,
     understaffedUpcoming,
     attendanceGaps,
     attachments,
     activity,
     archivedActivity,
+    attendanceRecords,
+    attendanceRate: attendanceRecords ? Math.round((reliableAttendanceRecords / attendanceRecords) * 100) : 100,
     averageReadinessScore,
     reliableMembers,
     incompleteMemberProfiles,
@@ -772,21 +995,35 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
   }
 }
 
-export async function buildPmacReportCsv(type: PmacReportType) {
+export async function buildPmacReportCsv(type: PmacReportType, filters: PmacReportFilters = {}) {
+  let csv: string
+
   switch (type) {
     case 'members':
-      return buildPmacMembersCsv()
+      csv = await buildPmacMembersCsv(filters)
+      break
     case 'events':
-      return buildPmacEventsCsv()
+      csv = await buildPmacEventsCsv(filters)
+      break
     case 'projects':
-      return buildPmacProjectsCsv()
+      csv = await buildPmacProjectsCsv(filters)
+      break
     case 'polls':
-      return buildPmacPollsCsv()
+      csv = await buildPmacPollsCsv(filters)
+      break
     case 'staffing':
-      return buildPmacStaffingCsv()
+      csv = await buildPmacStaffingCsv(filters)
+      break
     case 'activity':
-      return buildPmacActivityCsv()
+      csv = await buildPmacActivityCsv(filters)
+      break
     case 'performance':
-      return buildPmacPerformanceCsv()
+      csv = await buildPmacPerformanceCsv(filters)
+      break
+    case 'attendance':
+      csv = await buildPmacAttendanceCsv(filters)
+      break
   }
+
+  return withReportMetadata(type, filters, csv)
 }
