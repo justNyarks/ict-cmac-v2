@@ -277,6 +277,7 @@ export async function getPmacMemberDirectory(input: PmacMemberDirectoryQuery = {
 
   return {
     members,
+    syncedAt: new Date().toISOString(),
     total,
     active,
     inactive: total - active,

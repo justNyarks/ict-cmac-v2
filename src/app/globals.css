@@ -121,6 +121,33 @@ body {
     background-color: #1a2d42 !important;
   }
 
+  .dark [class~="bg-green-400"],
+  .dark [class~="bg-green-500"],
+  .dark [class~="bg-red-400"],
+  .dark [class~="bg-red-500"] {
+    background-color: #718496 !important;
+  }
+
+  .dark [class~="bg-green-600"],
+  .dark [class~="bg-red-600"] {
+    background-color: #5b7085 !important;
+  }
+
+  .dark [class~="bg-green-700"],
+  .dark [class~="bg-red-700"] {
+    background-color: #435a70 !important;
+  }
+
+  .dark [class~="hover:bg-red-100"]:hover,
+  .dark [class~="hover:bg-red-100/50"]:hover {
+    background-color: #435a70 !important;
+  }
+
+  .dark [class~="hover:bg-red-500"]:hover,
+  .dark [class~="hover:bg-red-700"]:hover {
+    background-color: #5b7085 !important;
+  }
+
   .dark [class~="hover:bg-[#065f46]"]:hover {
     background-color: #40566e !important;
   }
@@ -151,7 +178,7 @@ body {
   .dark [class~="bg-red-50/40"],
   .dark [class~="bg-red-100/50"],
   .dark [class~="bg-red-100"] {
-    background-color: #371d20 !important;
+    background-color: #3a4d62 !important;
   }
 
   .dark [class~="bg-purple-50"],
@@ -189,9 +216,27 @@ body {
   .dark [class~="text-emerald-300"],
   .dark [class~="text-emerald-400"],
   .dark [class~="text-emerald-500"],
+  .dark [class~="text-emerald-900"],
   .dark [class~="text-emerald-800"],
   .dark [class~="text-emerald-700"],
   .dark [class~="text-emerald-600"] {
+    color: #c0c8ca !important;
+  }
+
+  .dark [class~="text-green-500"],
+  .dark [class~="text-green-600"],
+  .dark [class~="text-green-700"],
+  .dark [class~="text-green-800"],
+  .dark [class~="text-green-900"],
+  .dark [class~="text-red-100"],
+  .dark [class~="text-red-300"],
+  .dark [class~="text-red-400"],
+  .dark [class~="text-red-500"],
+  .dark [class~="text-red-600"],
+  .dark [class~="text-red-700"],
+  .dark [class~="text-red-700/60"],
+  .dark [class~="text-red-800"],
+  .dark [class~="text-red-900"] {
     color: #c0c8ca !important;
   }
 
@@ -230,8 +275,15 @@ body {
   .dark [class~="border-amber-100"],
   .dark [class~="border-amber-200"],
   .dark [class~="border-red-100"],
-  .dark [class~="border-red-200"] {
+  .dark [class~="border-red-200"],
+  .dark [class~="border-red-300"],
+  .dark [class~="border-red-400"] {
     border-color: var(--border) !important;
+  }
+
+  .dark [class~="ring-red-100"],
+  .dark [class~="focus:ring-red-50"]:focus {
+    --tw-ring-color: #718496 !important;
   }
 
   .dark [class~="divide-slate-50"] > :not([hidden]) ~ :not([hidden]),

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Edit3, Eye, EyeOff, KeyRound, LoaderCircle, Search, UserPlus, Users } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Edit3, Eye, EyeOff, KeyRound, LoaderCircle, RefreshCw, Search, UserPlus, Users } from 'lucide-react'
 import clsx from 'clsx'
 
 import Portal from '@/components/Portal'
@@ -87,6 +87,16 @@ function formatDate(value: Date | string | null | undefined) {
   })
 }
 
+function formatSyncTime(value: string | null | undefined) {
+  if (!value) return 'Not synced yet'
+
+  return new Date(value).toLocaleTimeString('en-PH', {
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
 function toFormState(member: PmacMemberRecord): MemberFormState {
   const schoolInfo = getPmacMemberEducation(member)
 
@@ -102,7 +112,7 @@ function toFormState(member: PmacMemberRecord): MemberFormState {
     status: member.status as PmacMemberStatus,
     executiveTitle: (member.executiveTitle as PmacExecutiveTitle | null) ?? '',
     specialties: member.specialties.map((entry) => entry.specialty as PmacSpecialty),
-    systemRole: member.account?.role as PmacSystemRole,
+    systemRole: (member.account?.role as PmacSystemRole | undefined) ?? 'PMAC_MEMBER',
     password: '',
   }
 }
@@ -129,6 +139,7 @@ export default function PmacManagementPageClient({
   const [showPassword, setShowPassword] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
   const requestId = useRef(0)
+  const requestInFlight = useRef(false)
 
   const members = directory?.members ?? []
   const hasDirectoryFilters = !!query || statusFilter !== 'ALL' || departmentFilter !== 'ALL'
@@ -147,11 +158,14 @@ export default function PmacManagementPageClient({
     return () => window.clearTimeout(timeout)
   }, [query])
 
-  const fetchMembers = useCallback(async (showInitialLoading = false) => {
+  const fetchMembers = useCallback(async (options: { initial?: boolean; quiet?: boolean } = {}) => {
+    if (options.quiet && requestInFlight.current) return
+
     const currentRequest = requestId.current + 1
     requestId.current = currentRequest
-    if (showInitialLoading) setLoading(true)
-    setRefreshing(true)
+    requestInFlight.current = true
+    if (options.initial) setLoading(true)
+    if (!options.quiet) setRefreshing(true)
     setLoadError('')
     try {
       const data = await getPmacMemberDirectory({
@@ -175,13 +189,29 @@ export default function PmacManagementPageClient({
     } finally {
       if (requestId.current === currentRequest) {
         setLoading(false)
-        setRefreshing(false)
+        if (!options.quiet) setRefreshing(false)
+        requestInFlight.current = false
       }
     }
   }, [debouncedQuery, departmentFilter, page, sort, specialtyFilter, statusFilter, systemRoleFilter])
 
   useEffect(() => {
     void fetchMembers()
+  }, [fetchMembers])
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void fetchMembers({ quiet: true })
+    }
+    const interval = window.setInterval(refreshWhenVisible, 60000)
+
+    window.addEventListener('focus', refreshWhenVisible)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener('focus', refreshWhenVisible)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
   }, [fetchMembers])
   const shouldShowExecutiveTitle = form.systemRole === 'PMAC_EXECUTIVE'
 
@@ -287,7 +317,7 @@ export default function PmacManagementPageClient({
     return (
       <div className="card mx-auto max-w-2xl p-8 text-center">
         <p className="font-semibold text-red-700">{loadError}</p>
-        <button type="button" onClick={() => void fetchMembers(true)} className="mt-3 text-sm font-semibold text-emerald-700">Try again</button>
+        <button type="button" onClick={() => void fetchMembers({ initial: true })} className="mt-3 text-sm font-semibold text-emerald-700">Try again</button>
       </div>
     )
   }
@@ -309,7 +339,7 @@ export default function PmacManagementPageClient({
       <section className="card grid gap-3 p-4 sm:grid-cols-[1fr_auto_auto_auto] sm:items-center" aria-label="PMAC roster summary">
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700"><Users size={17} /></span>
-          <div><p className="text-sm font-semibold text-slate-800">PMAC Roster</p><p className="text-xs text-slate-400">Current member and account status</p></div>
+          <div><p className="text-sm font-semibold text-slate-800">Synchronized PMAC Roster</p><p className="text-xs text-slate-400">Profiles, access, and active PMAC responsibilities</p></div>
         </div>
         <p className="text-sm text-slate-500"><strong className="text-slate-800">{directory?.total ?? 0}</strong> members</p>
         <p className="text-sm text-slate-500"><strong className="text-emerald-700">{directory?.active ?? 0}</strong> active</p>
@@ -323,10 +353,20 @@ export default function PmacManagementPageClient({
             <p className="mt-1 text-xs text-slate-400">
               {canManageMembers
                 ? 'Manage member identity, department, course, system access role, and account status.'
-                : 'Coordinator view for PMAC roster visibility while member creation stays with PMAC director and secretary.'}
+                : 'Read-only coordinator view synchronized with PMAC member, role, event-duty, and project updates.'}
             </p>
+            <p className="mt-1 text-[11px] text-slate-500">Last synced at {formatSyncTime(directory?.syncedAt)}</p>
           </div>
           <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => void fetchMembers()}
+              disabled={refreshing}
+              title="Refresh PMAC directory"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw size={15} className={clsx(refreshing && 'animate-spin')} />
+            </button>
             {!canManageMembers ? (
               <Link
                 href="/coordinator/pmac/officers"
@@ -416,7 +456,9 @@ export default function PmacManagementPageClient({
         {loadError ? <p className="border-b border-red-100 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700">{loadError}</p> : null}
         <div className={clsx('divide-y divide-slate-100 transition-opacity', refreshing && 'opacity-60')}>
           {members.map(member => {
-            const activeWorkCount = member._count.eventAssignments + member._count.projectAssignments + member._count.headedPmacProjects
+            const activeEventDuties = member._count.eventAssignments
+            const activeProjectAssignments = member._count.projectAssignments
+            const activeHeadedProjects = member._count.headedPmacProjects
             const content = (
               <>
                 <div className="min-w-0">
@@ -433,11 +475,11 @@ export default function PmacManagementPageClient({
                   </div>
                   <p className="mt-1 text-xs text-slate-400">{member.email}</p>
                   <p className="mt-1 text-[11px] text-slate-500">
-                    {formatPmacMemberEducation(member) || 'No department or course yet'} · Joined {formatDate(member.joinedAt)}
+                    {formatPmacMemberEducation(member) || 'No department or course yet'} | Joined {formatDate(member.joinedAt)}
                   </p>
                   {member.receivedTags.length ? (
                     <p className="mt-2 text-[11px] text-slate-500">
-                      Tags: {member.receivedTags.map((tag) => `${tag.label} (${tag.assignedByMember.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[tag.assignedByMember.executiveTitle as PmacExecutiveTitle] : tag.assignedByMember.fullName})`).join(' · ')}
+                      Tags: {member.receivedTags.map((tag) => `${tag.label} (${tag.assignedByMember.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[tag.assignedByMember.executiveTitle as PmacExecutiveTitle] : tag.assignedByMember.fullName})`).join(' | ')}
                     </p>
                   ) : null}
                 </div>
@@ -456,17 +498,38 @@ export default function PmacManagementPageClient({
                       {PMAC_SPECIALTY_LABELS[entry.specialty as PmacSpecialty]}
                     </span>
                   ))}
-                  <span className="status-badge bg-indigo-50 text-indigo-700 border-indigo-200">
-                    Access: {ROLE_LABELS[member.account?.role as PmacSystemRole]}
-                  </span>
+                  {member.account ? (
+                    <span className="status-badge bg-indigo-50 text-indigo-700 border-indigo-200">
+                      Access: {ROLE_LABELS[member.account.role as PmacSystemRole]}
+                    </span>
+                  ) : (
+                    <span className="status-badge border-red-200 bg-red-50 text-red-700">
+                      No linked account
+                    </span>
+                  )}
+                  {member.account && !member.account.isActive ? (
+                    <span className="status-badge border-red-200 bg-red-50 text-red-700">
+                      Account disabled
+                    </span>
+                  ) : null}
                   {member.account?.mustChangePassword ? (
                     <span className="status-badge bg-amber-50 text-amber-700 border-amber-200">
                       Password reset pending
                     </span>
                   ) : null}
-                  {activeWorkCount ? (
+                  {activeEventDuties ? (
                     <span className="status-badge border-slate-200 bg-slate-50 text-slate-600">
-                      {activeWorkCount} active responsibilit{activeWorkCount === 1 ? 'y' : 'ies'}
+                      {activeEventDuties} event dut{activeEventDuties === 1 ? 'y' : 'ies'}
+                    </span>
+                  ) : null}
+                  {activeProjectAssignments ? (
+                    <span className="status-badge border-slate-200 bg-slate-50 text-slate-600">
+                      {activeProjectAssignments} project assignment{activeProjectAssignments === 1 ? '' : 's'}
+                    </span>
+                  ) : null}
+                  {activeHeadedProjects ? (
+                    <span className="status-badge border-slate-200 bg-slate-50 text-slate-600">
+                      Heads {activeHeadedProjects} active project{activeHeadedProjects === 1 ? '' : 's'}
                     </span>
                   ) : null}
                   {canManageMembers ? (
