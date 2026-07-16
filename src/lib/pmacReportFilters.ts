@@ -20,6 +20,30 @@ export const PMAC_REPORT_STATUSES = [
   'EXCUSED',
 ] as const
 
+export const PMAC_REPORT_TYPES = [
+  'members',
+  'events',
+  'projects',
+  'staffing',
+  'performance',
+  'attendance',
+  'polls',
+  'activity',
+] as const
+
+export type PmacReportType = (typeof PMAC_REPORT_TYPES)[number]
+
+export const PMAC_REPORT_STATUS_OPTIONS: Record<PmacReportType, readonly string[]> = {
+  members: ['ACTIVE', 'INACTIVE'],
+  events: ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'COMPLETED'],
+  projects: ['PLANNED', 'ACTIVE', 'ON_HOLD', 'COMPLETED', 'ARCHIVED'],
+  staffing: [],
+  performance: [],
+  attendance: ['PRESENT', 'LATE', 'ABSENT', 'EXCUSED'],
+  polls: ['DRAFT', 'OPEN', 'CLOSED', 'ARCHIVED'],
+  activity: [],
+}
+
 export type PmacReportFilters = {
   from?: string
   to?: string
@@ -27,6 +51,7 @@ export type PmacReportFilters = {
   branch?: (typeof PMAC_EXECUTIVE_TITLES)[number]
   department?: PmacDepartment
   subject?: string
+  report?: PmacReportType
 }
 
 type SearchParamsReader = Pick<URLSearchParams, 'get'>
@@ -77,6 +102,7 @@ export function parsePmacReportFilters(searchParams: SearchParamsReader): PmacRe
   const branch = searchParams.get('branch') || undefined
   const department = searchParams.get('department') || undefined
   const subject = parseSubject(searchParams.get('subject'))
+  const report = searchParams.get('report') || undefined
 
   if (from && to && from > to) {
     throw new Error('Invalid report filter: From date must be before or equal to To date.')
@@ -84,6 +110,14 @@ export function parsePmacReportFilters(searchParams: SearchParamsReader): PmacRe
 
   if (status && !PMAC_REPORT_STATUSES.includes(status as (typeof PMAC_REPORT_STATUSES)[number])) {
     throw new Error('Invalid report filter: status is unsupported.')
+  }
+
+  if (report && !PMAC_REPORT_TYPES.includes(report as PmacReportType)) {
+    throw new Error('Invalid report filter: report type is unsupported.')
+  }
+
+  if (status && report && !PMAC_REPORT_STATUS_OPTIONS[report as PmacReportType].includes(status)) {
+    throw new Error('Invalid report filter: status does not apply to the selected report type.')
   }
 
   if (branch && !PMAC_EXECUTIVE_TITLES.includes(branch as (typeof PMAC_EXECUTIVE_TITLES)[number])) {
@@ -101,12 +135,13 @@ export function parsePmacReportFilters(searchParams: SearchParamsReader): PmacRe
     branch: branch as PmacReportFilters['branch'],
     department: department as PmacReportFilters['department'],
     subject,
+    report: report as PmacReportFilters['report'],
   }
 }
 
 export function parsePmacReportSearchParams(searchParams: PmacReportSearchParams) {
   const normalized = new URLSearchParams()
-  for (const key of ['from', 'to', 'status', 'branch', 'department', 'subject']) {
+  for (const key of ['from', 'to', 'status', 'branch', 'department', 'subject', 'report']) {
     const value = searchParams[key]
     const firstValue = Array.isArray(value) ? value[0] : value
     if (firstValue) normalized.set(key, firstValue)

@@ -2,9 +2,9 @@
 
 import type { PmacReportFilters } from '@/lib/pmacReportFilters'
 import {
-  buildPmacReportAnalytics,
-  buildPmacReportCounts,
-  buildPmacReportFilterOptions,
+  getCachedPmacReportAnalytics,
+  getCachedPmacReportCounts,
+  getCachedPmacReportFilterOptions,
   getCachedPmacReportSummary,
 } from '@/lib/pmacReports'
 import { assertActionAccess } from '@/lib/security'
@@ -19,9 +19,9 @@ export async function getPmacReportPageData(filters: PmacReportFilters = {}) {
 
   const [stats, filterOptions, counts, analytics] = await Promise.all([
     getCachedPmacReportSummary(),
-    buildPmacReportFilterOptions(),
-    buildPmacReportCounts(filters),
-    buildPmacReportAnalytics(filters),
+    getCachedPmacReportFilterOptions(),
+    getCachedPmacReportCounts(filters),
+    getCachedPmacReportAnalytics(filters),
   ])
 
   return { stats, filterOptions, counts, analytics }
@@ -29,5 +29,5 @@ export async function getPmacReportPageData(filters: PmacReportFilters = {}) {
 
 export async function getPmacReportFilterOptions() {
   await assertActionAccess(['CMAC_COORDINATOR', 'PMAC_DIRECTOR', 'PMAC_ASSISTANT_DIRECTOR', 'PMAC_SECRETARY'])
-  return buildPmacReportFilterOptions()
+  return getCachedPmacReportFilterOptions()
 }

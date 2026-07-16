@@ -6,7 +6,13 @@ import { useEffect, useState } from 'react'
 
 import { PMAC_ATTENDANCE_LABELS, PMAC_EXECUTIVE_TITLE_LABELS, PMAC_EXECUTIVE_TITLES } from '@/lib/pmac'
 import { PMAC_DEPARTMENTS } from '@/lib/pmacMembers'
-import { describePmacReportPeriod, PMAC_REPORT_STATUSES, type PmacReportFilters } from '@/lib/pmacReportFilters'
+import {
+  describePmacReportPeriod,
+  PMAC_REPORT_STATUS_OPTIONS,
+  PMAC_REPORT_TYPES,
+  type PmacReportFilters,
+  type PmacReportType,
+} from '@/lib/pmacReportFilters'
 import type { PmacReportAnalytics, PmacReportCounts } from '@/lib/pmacReports'
 import { runWithReverification } from '@/lib/reverificationClient'
 
@@ -51,6 +57,7 @@ type ReportFilterForm = {
   branch: string
   department: string
   subject: string
+  report: string
 }
 
 const EMPTY_FILTERS: ReportFilterForm = {
@@ -60,6 +67,7 @@ const EMPTY_FILTERS: ReportFilterForm = {
   branch: '',
   department: '',
   subject: '',
+  report: '',
 }
 
 const REPORT_LINKS = [
@@ -148,7 +156,11 @@ export default function PmacReportsPanel({
   }
 
   function updateFilter(field: keyof ReportFilterForm, value: string) {
-    setFilters((current) => ({ ...current, [field]: value }))
+    setFilters((current) => ({
+      ...current,
+      [field]: value,
+      ...(field === 'report' ? { status: '' } : {}),
+    }))
   }
 
   function applyFilters(nextFilters = filters) {
@@ -169,6 +181,11 @@ export default function PmacReportsPanel({
   const hasPendingFilters = JSON.stringify(filters) !== JSON.stringify({ ...EMPTY_FILTERS, ...appliedFilters })
   const reportingPeriod = describePmacReportPeriod(appliedFilters)
   const trendMaximum = Math.max(1, ...analytics.trends.map((trend) => trend.assignments + trend.reliableAttendance + trend.absences))
+  const selectedReport = filters.report as PmacReportType | ''
+  const statusOptions = selectedReport ? PMAC_REPORT_STATUS_OPTIONS[selectedReport] : []
+  const visibleReports = appliedFilters.report
+    ? REPORT_LINKS.filter((report) => report.type === appliedFilters.report)
+    : REPORT_LINKS
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 animate-fade-in">
@@ -243,7 +260,21 @@ export default function PmacReportsPanel({
           ) : null}
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <label>
+            <span className="mb-1 block text-xs font-semibold text-slate-500">Report type</span>
+            <select
+              value={filters.report}
+              onChange={(event) => updateFilter('report', event.target.value)}
+              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+            >
+              <option value="">All reports</option>
+              {PMAC_REPORT_TYPES.map((type) => {
+                const report = REPORT_LINKS.find((entry) => entry.type === type)
+                return <option key={type} value={type}>{report?.label ?? type}</option>
+              })}
+            </select>
+          </label>
           <label>
             <span className="mb-1 block text-xs font-semibold text-slate-500">From</span>
             <input
@@ -269,10 +300,11 @@ export default function PmacReportsPanel({
             <select
               value={filters.status}
               onChange={(event) => updateFilter('status', event.target.value)}
+              disabled={!selectedReport || statusOptions.length === 0}
               className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
             >
-              <option value="">All statuses</option>
-              {PMAC_REPORT_STATUSES.map((status) => (
+              <option value="">{!selectedReport ? 'Select a report first' : statusOptions.length ? 'All statuses' : 'Not applicable'}</option>
+              {statusOptions.map((status) => (
                 <option key={status} value={status}>{status.replaceAll('_', ' ').toLowerCase().replace(/^./, (value) => value.toUpperCase())}</option>
               ))}
             </select>
@@ -504,7 +536,7 @@ export default function PmacReportsPanel({
           ) : null}
         </div>
         <div className="divide-y divide-slate-50">
-          {REPORT_LINKS.map((report) => {
+          {visibleReports.map((report) => {
             const isDownloading = downloadingTypes.includes(report.type)
 
             return (

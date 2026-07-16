@@ -26,6 +26,7 @@ describe('PMAC report filters', () => {
       branch: 'HEAD_PHOTOGRAPHER',
       department: 'SITE',
       subject: 'EVENT:event-1',
+      report: undefined,
     })
     expect(getPmacReportSubject(filters)).toEqual({ type: 'EVENT', id: 'event-1' })
     expect(describePmacReportPeriod(filters)).toBe('2026-07-01 to 2026-07-31')
@@ -50,5 +51,14 @@ describe('PMAC report filters', () => {
     expect(() => parsePmacReportFilters(new URLSearchParams({ from: '2026-02-31' }))).toThrow(/valid date/)
     expect(() => parsePmacReportFilters(new URLSearchParams({ status: 'EVERYTHING' }))).toThrow(/status/)
     expect(() => parsePmacReportFilters(new URLSearchParams({ subject: 'EVENT:../secret' }))).toThrow(/selection/)
+    expect(() => parsePmacReportFilters(new URLSearchParams({ report: 'secrets' }))).toThrow(/report type/)
+    expect(() => parsePmacReportFilters(new URLSearchParams({ report: 'attendance', status: 'ACTIVE' }))).toThrow(/does not apply/)
+  })
+
+  it('accepts statuses supported by the selected report type', () => {
+    expect(parsePmacReportFilters(new URLSearchParams({ report: 'attendance', status: 'ABSENT' }))).toMatchObject({
+      report: 'attendance',
+      status: 'ABSENT',
+    })
   })
 })

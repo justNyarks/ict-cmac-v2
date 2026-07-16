@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { recordPmacActivity } from '@/lib/pmacActivity'
-import { describePmacReportPeriod, parsePmacReportFilters } from '@/lib/pmacReportFilters'
-import { buildPmacReportCsv, streamPmacActivityCsv, type PmacReportType } from '@/lib/pmacReports'
+import {
+  describePmacReportPeriod,
+  parsePmacReportFilters,
+  PMAC_REPORT_STATUS_OPTIONS,
+  type PmacReportType,
+} from '@/lib/pmacReportFilters'
+import { streamPmacReportCsv } from '@/lib/pmacReports'
 import { prisma } from '@/lib/prisma'
 import { assertActionAccess } from '@/lib/security'
 import { sanitizeSingleLineText } from '@/lib/sanitization'
@@ -12,30 +17,6 @@ const ALLOWED_REPORT_TYPES = new Set<PmacReportType>(['members', 'events', 'proj
 function buildFilename(type: PmacReportType) {
   const dateStamp = new Date().toISOString().slice(0, 10)
   return `pmac-${type}-report-${dateStamp}.csv`
-}
-
-function createCsvStream(csv: string) {
-  const encoder = new TextEncoder()
-  let cursor = 0
-  const chunkSize = 64 * 1024
-
-  return new ReadableStream<Uint8Array>({
-    pull(controller) {
-      if (cursor >= csv.length) {
-        controller.close()
-        return
-      }
-
-      let end = Math.min(cursor + chunkSize, csv.length)
-      if (end < csv.length) {
-        const newline = csv.lastIndexOf('\n', end)
-        end = newline > cursor ? newline + 1 : end
-      }
-
-      controller.enqueue(encoder.encode(csv.slice(cursor, end)))
-      cursor = end
-    },
-  })
 }
 
 function createAsyncCsvStream(chunks: AsyncIterable<string>) {
@@ -91,10 +72,18 @@ async function authorizeExportRequest(request: NextRequest) {
     throw new Error('Unsupported PMAC report type.')
   }
 
+  const filters = parsePmacReportFilters(request.nextUrl.searchParams)
+  if (filters.report && filters.report !== type) {
+    throw new Error('Invalid report filter: selected report type does not match the export.')
+  }
+  if (filters.status && !PMAC_REPORT_STATUS_OPTIONS[type].includes(filters.status)) {
+    throw new Error('Invalid report filter: status does not apply to this report type.')
+  }
+
   return {
     session,
     type,
-    filters: parsePmacReportFilters(request.nextUrl.searchParams),
+    filters,
   }
 }
 
@@ -111,9 +100,7 @@ export async function HEAD(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const { session, type, filters } = await authorizeExportRequest(request)
-    const body = type === 'activity'
-      ? createAsyncCsvStream(streamPmacActivityCsv(filters))
-      : createCsvStream(await buildPmacReportCsv(type, filters))
+    const body = createAsyncCsvStream(streamPmacReportCsv(type, filters))
 
     await recordPmacActivity(prisma, {
       entityType: 'REPORT',

@@ -1,4 +1,5 @@
 import { hasPmacV4Delegates, hasUserSecurityFields, prisma } from '@/lib/prisma'
+import { unstable_cache } from 'next/cache'
 import {
   calculatePmacReadinessScore,
   getRecommendedAssignmentRoles,
@@ -15,10 +16,11 @@ import {
   getPmacReportDateRange,
   getPmacReportSubject,
   type PmacReportFilters,
+  type PmacReportType,
 } from '@/lib/pmacReportFilters'
 import { sanitizeCsvCell } from '@/lib/sanitization'
 
-export type PmacReportType = 'members' | 'events' | 'projects' | 'polls' | 'activity' | 'staffing' | 'performance' | 'attendance'
+export type { PmacReportType } from '@/lib/pmacReportFilters'
 export type PmacReportSummary = {
   members: number
   activeMembers: number
@@ -113,10 +115,6 @@ function buildReportMetadataCsv(type: PmacReportType, filters: PmacReportFilters
     ['Event / Project Filter', filters.subject ?? 'All'],
     [],
   ])
-}
-
-function withReportMetadata(type: PmacReportType, filters: PmacReportFilters, csv: string) {
-  return `${buildReportMetadataCsv(type, filters)}\n${csv}`
 }
 
 function hasStatus<T extends string>(statuses: readonly T[], status: string | undefined): status is T {
@@ -1039,8 +1037,6 @@ export async function buildPmacAttendanceCsv(filters: PmacReportFilters = {}) {
   ])
 }
 
-const PMAC_ACTIVITY_EXPORT_LIMIT = 10_000
-
 function buildPmacActivityRow(entry: {
   createdAt: Date
   entityType: string
@@ -1065,37 +1061,6 @@ function buildPmacActivityRow(entry: {
     entry.changes ? JSON.stringify(entry.changes) : '',
     entry.archivedAt?.toISOString() ?? '',
   ]
-}
-
-export async function buildPmacActivityCsv(filters: PmacReportFilters = {}) {
-  if (!hasPmacV4Delegates()) {
-    return joinCsv([
-      ['Timestamp', 'Entity Type', 'Entity ID', 'Action', 'Actor Name', 'Actor Role', 'Summary', 'Details', 'Changes', 'Archived At'],
-    ])
-  }
-
-  const dateRange = getPmacReportDateRange(filters)
-  const subject = getPmacReportSubject(filters)
-  const entries = await prisma.pmacActivityLog.findMany({
-    where: {
-      ...(dateRange ? { createdAt: dateRange } : {}),
-      ...(subject?.type === 'EVENT' ? { eventId: subject.id } : {}),
-      ...(subject?.type === 'PROJECT' ? { projectId: subject.id } : {}),
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-    take: PMAC_ACTIVITY_EXPORT_LIMIT + 1,
-  })
-
-  if (entries.length > PMAC_ACTIVITY_EXPORT_LIMIT) {
-    throw new Error(`Report is too large. Select a shorter date range to export ${PMAC_ACTIVITY_EXPORT_LIMIT.toLocaleString()} activity records or fewer.`)
-  }
-
-  return joinCsv([
-    ['Timestamp', 'Entity Type', 'Entity ID', 'Action', 'Actor Name', 'Actor Role', 'Summary', 'Details', 'Changes', 'Archived At'],
-    ...entries.map(buildPmacActivityRow),
-  ])
 }
 
 export async function* streamPmacActivityCsv(filters: PmacReportFilters = {}) {
@@ -1133,6 +1098,456 @@ export async function* streamPmacActivityCsv(filters: PmacReportFilters = {}) {
     if (entries.length < 500) {
       return
     }
+  }
+}
+
+const PMAC_EXPORT_BATCH_SIZE = 250
+
+async function* paginateExportRows<T extends { id: string }>(
+  loadPage: (cursor?: string) => Promise<T[]>,
+) {
+  let cursor: string | undefined
+
+  while (true) {
+    const rows = await loadPage(cursor)
+    if (!rows.length) return
+
+    yield rows
+    cursor = rows.at(-1)?.id
+    if (rows.length < PMAC_EXPORT_BATCH_SIZE) return
+  }
+}
+
+async function* startPmacCsvStream(type: PmacReportType, filters: PmacReportFilters, header: unknown[]) {
+  yield `${buildReportMetadataCsv(type, filters)}\n`
+  yield `${joinCsv([header])}\n`
+}
+
+async function* streamPmacMembersCsv(filters: PmacReportFilters) {
+  yield* startPmacCsvStream('members', filters, [
+    'Full Name', 'Email', 'Club Role', 'Executive Title', 'Specialties', 'Assigned Tags', 'Status', 'System Role',
+    'Account Active', 'Password Reset Required', 'Joined At', 'Department', 'Course', 'Phone',
+  ])
+
+  const where = getFilteredMemberWhere(filters)
+  for await (const members of paginateExportRows((cursor) => prisma.pmacMember.findMany({
+    where,
+    take: PMAC_EXPORT_BATCH_SIZE,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    include: {
+      account: {
+        select: {
+          email: true,
+          role: true,
+          isActive: true,
+          ...(hasUserSecurityFields() ? { mustChangePassword: true } : {}),
+        },
+      },
+      specialties: { select: { specialty: true }, orderBy: { specialty: 'asc' } },
+      receivedTags: {
+        include: { assignedByMember: { select: { fullName: true, executiveTitle: true } } },
+        orderBy: [{ label: 'asc' }, { createdAt: 'asc' }],
+      },
+    },
+    orderBy: { id: 'asc' },
+  }))) {
+    yield `${joinCsv(members.map((member) => {
+      const education = getPmacMemberEducation(member)
+      return [
+        member.fullName,
+        member.email,
+        member.clubRole,
+        member.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle] : '',
+        member.specialties.map((entry) => PMAC_SPECIALTY_LABELS[entry.specialty]).join(' | '),
+        member.receivedTags.map((tag) => `${tag.label} (${tag.assignedByMember.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[tag.assignedByMember.executiveTitle] : tag.assignedByMember.fullName})`).join(' | '),
+        member.status,
+        member.account?.role ?? '',
+        member.account?.isActive ? 'Yes' : 'No',
+        member.account?.mustChangePassword ? 'Yes' : 'No',
+        member.joinedAt?.toISOString() ?? '',
+        education.department,
+        education.course,
+        member.phone ?? '',
+      ]
+    }))}\n`
+  }
+}
+
+async function* streamPmacEventsCsv(filters: PmacReportFilters) {
+  const header = [
+    'Title', 'Status', 'Source Type', 'Source Label', 'Source School', 'Source Documentation', 'Source Campus', 'Venue',
+    'Starts At', 'Ends At', 'Created By', 'Creator Email', 'Approved By', 'Assignments', 'Attendance Records', 'Attachments',
+  ]
+  yield* startPmacCsvStream('events', filters, header)
+  if (!hasPmacV4Delegates()) return
+
+  const where = getFilteredEventWhere(filters)
+  for await (const events of paginateExportRows((cursor) => prisma.pmacEvent.findMany({
+    where,
+    take: PMAC_EXPORT_BATCH_SIZE,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    include: {
+      createdBy: { select: { name: true, email: true } },
+      approvedBy: { select: { name: true } },
+      _count: { select: { assignments: true, attendance: true, attachments: true } },
+    },
+    orderBy: { id: 'asc' },
+  }))) {
+    yield `${joinCsv(events.map((event) => [
+      event.title,
+      event.status,
+      event.sourceType,
+      event.sourceLabel ?? '',
+      event.sourceSchool ?? '',
+      event.sourceDocumentationType ?? '',
+      event.sourceCampusType ?? '',
+      event.venue,
+      event.startDateTime.toISOString(),
+      event.endDateTime.toISOString(),
+      event.createdBy.name ?? '',
+      event.createdBy.email,
+      event.approvedBy?.name ?? '',
+      event._count.assignments,
+      event._count.attendance,
+      event._count.attachments,
+    ]))}\n`
+  }
+}
+
+async function* streamPmacProjectsCsv(filters: PmacReportFilters) {
+  yield* startPmacCsvStream('projects', filters, [
+    'Title', 'Branch', 'Status', 'Starts At', 'Target Date', 'Head', 'Team', 'Milestones Done', 'Milestones Total',
+    'Milestone Details', 'Output Submitted', 'Output Summary', 'Links', 'Launched By', 'Launcher Email', 'Created At',
+  ])
+  if (!hasPmacV4Delegates()) return
+
+  const where = getFilteredProjectWhere(filters)
+  for await (const projects of paginateExportRows((cursor) => prisma.pmacProject.findMany({
+    where,
+    take: PMAC_EXPORT_BATCH_SIZE,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    include: {
+      launchedBy: { select: { name: true, email: true } },
+      headMember: { select: { fullName: true } },
+      memberAssignments: {
+        include: { member: { select: { fullName: true } } },
+        orderBy: { createdAt: 'asc' },
+      },
+      milestones: { select: { title: true, status: true, dueDate: true }, orderBy: { dueDate: 'asc' } },
+      links: { select: { type: true, label: true, url: true }, orderBy: { createdAt: 'asc' } },
+    },
+    orderBy: { id: 'asc' },
+  }))) {
+    yield `${joinCsv(projects.map((project) => [
+      project.title,
+      PMAC_EXECUTIVE_TITLE_LABELS[project.branch],
+      project.status,
+      project.startDate.toISOString(),
+      project.targetDate.toISOString(),
+      project.headMember?.fullName ?? '',
+      project.memberAssignments.map((assignment) => assignment.member.fullName).join(' | '),
+      project.milestones.filter((milestone) => milestone.status === 'DONE').length,
+      project.milestones.length,
+      project.milestones.map((milestone) => `${milestone.title} (${milestone.status}, ${milestone.dueDate.toISOString()})`).join(' | '),
+      project.outputSubmittedAt?.toISOString() ?? '',
+      project.outputSummary ?? '',
+      project.links.map((link) => `${link.type}: ${link.label} (${link.url})`).join(' | '),
+      project.launchedBy.name ?? '',
+      project.launchedBy.email,
+      project.createdAt.toISOString(),
+    ]))}\n`
+  }
+}
+
+async function* streamPmacPollsCsv(filters: PmacReportFilters) {
+  yield* startPmacCsvStream('polls', filters, [
+    'Title', 'Type', 'Status', 'Results Visibility', 'Opens At', 'Closes At', 'Created By', 'Creator Email',
+    'Linked Event', 'Votes Cast', 'Attachments',
+  ])
+  if (!hasPmacV4Delegates()) return
+
+  const dateRange = getPmacReportDateRange(filters)
+  const subject = getPmacReportSubject(filters)
+  const where = {
+    ...(hasStatus(PMAC_POLL_STATUSES, filters.status) ? { status: filters.status } : {}),
+    ...(dateRange ? { createdAt: dateRange } : {}),
+    ...(subject?.type === 'EVENT' ? { linkedEventId: subject.id } : {}),
+  }
+
+  for await (const polls of paginateExportRows((cursor) => prisma.pmacPoll.findMany({
+    where,
+    take: PMAC_EXPORT_BATCH_SIZE,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    include: {
+      createdBy: { select: { name: true, email: true } },
+      linkedEvent: { select: { title: true } },
+      _count: { select: { votes: true, attachments: true } },
+    },
+    orderBy: { id: 'asc' },
+  }))) {
+    yield `${joinCsv(polls.map((poll) => [
+      poll.title,
+      poll.type,
+      poll.status,
+      poll.resultsVisibility,
+      poll.opensAt?.toISOString() ?? '',
+      poll.closesAt?.toISOString() ?? '',
+      poll.createdBy.name ?? '',
+      poll.createdBy.email,
+      poll.linkedEvent?.title ?? '',
+      poll._count.votes,
+      poll._count.attachments,
+    ]))}\n`
+  }
+}
+
+async function* streamPmacAttendanceCsv(filters: PmacReportFilters) {
+  yield* startPmacCsvStream('attendance', filters, [
+    'Event', 'Event Date', 'Member', 'Department', 'Course', 'Assigned Duties', 'Attendance Status', 'Notes',
+    'Recorded By', 'Recorded At',
+  ])
+  if (!hasPmacV4Delegates()) return
+
+  const where = getFilteredAttendanceWhere(filters)
+  for await (const attendance of paginateExportRows((cursor) => prisma.pmacAttendance.findMany({
+    where,
+    take: PMAC_EXPORT_BATCH_SIZE,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    select: {
+      id: true,
+      status: true,
+      notes: true,
+      recordedAt: true,
+      event: {
+        select: {
+          title: true,
+          startDateTime: true,
+          assignments: { select: { memberId: true, assignmentRole: true } },
+        },
+      },
+      member: {
+        select: { id: true, fullName: true, department: true, course: true, courseOrDepartment: true },
+      },
+      recordedBy: { select: { name: true, email: true } },
+    },
+    orderBy: { id: 'asc' },
+  }))) {
+    yield `${joinCsv(attendance.map((record) => {
+      const education = getPmacMemberEducation(record.member)
+      const duties = record.event.assignments
+        .filter((assignment) => assignment.memberId === record.member.id)
+        .map((assignment) => assignment.assignmentRole)
+      return [
+        record.event.title,
+        record.event.startDateTime.toISOString(),
+        record.member.fullName,
+        education.department,
+        education.course,
+        duties.join(' | '),
+        record.status,
+        record.notes ?? '',
+        record.recordedBy.name ?? record.recordedBy.email,
+        record.recordedAt.toISOString(),
+      ]
+    }))}\n`
+  }
+}
+
+async function* streamPmacStaffingCsv(filters: PmacReportFilters) {
+  yield* startPmacCsvStream('staffing', filters, [
+    'Section', 'Label', 'Source/Role', 'Source Label', 'Starts At', 'Venue', 'Assignment Count',
+    'Pending Responses', 'Missing Roles / Specialties', 'Assignment Details',
+  ])
+
+  const now = new Date()
+  const soon = new Date(now.getTime() + (14 * 24 * 60 * 60 * 1_000))
+  const dateRange = getPmacReportDateRange(filters) ?? { gte: now, lte: soon }
+  const subject = getPmacReportSubject(filters)
+
+  for await (const events of paginateExportRows((cursor) => prisma.pmacEvent.findMany({
+    where: {
+      status: 'APPROVED',
+      startDateTime: dateRange,
+      ...(subject?.type === 'EVENT' ? { id: subject.id } : {}),
+    },
+    take: PMAC_EXPORT_BATCH_SIZE,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    include: {
+      assignments: { include: { member: { select: { fullName: true } } } },
+    },
+    orderBy: { id: 'asc' },
+  }))) {
+    yield `${joinCsv(events.map((event) => {
+      const assignedRoles = new Set(event.assignments.map((assignment) => assignment.assignmentRole))
+      const missingRoles = event.sourceDocumentationType
+        ? getRecommendedAssignmentRoles(event.sourceDocumentationType).filter((role) => !assignedRoles.has(role))
+        : []
+      return [
+        'EVENT',
+        event.title,
+        event.sourceType,
+        event.sourceLabel ?? '',
+        event.startDateTime.toISOString(),
+        event.venue,
+        event.assignments.length,
+        event.assignments.filter((assignment) => assignment.availabilityResponse === 'PENDING').length,
+        missingRoles.join(' | '),
+        event.assignments.map((assignment) => `${assignment.member.fullName} (${assignment.assignmentRole})`).join(' | '),
+      ]
+    }))}\n`
+  }
+
+  for await (const members of paginateExportRows((cursor) => prisma.pmacMember.findMany({
+    where: {
+      status: 'ACTIVE',
+      ...(filters.department ? { department: filters.department } : {}),
+      ...(subject?.type === 'EVENT' ? { eventAssignments: { some: { eventId: subject.id } } } : {}),
+    },
+    take: PMAC_EXPORT_BATCH_SIZE,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    select: {
+      id: true,
+      fullName: true,
+      clubRole: true,
+      executiveTitle: true,
+      specialties: { select: { specialty: true }, orderBy: { specialty: 'asc' } },
+      eventAssignments: {
+        where: {
+          event: {
+            status: { in: ['APPROVED', 'COMPLETED'] },
+            startDateTime: dateRange,
+            ...(subject?.type === 'EVENT' ? { id: subject.id } : {}),
+          },
+        },
+        select: {
+          assignmentRole: true,
+          event: { select: { title: true, startDateTime: true } },
+        },
+      },
+    },
+    orderBy: { id: 'asc' },
+  }))) {
+    yield `${joinCsv(members.map((member) => [
+      'MEMBER',
+      member.fullName,
+      member.executiveTitle ? `${member.clubRole} (${PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle]})` : member.clubRole,
+      '',
+      '',
+      '',
+      member.eventAssignments.length,
+      member.eventAssignments.filter((assignment) => assignment.event.startDateTime >= now).length,
+      member.specialties.map((entry) => PMAC_SPECIALTY_LABELS[entry.specialty]).join(' | '),
+      member.eventAssignments.map((assignment) => `${assignment.event.title} (${assignment.assignmentRole})`).join(' | '),
+    ]))}\n`
+  }
+}
+
+async function* streamPmacPerformanceCsv(filters: PmacReportFilters) {
+  yield* startPmacCsvStream('performance', filters, [
+    'Full Name', 'Club Role', 'Executive Title', 'Specialties', 'Upcoming Load', 'Recent Assignments',
+    'Attendance Rate', 'Late/Absent Count', 'Recent Duty History', 'Attendance Notes',
+  ])
+
+  const now = new Date()
+  const soon = new Date(now.getTime() + (14 * 24 * 60 * 60 * 1_000))
+  const attendanceWindow = new Date(now.getTime() - (90 * 24 * 60 * 60 * 1_000))
+  const dateRange = getPmacReportDateRange(filters) ?? { gte: attendanceWindow, lte: soon }
+  const attendanceDateRange = getPmacReportDateRange(filters) ?? { gte: attendanceWindow }
+  const subject = getPmacReportSubject(filters)
+
+  for await (const members of paginateExportRows((cursor) => prisma.pmacMember.findMany({
+    where: {
+      status: 'ACTIVE',
+      ...(filters.department ? { department: filters.department } : {}),
+      ...(subject?.type === 'EVENT'
+        ? {
+            OR: [
+              { eventAssignments: { some: { eventId: subject.id } } },
+              { attendanceRecords: { some: { eventId: subject.id } } },
+            ],
+          }
+        : {}),
+      account: { is: { isActive: true } },
+    },
+    take: PMAC_EXPORT_BATCH_SIZE,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    select: {
+      id: true,
+      fullName: true,
+      clubRole: true,
+      executiveTitle: true,
+      specialties: { select: { specialty: true }, orderBy: { specialty: 'asc' } },
+      eventAssignments: {
+        where: {
+          event: {
+            status: { in: ['APPROVED', 'COMPLETED'] },
+            startDateTime: dateRange,
+            ...(subject?.type === 'EVENT' ? { id: subject.id } : {}),
+          },
+        },
+        select: {
+          assignmentRole: true,
+          event: { select: { title: true, startDateTime: true } },
+        },
+      },
+      attendanceRecords: {
+        where: {
+          recordedAt: attendanceDateRange,
+          ...(subject?.type === 'EVENT' ? { eventId: subject.id } : {}),
+        },
+        select: { status: true, event: { select: { title: true } } },
+      },
+    },
+    orderBy: { id: 'asc' },
+  }))) {
+    yield `${joinCsv(members.map((member) => {
+      const upcomingLoad = member.eventAssignments.filter((assignment) => assignment.event.startDateTime >= now).length
+      const reliableAttendance = member.attendanceRecords.filter((record) => record.status === 'PRESENT' || record.status === 'LATE').length
+      const attendanceRate = member.attendanceRecords.length
+        ? Math.round((reliableAttendance / member.attendanceRecords.length) * 100)
+        : 100
+      const lateOrAbsentCount = member.attendanceRecords.filter((record) => record.status === 'LATE' || record.status === 'ABSENT').length
+      return [
+        member.fullName,
+        member.clubRole,
+        member.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle] : '',
+        member.specialties.map((entry) => PMAC_SPECIALTY_LABELS[entry.specialty]).join(' | '),
+        upcomingLoad,
+        member.eventAssignments.length,
+        `${attendanceRate}%`,
+        lateOrAbsentCount,
+        member.eventAssignments.map((assignment) => `${assignment.event.title} (${assignment.assignmentRole})`).join(' | '),
+        member.attendanceRecords.map((record) => `${record.event.title} (${record.status})`).join(' | '),
+      ]
+    }))}\n`
+  }
+}
+
+export async function* streamPmacReportCsv(type: PmacReportType, filters: PmacReportFilters = {}) {
+  switch (type) {
+    case 'members':
+      yield* streamPmacMembersCsv(filters)
+      return
+    case 'events':
+      yield* streamPmacEventsCsv(filters)
+      return
+    case 'projects':
+      yield* streamPmacProjectsCsv(filters)
+      return
+    case 'staffing':
+      yield* streamPmacStaffingCsv(filters)
+      return
+    case 'performance':
+      yield* streamPmacPerformanceCsv(filters)
+      return
+    case 'attendance':
+      yield* streamPmacAttendanceCsv(filters)
+      return
+    case 'polls':
+      yield* streamPmacPollsCsv(filters)
+      return
+    case 'activity':
+      yield* streamPmacActivityCsv(filters)
   }
 }
 
@@ -1411,36 +1826,20 @@ export const getCachedPmacReportSummary = unstable_cache(
   { revalidate: 60, tags: ['pmac-reports'] },
 )
 
-export async function buildPmacReportCsv(type: PmacReportType, filters: PmacReportFilters = {}) {
-  let csv: string
+export const getCachedPmacReportFilterOptions = unstable_cache(
+  buildPmacReportFilterOptions,
+  ['pmac-report-filter-options-v1'],
+  { revalidate: 300, tags: ['pmac-reports'] },
+)
 
-  switch (type) {
-    case 'members':
-      csv = await buildPmacMembersCsv(filters)
-      break
-    case 'events':
-      csv = await buildPmacEventsCsv(filters)
-      break
-    case 'projects':
-      csv = await buildPmacProjectsCsv(filters)
-      break
-    case 'polls':
-      csv = await buildPmacPollsCsv(filters)
-      break
-    case 'staffing':
-      csv = await buildPmacStaffingCsv(filters)
-      break
-    case 'activity':
-      csv = await buildPmacActivityCsv(filters)
-      break
-    case 'performance':
-      csv = await buildPmacPerformanceCsv(filters)
-      break
-    case 'attendance':
-      csv = await buildPmacAttendanceCsv(filters)
-      break
-  }
+export const getCachedPmacReportCounts = unstable_cache(
+  buildPmacReportCounts,
+  ['pmac-report-counts-v1'],
+  { revalidate: 60, tags: ['pmac-reports'] },
+)
 
-  return withReportMetadata(type, filters, csv)
-}
-import { unstable_cache } from 'next/cache'
+export const getCachedPmacReportAnalytics = unstable_cache(
+  buildPmacReportAnalytics,
+  ['pmac-report-analytics-v1'],
+  { revalidate: 60, tags: ['pmac-reports'] },
+)
