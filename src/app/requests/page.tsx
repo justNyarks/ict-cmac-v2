@@ -10,7 +10,7 @@ import { SCHOOL_LABELS } from '@/lib/schools'
 
 const FILTERS = ['ALL', 'PENDING', 'COORDINATOR_APPROVED', 'DIRECTOR_APPROVED', 'REJECTED'] as const
 
-import { approveRequest, bulkApproveRequests, bulkRejectRequests, rejectRequest, deleteRequest, getRequests, checkConflict } from './actions'
+import { approveRequest, rejectRequest, deleteRequest, getRequests, checkConflict } from './actions'
 import { useSession } from 'next-auth/react'
 import { useEffect } from 'react'
 
@@ -32,7 +32,6 @@ export default function RequestsPage() {
   const [printMode, setPrintMode] = useState<'LETTER' | 'RECEIPT'>('LETTER')
   const [selectedServiceType, setSelectedServiceType] = useState<any>(null)
   const [isDownloadingPastEvents, setIsDownloadingPastEvents] = useState(false)
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [slaReferenceTime] = useState(() => Date.now())
   const selectedServiceLabel = selected?.serviceType || 'Unassigned'
   const isPrivilegedUser = ['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes((session?.user as any)?.role)
@@ -148,32 +147,6 @@ export default function RequestsPage() {
     if (request.status === 'DIRECTOR_APPROVED' && daysUntilEvent <= 2) return 'Upcoming soon'
     if (request.status === 'REJECTED') return 'Closed'
     return 'On track'
-  }
-
-  async function handleBulkApprove() {
-    if (!selectedIds.length) return
-
-    try {
-      await runWithReverification(() => bulkApproveRequests(selectedIds, note, selectedServiceType))
-      await fetchRequests()
-      setSelectedIds([])
-      setNote('')
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to bulk approve requests.')
-    }
-  }
-
-  async function handleBulkReject() {
-    if (!selectedIds.length) return
-
-    try {
-      await runWithReverification(() => bulkRejectRequests(selectedIds, note || 'Bulk rejection from queue review.'))
-      await fetchRequests()
-      setSelectedIds([])
-      setNote('')
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Failed to bulk reject requests.')
-    }
   }
 
   async function handleApprove(id: string) {
@@ -319,52 +292,11 @@ export default function RequestsPage() {
           </div>
         </div>
 
-        {isPrivilegedUser ? (
-          <div className="card p-4 flex flex-wrap items-center gap-3">
-            <span className="text-xs font-black uppercase tracking-widest text-slate-400">{selectedIds.length} selected</span>
-            <input
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="Optional bulk note / rejection reason"
-              className="min-w-[240px] flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600"
-            />
-            {(session?.user as any)?.role === 'ICT_DIRECTOR' ? (
-              <select value={selectedServiceType || 'CMAC'} onChange={(event) => setSelectedServiceType(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600">
-                <option value="CMAC">CMAC</option>
-                <option value="PMAC">PMAC</option>
-              </select>
-            ) : null}
-            <button
-              onClick={handleBulkApprove}
-              disabled={!selectedIds.length}
-              className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black uppercase tracking-widest text-white disabled:opacity-50"
-            >
-              Bulk Approve
-            </button>
-            <button
-              onClick={handleBulkReject}
-              disabled={!selectedIds.length}
-              className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-black uppercase tracking-widest text-red-700 disabled:opacity-50"
-            >
-              Bulk Reject
-            </button>
-          </div>
-        ) : null}
-
         {/* Table */}
         <div className="card overflow-hidden border border-emerald-100/50 shadow-xl shadow-emerald-900/5">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-emerald-50 bg-emerald-50/20">
-                {isPrivilegedUser ? (
-                  <th className="px-4 py-4">
-                    <input
-                      type="checkbox"
-                      checked={filtered.length > 0 && selectedIds.length === filtered.length}
-                      onChange={(event) => setSelectedIds(event.target.checked ? filtered.map((request) => request.id) : [])}
-                    />
-                  </th>
-                ) : null}
                 {['Event & School', 'Service Type', 'Request Date', 'Status', 'SLA', ''].map(h => (
                   <th key={h} className="text-left px-6 py-4 text-[10px] font-black text-emerald-800/50 uppercase tracking-widest">{h}</th>
                 ))}
@@ -373,15 +305,6 @@ export default function RequestsPage() {
             <tbody className="divide-y divide-emerald-50/50">
               {filtered.map(req => (
                 <tr key={req.id} className="hover:bg-emerald-50/30 transition-colors group">
-                  {isPrivilegedUser ? (
-                    <td className="px-4 py-5">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(req.id)}
-                        onChange={(event) => setSelectedIds((previous) => event.target.checked ? [...previous, req.id] : previous.filter((id) => id !== req.id))}
-                      />
-                    </td>
-                  ) : null}
                   <td className="px-6 py-5">
                     <p className="font-bold text-[var(--text-dark)] group-hover:text-emerald-700 transition-colors">{req.eventTitle}</p>
                     <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-tight">{req.school}</p>

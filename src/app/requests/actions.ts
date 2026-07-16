@@ -125,28 +125,6 @@ export async function approveRequest(id: string, note: string, serviceType?: Ser
   }
 }
 
-export async function bulkApproveRequests(ids: string[], note: string, serviceType?: ServiceType) {
-  const results: Array<{ id: string; success: boolean; error?: string }> = []
-
-  for (const id of ids) {
-    try {
-      await approveRequest(id, note, serviceType)
-      results.push({ id, success: true })
-    } catch (error) {
-      results.push({
-        id,
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown approval error.',
-      })
-    }
-  }
-
-  return {
-    success: results.every((result) => result.success),
-    results,
-  }
-}
-
 export async function rejectRequest(id: string, note: string) {
   const session = await assertActionAccess(['CMAC_COORDINATOR', 'ICT_DIRECTOR'], { zeroTrust: true })
 
@@ -196,28 +174,6 @@ export async function rejectRequest(id: string, note: string) {
   revalidateRequestViews(true)
   if (touchedPmacEvent) {
     revalidatePmacViews([`/pmac/events/${id}`])
-  }
-}
-
-export async function bulkRejectRequests(ids: string[], note: string) {
-  const results: Array<{ id: string; success: boolean; error?: string }> = []
-
-  for (const id of ids) {
-    try {
-      await rejectRequest(id, note)
-      results.push({ id, success: true })
-    } catch (error) {
-      results.push({
-        id,
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown rejection error.',
-      })
-    }
-  }
-
-  return {
-    success: results.every((result) => result.success),
-    results,
   }
 }
 
