@@ -3,6 +3,7 @@ import { signIn } from 'next-auth/react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Aperture, Sparkles, Camera } from 'lucide-react'
+import ThemeToggle from '@/components/theme/ThemeToggle'
 
 export default function SignInPage() {
   const [email, setEmail] = useState('')
@@ -27,6 +28,9 @@ export default function SignInPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--surface)] p-4 md:p-8">
+      <div className="fixed right-4 top-4 z-30 md:right-8 md:top-8">
+        <ThemeToggle />
+      </div>
       <div className="max-w-6xl w-full flex bg-white shadow-[0_32px_64px_-12px_rgba(6,78,59,0.15)] rounded-[2.5rem] overflow-hidden border border-emerald-100/50">
         {/* Left Side: Mascot/Banner */}
         <div className="hidden lg:block w-[55%] bg-[#022c22] relative p-16 overflow-hidden">

@@ -11,6 +11,7 @@ import clsx from 'clsx'
 import { getNotifications, markAllNotificationsAsRead, markNotificationAsRead } from '@/app/notificationsActions'
 import { getRoleLabel } from '@/lib/roles'
 import type { AppNotification } from '@/types/notifications'
+import ThemeToggle from '@/components/theme/ThemeToggle'
 
 const PAGE_TITLES: Record<string, string> = {
   '/': 'Dashboard',
@@ -180,12 +181,13 @@ export default function TopBar() {
         : 'ICT CMAC')
 
   return (
-    <header className="flex items-center justify-between h-20 px-10 bg-white/80 backdrop-blur-md border-b border-emerald-100/50 shadow-sm flex-shrink-0 z-20 print:hidden">
-      <h1 className="font-display text-xl text-[var(--text-dark)] font-extrabold uppercase tracking-tight">
+    <header className="flex h-20 flex-shrink-0 items-center justify-between gap-3 border-b border-emerald-100/50 bg-white/80 px-4 shadow-sm backdrop-blur-md sm:px-6 lg:px-10 z-20 print:hidden">
+      <h1 className="min-w-0 truncate font-display text-base text-[var(--text-dark)] font-extrabold uppercase tracking-tight sm:text-xl">
         {pathname === '/' ? 'Dashboard Overview' : pageTitle}
       </h1>
 
-      <div className="flex items-center gap-8">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-4 lg:gap-6">
+        <ThemeToggle />
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setShowNotifs(!showNotifs)}
@@ -322,7 +324,7 @@ export default function TopBar() {
           ) : null}
         </div>
 
-        <div className="h-10 w-[1px] bg-emerald-100/50"></div>
+        <div className="hidden h-10 w-px bg-emerald-100/50 sm:block"></div>
         <Link href="/profile" className="flex items-center gap-4 group cursor-pointer" onClick={() => setShowNotifs(false)}>
           <div className="text-right hidden sm:block">
             <p className="text-sm font-bold text-[var(--text-dark)] leading-none group-hover:text-emerald-700 transition-colors">{session?.user?.name || 'User Name'}</p>
