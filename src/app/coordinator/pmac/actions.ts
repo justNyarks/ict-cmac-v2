@@ -1,13 +1,16 @@
 'use server'
 
+import type { Prisma } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { revalidatePath, revalidateTag } from 'next/cache'
 
 import { PMAC_EXECUTIVE_TITLES, PMAC_SPECIALTIES } from '@/lib/pmac'
 import { recordPmacActivity } from '@/lib/pmacActivity'
 import { formatCourseOrDepartment, isPmacDepartment, normalizePmacMemberName } from '@/lib/pmacMembers'
+import { isPmacMemberStatus, normalizePmacPhone, parsePmacJoinedDate } from '@/lib/pmacMemberValidation'
+import { getPmacActiveMemberWorkInclude, getPmacMemberTransitionProblem, toPmacMemberActiveWork } from '@/lib/pmacMemberTransitions'
 import { hasUserSecurityFields, prisma } from '@/lib/prisma'
-import { getDefaultClubRoleForSystemRole, PMAC_SYSTEM_ROLES } from '@/lib/roles'
+import { getDefaultClubRoleForSystemRole, PMAC_CLUB_ROLES, PMAC_SYSTEM_ROLES } from '@/lib/roles'
 import { assertActionAccess } from '@/lib/security'
 import { sanitizeEmailAddress, sanitizePasswordInput, sanitizeSingleLineText } from '@/lib/sanitization'
 import type { PmacClubRole, PmacExecutiveTitle, PmacMemberStatus, PmacSpecialty, Role } from '@/types'
@@ -39,6 +42,19 @@ type PmacOfficerAssignmentPayload = {
   systemRole: PmacSystemRole
 }
 
+export type PmacMemberDirectoryQuery = {
+  query?: string
+  status?: string
+  department?: string
+  specialty?: string
+  systemRole?: string
+  sort?: string
+  page?: number
+  pageSize?: number
+}
+
+const PMAC_MEMBER_DIRECTORY_SORTS = ['NAME_ASC', 'NAME_DESC', 'JOINED_DESC', 'STATUS'] as const
+
 function revalidatePmacViews() {
   revalidateTag('pmac-reports', 'max')
   revalidatePath('/coordinator/pmac')
@@ -64,19 +80,6 @@ function isPmacExecutiveTitle(value: string): value is PmacExecutiveTitle {
 
 function isPmacSpecialty(value: string): value is PmacSpecialty {
   return PMAC_SPECIALTIES.includes(value as PmacSpecialty)
-}
-
-function normalizeJoinedAt(value?: string | null) {
-  if (!value) {
-    return null
-  }
-
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) {
-    throw new Error('Joined date is invalid.')
-  }
-
-  return parsed
 }
 
 async function ensureUniquePmacIdentity(memberId: string | undefined, email: string, accountId?: string | null) {
@@ -172,6 +175,119 @@ export async function getPmacMembers() {
   })
 }
 
+export async function getPmacMemberDirectory(input: PmacMemberDirectoryQuery = {}) {
+  await assertActionAccess(['CMAC_COORDINATOR', 'PMAC_DIRECTOR', 'PMAC_SECRETARY'])
+
+  const query = sanitizeSingleLineText(input.query, { fieldName: 'Member search', maxLength: 100 })
+  const status = input.status && input.status !== 'ALL' ? input.status : ''
+  const department = input.department && input.department !== 'ALL' ? input.department : ''
+  const specialty = input.specialty && input.specialty !== 'ALL' ? input.specialty : ''
+  const systemRole = input.systemRole && input.systemRole !== 'ALL' ? input.systemRole : ''
+  const sort = PMAC_MEMBER_DIRECTORY_SORTS.includes(input.sort as (typeof PMAC_MEMBER_DIRECTORY_SORTS)[number])
+    ? input.sort as (typeof PMAC_MEMBER_DIRECTORY_SORTS)[number]
+    : 'NAME_ASC'
+  const requestedPage = Number.isFinite(input.page) ? Math.max(1, Math.trunc(input.page as number)) : 1
+  const pageSize = Number.isFinite(input.pageSize) ? Math.min(50, Math.max(10, Math.trunc(input.pageSize as number))) : 20
+
+  if (status && !isPmacMemberStatus(status)) throw new Error('Invalid member status filter.')
+  if (department && !isPmacDepartment(department)) throw new Error('Invalid department filter.')
+  if (specialty && !isPmacSpecialty(specialty)) throw new Error('Invalid specialty filter.')
+  if (systemRole && !isPmacSystemRole(systemRole)) throw new Error('Invalid access-role filter.')
+
+  const memberStatus = status as PmacMemberStatus | ''
+  const memberSpecialty = specialty as PmacSpecialty | ''
+  const memberSystemRole = systemRole as PmacSystemRole | ''
+
+  const where: Prisma.PmacMemberWhereInput = {
+    ...(query
+      ? {
+          OR: [
+            { fullName: { contains: query } },
+            { email: { contains: query } },
+            { phone: { contains: query } },
+            { department: { contains: query } },
+            { course: { contains: query } },
+            { receivedTags: { some: { label: { contains: query } } } },
+          ],
+        }
+      : {}),
+    ...(memberStatus ? { status: memberStatus } : {}),
+    ...(department ? { department } : {}),
+    ...(memberSpecialty ? { specialties: { some: { specialty: memberSpecialty } } } : {}),
+    ...(memberSystemRole ? { account: { is: { role: memberSystemRole } } } : {}),
+  }
+
+  const orderBy: Prisma.PmacMemberOrderByWithRelationInput[] = sort === 'NAME_DESC'
+    ? [{ fullName: 'desc' }]
+    : sort === 'JOINED_DESC'
+      ? [{ joinedAt: 'desc' }, { fullName: 'asc' }]
+      : sort === 'STATUS'
+        ? [{ status: 'asc' }, { fullName: 'asc' }]
+        : [{ fullName: 'asc' }]
+
+  const [filteredTotal, summaryGroups] = await Promise.all([
+    prisma.pmacMember.count({ where }),
+    prisma.pmacMember.groupBy({
+      by: ['status', 'clubRole'],
+      _count: { _all: true },
+    }),
+  ])
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / pageSize))
+  const page = Math.min(requestedPage, totalPages)
+
+  const members = await prisma.pmacMember.findMany({
+    where,
+    include: {
+      account: {
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          isActive: true,
+          ...(hasUserSecurityFields() ? { mustChangePassword: true } : {}),
+        },
+      },
+      specialties: { select: { specialty: true }, orderBy: { specialty: 'asc' } },
+      receivedTags: {
+        include: {
+          assignedByMember: { select: { id: true, fullName: true, executiveTitle: true } },
+        },
+        orderBy: [{ label: 'asc' }, { createdAt: 'asc' }],
+      },
+      _count: {
+        select: {
+          eventAssignments: { where: { event: { status: 'APPROVED' } } },
+          projectAssignments: { where: { project: { status: { in: ['PLANNED', 'ACTIVE', 'ON_HOLD'] } } } },
+          headedPmacProjects: { where: { status: { in: ['PLANNED', 'ACTIVE', 'ON_HOLD'] } } },
+        },
+      },
+    },
+    orderBy,
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+  })
+
+  const total = summaryGroups.reduce((sum, group) => sum + group._count._all, 0)
+  const active = summaryGroups
+    .filter(group => group.status === 'ACTIVE')
+    .reduce((sum, group) => sum + group._count._all, 0)
+  const officers = summaryGroups
+    .filter(group => group.clubRole !== 'MEMBER')
+    .reduce((sum, group) => sum + group._count._all, 0)
+
+  return {
+    members,
+    total,
+    active,
+    inactive: total - active,
+    officers,
+    filteredTotal,
+    page,
+    pageSize,
+    totalPages,
+  }
+}
+
 export async function savePmacMember(payload: PmacMemberPayload) {
   let session: Awaited<ReturnType<typeof assertActionAccess>> | undefined
 
@@ -181,16 +297,26 @@ export async function savePmacMember(payload: PmacMemberPayload) {
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' }
   }
 
+  const memberId = payload.id ? sanitizeSingleLineText(payload.id, {
+    fieldName: 'Member ID',
+    maxLength: 191,
+    required: true,
+  }) : undefined
   const fullName = normalizePmacMemberName(sanitizeSingleLineText(payload.fullName, {
     fieldName: 'Full name',
     maxLength: 191,
     required: true,
   }))
   const email = sanitizeEmailAddress(payload.email)
-  const phone = sanitizeSingleLineText(payload.phone, {
-    fieldName: 'Phone',
-    maxLength: 50,
-  })
+  let phone = ''
+  try {
+    phone = normalizePmacPhone(sanitizeSingleLineText(payload.phone, {
+      fieldName: 'Phone',
+      maxLength: 50,
+    }))
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Invalid phone number.' }
+  }
   const department = sanitizeSingleLineText(payload.department, {
     fieldName: 'Department',
     maxLength: 20,
@@ -208,6 +334,12 @@ export async function savePmacMember(payload: PmacMemberPayload) {
   const specialties = Array.from(new Set((payload.specialties ?? []).map((specialty) => String(specialty).trim()).filter(Boolean)))
   if (specialties.some((specialty) => !isPmacSpecialty(specialty))) {
     return { success: false, error: 'Please choose valid PMAC specialties.' }
+  }
+  if (!specialties.length) {
+    return { success: false, error: 'Select at least one PMAC specialty.' }
+  }
+  if (!isPmacMemberStatus(payload.status)) {
+    return { success: false, error: 'Please choose a valid member status.' }
   }
   const executiveTitleValue = sanitizeSingleLineText(payload.executiveTitle, {
     fieldName: 'Executive title',
@@ -236,7 +368,7 @@ export async function savePmacMember(payload: PmacMemberPayload) {
     password = sanitizePasswordInput(payload.password, {
       fieldName: payload.id ? 'Password update' : 'Password',
       required: !payload.id,
-      minLength: payload.password ? 8 : 1,
+      minLength: payload.password ? 12 : 1,
       maxLength: 255,
     })
   } catch (error) {
@@ -245,15 +377,15 @@ export async function savePmacMember(payload: PmacMemberPayload) {
 
   let joinedAt: Date | null
   try {
-    joinedAt = normalizeJoinedAt(payload.joinedAt)
+    joinedAt = parsePmacJoinedDate(payload.joinedAt)
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Joined date is invalid.' }
   }
 
   try {
-    const existing = payload.id
+    const existing = memberId
       ? await prisma.pmacMember.findUnique({
-          where: { id: payload.id },
+          where: { id: memberId },
           include: {
             account: {
               select: {
@@ -263,17 +395,37 @@ export async function savePmacMember(payload: PmacMemberPayload) {
                 isActive: true,
               },
             },
+            specialties: { select: { specialty: true } },
+            ...getPmacActiveMemberWorkInclude(),
           },
         })
       : null
 
-    if (payload.id && !existing) {
+    if (memberId && !existing) {
       return { success: false, error: 'PMAC member not found.' }
     }
 
-    await ensureUniquePmacIdentity(payload.id, email, existing?.account?.id)
-    await ensureExecutiveTitleAvailability(payload.id, executiveTitle)
+    if (existing && !existing.account && !password) {
+      return { success: false, error: 'A temporary password is required because this member does not have a system account yet.' }
+    }
+
+    await ensureUniquePmacIdentity(memberId, email, existing?.account?.id)
+    await ensureExecutiveTitleAvailability(memberId, executiveTitle)
+    const transitionProblem = getPmacMemberTransitionProblem({
+      currentClubRole: existing?.clubRole ?? null,
+      nextClubRole: clubRole,
+      currentExecutiveTitle: existing?.executiveTitle ?? null,
+      nextExecutiveTitle: executiveTitle,
+      nextStatus: payload.status,
+      nextSpecialties: specialties as PmacSpecialty[],
+      activeWork: existing
+        ? toPmacMemberActiveWork(existing)
+        : { eventDuties: [], projectAssignments: [], headedProjects: [] },
+    })
+    if (transitionProblem) return { success: false, error: transitionProblem }
+
     const supportsUserSecurityFields = hasUserSecurityFields()
+    const hashedPassword = password ? await bcrypt.hash(password, 10) : null
 
     await prisma.$transaction(async (tx) => {
       const member = existing
@@ -323,8 +475,6 @@ export async function savePmacMember(payload: PmacMemberPayload) {
           })),
         })
       }
-
-      const hashedPassword = password ? await bcrypt.hash(password, 10) : null
 
       if (existing?.account?.id) {
         await tx.user.update({
@@ -414,8 +564,20 @@ export async function assignPmacOfficerRole(payload: PmacOfficerAssignmentPayloa
     return { success: false, error: error instanceof Error ? error.message : 'Unauthorized' }
   }
 
+  const memberId = sanitizeSingleLineText(payload.memberId, {
+    fieldName: 'Member ID',
+    maxLength: 191,
+    required: true,
+  })
+
   if (!isPmacSystemRole(payload.systemRole)) {
     return { success: false, error: 'Please choose a valid PMAC system role.' }
+  }
+  if (!PMAC_CLUB_ROLES.includes(payload.clubRole)) {
+    return { success: false, error: 'Please choose a valid PMAC club role.' }
+  }
+  if (!isPmacMemberStatus(payload.status)) {
+    return { success: false, error: 'Please choose a valid member status.' }
   }
 
   const executiveTitleValue = sanitizeSingleLineText(payload.executiveTitle, {
@@ -438,10 +600,10 @@ export async function assignPmacOfficerRole(payload: PmacOfficerAssignmentPayloa
   }
 
   try {
-    await ensureExecutiveTitleAvailability(payload.memberId, executiveTitle)
+    await ensureExecutiveTitleAvailability(memberId, executiveTitle)
 
     const member = await prisma.pmacMember.findUnique({
-      where: { id: payload.memberId },
+      where: { id: memberId },
       include: {
         account: {
           select: {
@@ -450,6 +612,8 @@ export async function assignPmacOfficerRole(payload: PmacOfficerAssignmentPayloa
             isActive: true,
           },
         },
+        specialties: { select: { specialty: true } },
+        ...getPmacActiveMemberWorkInclude(),
       },
     })
 
@@ -459,10 +623,20 @@ export async function assignPmacOfficerRole(payload: PmacOfficerAssignmentPayloa
 
     const account = member.account
     const accountId = account.id
+    const transitionProblem = getPmacMemberTransitionProblem({
+      currentClubRole: member.clubRole,
+      nextClubRole: payload.clubRole,
+      currentExecutiveTitle: member.executiveTitle,
+      nextExecutiveTitle: executiveTitle,
+      nextStatus: payload.status,
+      nextSpecialties: member.specialties.map(entry => entry.specialty),
+      activeWork: toPmacMemberActiveWork(member),
+    })
+    if (transitionProblem) return { success: false, error: transitionProblem }
 
     await prisma.$transaction(async (tx) => {
       await tx.pmacMember.update({
-        where: { id: payload.memberId },
+        where: { id: memberId },
         data: {
           clubRole: payload.clubRole,
           status: payload.status,
@@ -478,8 +652,8 @@ export async function assignPmacOfficerRole(payload: PmacOfficerAssignmentPayloa
       })
       await recordPmacActivity(tx, {
         entityType: 'MEMBER',
-        entityId: payload.memberId,
-        memberId: payload.memberId,
+        entityId: memberId,
+        memberId,
         actorId: session.user.id,
         actorName: session.user.name || 'CMAC Coordinator',
         actorRole: session.user.role,

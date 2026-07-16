@@ -1,14 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, CheckCircle2, Search, Shield, UserPlus, Users } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Edit3, Eye, EyeOff, KeyRound, LoaderCircle, Search, UserPlus, Users } from 'lucide-react'
 import clsx from 'clsx'
 
 import Portal from '@/components/Portal'
-import { filterPmacMembers } from '@/lib/pmacFilters'
 import {
   PMAC_EXECUTIVE_TITLES,
+  PMAC_EXECUTIVE_BRANCH_SPECIALTY,
   PMAC_EXECUTIVE_TITLE_LABELS,
   PMAC_SPECIALTIES,
   PMAC_SPECIALTY_LABELS,
@@ -22,18 +22,18 @@ import {
 import { runWithReverification } from '@/lib/reverificationClient'
 import {
   getDefaultClubRoleForSystemRole,
-  PMAC_CLUB_ROLES,
   PMAC_CLUB_ROLE_LABELS,
   PMAC_MEMBER_STATUSES,
   PMAC_MEMBER_STATUS_LABELS,
   PMAC_SYSTEM_ROLES,
   ROLE_LABELS,
 } from '@/lib/roles'
-import { getPmacMembers, savePmacMember } from './actions'
+import { getPmacMemberDirectory, savePmacMember } from './actions'
 import type { PmacClubRole, PmacExecutiveTitle, PmacMemberStatus, PmacSpecialty, Role } from '@/types'
 
 type PmacSystemRole = Extract<Role, 'PMAC_DIRECTOR' | 'PMAC_ASSISTANT_DIRECTOR' | 'PMAC_SECRETARY' | 'PMAC_EXECUTIVE' | 'PMAC_MEMBER'>
-type PmacMemberRecord = Awaited<ReturnType<typeof getPmacMembers>>[number]
+type PmacMemberDirectory = Awaited<ReturnType<typeof getPmacMemberDirectory>>
+type PmacMemberRecord = PmacMemberDirectory['members'][number]
 type MemberFormState = {
   id?: string
   fullName: string
@@ -67,6 +67,12 @@ const EMPTY_FORM: MemberFormState = {
   specialties: [],
   systemRole: 'PMAC_MEMBER',
   password: '',
+}
+
+function generateTemporaryPassword() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%'
+  const values = crypto.getRandomValues(new Uint32Array(16))
+  return Array.from(values, value => alphabet[value % alphabet.length]).join('')
 }
 
 function formatDate(value: Date | string | null | undefined) {
@@ -104,68 +110,103 @@ function toFormState(member: PmacMemberRecord): MemberFormState {
 export default function PmacManagementPageClient({
   canManageMembers = true,
 }: PmacManagementPageClientProps) {
-  const [members, setMembers] = useState<PmacMemberRecord[]>([])
+  const [directory, setDirectory] = useState<PmacMemberDirectory | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | PmacMemberStatus>('ALL')
-  const [clubRoleFilter, setClubRoleFilter] = useState<'ALL' | PmacClubRole>('ALL')
+  const [departmentFilter, setDepartmentFilter] = useState('ALL')
+  const [specialtyFilter, setSpecialtyFilter] = useState<'ALL' | PmacSpecialty>('ALL')
+  const [systemRoleFilter, setSystemRoleFilter] = useState<'ALL' | PmacSystemRole>('ALL')
+  const [sort, setSort] = useState('NAME_ASC')
+  const [page, setPage] = useState(1)
   const [form, setForm] = useState<MemberFormState>(EMPTY_FORM)
+  const [editingWorkCount, setEditingWorkCount] = useState(0)
+  const [showPassword, setShowPassword] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null)
+  const requestId = useRef(0)
+
+  const members = directory?.members ?? []
+  const hasDirectoryFilters = !!query || statusFilter !== 'ALL' || departmentFilter !== 'ALL'
+    || specialtyFilter !== 'ALL' || systemRoleFilter !== 'ALL' || sort !== 'NAME_ASC'
 
   const showToast = (type: 'success' | 'error', msg: string) => {
     setToast({ type, msg })
     setTimeout(() => setToast(null), 4000)
   }
 
-  const fetchMembers = useCallback(async () => {
-    setLoading(true)
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedQuery(query)
+      setPage(1)
+    }, 300)
+    return () => window.clearTimeout(timeout)
+  }, [query])
+
+  const fetchMembers = useCallback(async (showInitialLoading = false) => {
+    const currentRequest = requestId.current + 1
+    requestId.current = currentRequest
+    if (showInitialLoading) setLoading(true)
+    setRefreshing(true)
+    setLoadError('')
     try {
-      const data = await getPmacMembers()
-      setMembers(data)
+      const data = await getPmacMemberDirectory({
+        query: debouncedQuery,
+        status: statusFilter,
+        department: departmentFilter,
+        specialty: specialtyFilter,
+        systemRole: systemRoleFilter,
+        sort,
+        page,
+        pageSize: 20,
+      })
+      if (requestId.current === currentRequest) {
+        setDirectory(data)
+        if (data.page !== page) setPage(data.page)
+      }
     } catch (error) {
-      showToast('error', error instanceof Error ? error.message : 'Failed to load PMAC members.')
+      if (requestId.current === currentRequest) {
+        setLoadError(error instanceof Error ? error.message : 'Failed to load PMAC members.')
+      }
     } finally {
-      setLoading(false)
+      if (requestId.current === currentRequest) {
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
-  }, [])
+  }, [debouncedQuery, departmentFilter, page, sort, specialtyFilter, statusFilter, systemRoleFilter])
 
   useEffect(() => {
-    fetchMembers()
+    void fetchMembers()
   }, [fetchMembers])
-
-  const stats = useMemo(() => {
-    const active = members.filter(member => member.status === 'ACTIVE').length
-    const inactive = members.length - active
-    const officers = members.filter(member => member.clubRole !== 'MEMBER').length
-
-    return { active, inactive, officers }
-  }, [members])
-
-  const filteredMembers = useMemo(
-    () => filterPmacMembers(
-      members.map((member) => ({
-        ...member,
-        executiveTitleText: member.executiveTitle ? PMAC_EXECUTIVE_TITLE_LABELS[member.executiveTitle as PmacExecutiveTitle] : '',
-        specialtiesText: member.specialties.map((entry) => PMAC_SPECIALTY_LABELS[entry.specialty as PmacSpecialty]).join(' '),
-        tagsText: member.receivedTags.map((tag) => tag.label).join(' '),
-      })),
-      query,
-      statusFilter,
-      clubRoleFilter
-    ),
-    [clubRoleFilter, members, query, statusFilter]
-  )
   const shouldShowExecutiveTitle = form.systemRole === 'PMAC_EXECUTIVE'
+
+  const clearDirectoryFilters = () => {
+    setQuery('')
+    setDebouncedQuery('')
+    setStatusFilter('ALL')
+    setDepartmentFilter('ALL')
+    setSpecialtyFilter('ALL')
+    setSystemRoleFilter('ALL')
+    setSort('NAME_ASC')
+    setPage(1)
+  }
 
   const openCreate = () => {
     setForm(EMPTY_FORM)
+    setEditingWorkCount(0)
+    setShowPassword(false)
     setShowModal(true)
   }
 
   const openEdit = (member: PmacMemberRecord) => {
     setForm(toFormState(member))
+    setEditingWorkCount(member._count.eventAssignments + member._count.projectAssignments + member._count.headedPmacProjects)
+    setShowPassword(false)
     setShowModal(true)
   }
 
@@ -176,6 +217,8 @@ export default function PmacManagementPageClient({
 
     setShowModal(false)
     setForm(EMPTY_FORM)
+    setEditingWorkCount(0)
+    setShowPassword(false)
   }
 
   const handleSave = async () => {
@@ -201,8 +244,12 @@ export default function PmacManagementPageClient({
       showToast('error', 'Executive accounts must have an executive title.')
       return
     }
-    if (!form.id && form.password.length < 8) {
-      showToast('error', 'Password must be at least 8 characters.')
+    if (!form.specialties.length) {
+      showToast('error', 'Select at least one specialty.')
+      return
+    }
+    if ((!form.id || form.password) && form.password.length < 12) {
+      showToast('error', 'Temporary passwords must be at least 12 characters.')
       return
     }
 
@@ -233,7 +280,16 @@ export default function PmacManagementPageClient({
   }
 
   if (loading) {
-    return <div className="p-10 text-center text-slate-400">Loading PMAC members...</div>
+    return <div className="flex items-center justify-center gap-2 p-10 text-sm text-slate-500"><LoaderCircle size={17} className="animate-spin" /> Loading PMAC members...</div>
+  }
+
+  if (loadError && !directory) {
+    return (
+      <div className="card mx-auto max-w-2xl p-8 text-center">
+        <p className="font-semibold text-red-700">{loadError}</p>
+        <button type="button" onClick={() => void fetchMembers(true)} className="mt-3 text-sm font-semibold text-emerald-700">Try again</button>
+      </div>
+    )
   }
 
   return (
@@ -241,7 +297,7 @@ export default function PmacManagementPageClient({
       {toast && (
         <div
           className={clsx(
-            'fixed right-6 top-6 z-50 flex items-center gap-3 rounded-2xl px-6 py-4 text-sm font-bold text-white shadow-2xl animate-fade-in',
+            'fixed right-4 top-4 z-50 flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-lg px-4 py-3 text-sm font-semibold text-white shadow-xl animate-fade-in',
             toast.type === 'success' ? 'bg-emerald-600' : 'bg-red-500'
           )}
         >
@@ -250,38 +306,15 @@ export default function PmacManagementPageClient({
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl bg-[#0f172a] p-5 text-white shadow-xl">
-          <div className="mb-3 flex items-start justify-between">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10">
-              <Users size={18} />
-            </div>
-            <span className="text-2xl font-bold">{members.length}</span>
-          </div>
-          <p className="text-sm font-semibold">Total PMAC Members</p>
-          <p className="mt-1 text-xs text-slate-300">Database-driven roster foundation for PMAC V1.</p>
+      <section className="card grid gap-3 p-4 sm:grid-cols-[1fr_auto_auto_auto] sm:items-center" aria-label="PMAC roster summary">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700"><Users size={17} /></span>
+          <div><p className="text-sm font-semibold text-slate-800">PMAC Roster</p><p className="text-xs text-slate-400">Current member and account status</p></div>
         </div>
-        <div className="rounded-2xl bg-emerald-500 p-5 text-white shadow-xl">
-          <div className="mb-3 flex items-start justify-between">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15">
-              <CheckCircle2 size={18} />
-            </div>
-            <span className="text-2xl font-bold">{stats.active}</span>
-          </div>
-          <p className="text-sm font-semibold">Active Accounts</p>
-          <p className="mt-1 text-xs text-emerald-100">Members who can currently access PMAC routes.</p>
-        </div>
-        <div className="rounded-2xl bg-amber-400 p-5 text-amber-950 shadow-xl">
-          <div className="mb-3 flex items-start justify-between">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
-              <Shield size={18} />
-            </div>
-            <span className="text-2xl font-bold">{stats.officers}</span>
-          </div>
-          <p className="text-sm font-semibold">Officer Assignments</p>
-          <p className="mt-1 text-xs text-amber-900/70">Director, assistant, secretary, and executive roles tracked separately.</p>
-        </div>
-      </div>
+        <p className="text-sm text-slate-500"><strong className="text-slate-800">{directory?.total ?? 0}</strong> members</p>
+        <p className="text-sm text-slate-500"><strong className="text-emerald-700">{directory?.active ?? 0}</strong> active</p>
+        <p className="text-sm text-slate-500"><strong className="text-slate-800">{directory?.officers ?? 0}</strong> officers</p>
+      </section>
 
       <div className="card overflow-hidden">
         <div className="flex flex-col gap-3 border-b border-slate-100 px-6 py-4 md:flex-row md:items-center md:justify-between">
@@ -314,20 +347,20 @@ export default function PmacManagementPageClient({
           </div>
         </div>
 
-        <div className="grid gap-3 border-b border-slate-100 px-6 py-4 md:grid-cols-[1.4fr_0.8fr_0.8fr]">
-          <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <div className="grid gap-3 border-b border-slate-100 px-5 py-4 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="flex h-10 items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 sm:col-span-2 lg:col-span-3">
             <Search size={16} className="text-slate-400" />
             <input
               value={query}
               onChange={event => setQuery(event.target.value)}
-              placeholder="Search name, email, department, or course"
+              placeholder="Search name, email, phone, department, course, or tag"
               className="w-full bg-transparent text-sm text-slate-700 outline-none"
             />
           </label>
           <select
             value={statusFilter}
-            onChange={event => setStatusFilter(event.target.value as typeof statusFilter)}
-            className="rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-200"
+            onChange={event => { setStatusFilter(event.target.value as typeof statusFilter); setPage(1) }}
+            className="h-10 rounded-lg border border-slate-200 px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-200"
           >
             <option value="ALL">All statuses</option>
             {PMAC_MEMBER_STATUSES.map(status => (
@@ -337,21 +370,53 @@ export default function PmacManagementPageClient({
             ))}
           </select>
           <select
-            value={clubRoleFilter}
-            onChange={event => setClubRoleFilter(event.target.value as typeof clubRoleFilter)}
-            className="rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-200"
+            value={departmentFilter}
+            onChange={event => { setDepartmentFilter(event.target.value); setPage(1) }}
+            className="h-10 rounded-lg border border-slate-200 px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-200"
           >
-            <option value="ALL">All club roles</option>
-            {PMAC_CLUB_ROLES.map(role => (
-              <option key={role} value={role}>
-                {PMAC_CLUB_ROLE_LABELS[role]}
-              </option>
-            ))}
+            <option value="ALL">All departments</option>
+            {PMAC_DEPARTMENTS.map(department => <option key={department} value={department}>{department}</option>)}
           </select>
+          <select
+            value={specialtyFilter}
+            onChange={event => { setSpecialtyFilter(event.target.value as typeof specialtyFilter); setPage(1) }}
+            className="h-10 rounded-lg border border-slate-200 px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-200"
+          >
+            <option value="ALL">All specialties</option>
+            {PMAC_SPECIALTIES.map(specialty => <option key={specialty} value={specialty}>{PMAC_SPECIALTY_LABELS[specialty]}</option>)}
+          </select>
+          <select
+            value={systemRoleFilter}
+            onChange={event => { setSystemRoleFilter(event.target.value as typeof systemRoleFilter); setPage(1) }}
+            className="h-10 rounded-lg border border-slate-200 px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-200"
+          >
+            <option value="ALL">All access roles</option>
+            {PMAC_SYSTEM_ROLES.map(role => <option key={role} value={role}>{ROLE_LABELS[role]}</option>)}
+          </select>
+          <select
+            value={sort}
+            onChange={event => { setSort(event.target.value); setPage(1) }}
+            className="h-10 rounded-lg border border-slate-200 px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-emerald-200"
+          >
+            <option value="NAME_ASC">Name A-Z</option>
+            <option value="NAME_DESC">Name Z-A</option>
+            <option value="JOINED_DESC">Newest members</option>
+            <option value="STATUS">Status then name</option>
+          </select>
+          <button
+            type="button"
+            disabled={!hasDirectoryFilters}
+            onClick={clearDirectoryFilters}
+            className="h-10 rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Clear filters
+          </button>
         </div>
 
-        <div className="divide-y divide-slate-50">
-          {filteredMembers.map(member => {
+        {loadError ? <p className="border-b border-red-100 bg-red-50 px-5 py-3 text-sm font-semibold text-red-700">{loadError}</p> : null}
+        <div className={clsx('divide-y divide-slate-100 transition-opacity', refreshing && 'opacity-60')}>
+          {members.map(member => {
+            const activeWorkCount = member._count.eventAssignments + member._count.projectAssignments + member._count.headedPmacProjects
             const content = (
               <>
                 <div className="min-w-0">
@@ -377,7 +442,7 @@ export default function PmacManagementPageClient({
                   ) : null}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                <div className="flex flex-wrap items-center gap-2 md:max-w-[55%] md:justify-end">
                   <span className="status-badge bg-sky-50 text-sky-700 border-sky-200">
                     Club: {PMAC_CLUB_ROLE_LABELS[member.clubRole as PmacClubRole]}
                   </span>
@@ -399,46 +464,54 @@ export default function PmacManagementPageClient({
                       Password reset pending
                     </span>
                   ) : null}
+                  {activeWorkCount ? (
+                    <span className="status-badge border-slate-200 bg-slate-50 text-slate-600">
+                      {activeWorkCount} active responsibilit{activeWorkCount === 1 ? 'y' : 'ies'}
+                    </span>
+                  ) : null}
+                  {canManageMembers ? (
+                    <button
+                      type="button"
+                      onClick={() => openEdit(member)}
+                      title={`Edit ${member.fullName}`}
+                      className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      <Edit3 size={14} /> Edit
+                    </button>
+                  ) : null}
                 </div>
               </>
             )
 
-            return canManageMembers ? (
-              <button
-                key={member.id}
-                onClick={() => openEdit(member)}
-                className="flex w-full flex-col gap-4 px-6 py-5 text-left transition-colors hover:bg-slate-50/70 md:flex-row md:items-center md:justify-between"
-              >
-                {content}
-              </button>
-            ) : (
+            return (
               <div
                 key={member.id}
-                className="flex w-full flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between"
+                className="flex w-full flex-col gap-4 px-5 py-4 md:flex-row md:items-center md:justify-between"
               >
                 {content}
               </div>
             )
           })}
+          {!members.length ? (
+            <div className="px-5 py-10 text-center">
+              <p className="font-semibold text-slate-700">No members match these filters</p>
+              <p className="mt-1 text-sm text-slate-400">Clear or adjust the directory filters to see more members.</p>
+            </div>
+          ) : null}
         </div>
-      </div>
-
-      <div className="rounded-2xl border border-slate-100 bg-white px-6 py-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Status Snapshot</p>
-            <p className="mt-2 text-sm font-semibold text-slate-800">Inactive members remain in the roster but cannot sign in.</p>
+        <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-slate-500">{directory?.filteredTotal ?? 0} result(s) | Page {directory?.page ?? 1} of {directory?.totalPages ?? 1}</p>
+          <div className="flex gap-2">
+            <button type="button" title="Previous page" disabled={!directory || directory.page <= 1 || refreshing} onClick={() => setPage(current => Math.max(1, current - 1))} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40"><ChevronLeft size={16} /></button>
+            <button type="button" title="Next page" disabled={!directory || directory.page >= directory.totalPages || refreshing} onClick={() => setPage(current => current + 1)} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 disabled:opacity-40"><ChevronRight size={16} /></button>
           </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-            {stats.inactive} inactive
-          </span>
         </div>
       </div>
 
       {canManageMembers && showModal && (
         <Portal>
           <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/45 px-4 py-6 print:hidden sm:py-8" onClick={closeModal}>
-            <div className="mx-auto flex max-h-[calc(100dvh-3rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={event => event.stopPropagation()}>
+            <div className="mx-auto flex max-h-[calc(100dvh-3rem)] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl" onClick={event => event.stopPropagation()}>
               <div className="border-b border-slate-100 px-6 py-5 sm:px-7">
                 <h3 className="font-display text-xl font-bold text-slate-800">
                   {form.id ? 'Edit PMAC Member' : 'Create PMAC Member'}
@@ -449,11 +522,16 @@ export default function PmacManagementPageClient({
               </div>
 
               <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5 sm:px-7">
+              {editingWorkCount ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  This member has {editingWorkCount} active responsibilit{editingWorkCount === 1 ? 'y' : 'ies'}. Reassign conflicting work before deactivation, demotion, executive-title changes, or specialty removal.
+                </div>
+              ) : null}
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">Full Name</label>
                   <input
-                    type="text"
+                    type="tel"
                     value={form.fullName}
                     onChange={event => setForm(previous => ({ ...previous, fullName: event.target.value }))}
                     onBlur={() => setForm(previous => ({ ...previous, fullName: normalizePmacMemberName(previous.fullName) }))}
@@ -516,7 +594,17 @@ export default function PmacManagementPageClient({
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">Executive Title</label>
                   <select
                     value={form.executiveTitle}
-                    onChange={event => setForm(previous => ({ ...previous, executiveTitle: event.target.value as PmacExecutiveTitle | '' }))}
+                    onChange={event => setForm(previous => {
+                      const executiveTitle = event.target.value as PmacExecutiveTitle | ''
+                      const requiredSpecialty = executiveTitle ? PMAC_EXECUTIVE_BRANCH_SPECIALTY[executiveTitle] : null
+                      return {
+                        ...previous,
+                        executiveTitle,
+                        specialties: requiredSpecialty && !previous.specialties.includes(requiredSpecialty)
+                          ? [...previous.specialties, requiredSpecialty]
+                          : previous.specialties,
+                      }
+                    })}
                     disabled={!shouldShowExecutiveTitle}
                     className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 disabled:bg-slate-50 disabled:text-slate-400"
                   >
@@ -536,7 +624,7 @@ export default function PmacManagementPageClient({
                     className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
                   >
                     {PMAC_MEMBER_STATUSES.map(status => (
-                      <option key={status} value={status}>
+                      <option key={status} value={status} disabled={status === 'INACTIVE' && editingWorkCount > 0}>
                         {PMAC_MEMBER_STATUS_LABELS[status]}
                       </option>
                     ))}
@@ -567,17 +655,41 @@ export default function PmacManagementPageClient({
                     className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
                   />
                 </div>
-                <div>
+                <div className="md:col-span-2">
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    {form.id ? 'Reset Password (Optional)' : 'Password'}
+                    {form.id ? 'Reset Password (Optional)' : 'Temporary Password'}
                   </label>
-                  <input
-                    type="password"
-                    value={form.password}
-                    onChange={event => setForm(previous => ({ ...previous, password: event.target.value }))}
-                    placeholder={form.id ? 'Leave blank to keep current password' : 'Minimum 8 characters'}
-                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
-                  />
+                  <div className="flex gap-2">
+                    <div className="relative min-w-0 flex-1">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={form.password}
+                        minLength={12}
+                        onChange={event => setForm(previous => ({ ...previous, password: event.target.value }))}
+                        placeholder={form.id ? 'Leave blank to keep current password' : 'Minimum 12 characters'}
+                        className="w-full rounded-xl border border-slate-200 px-4 py-2.5 pr-11 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                      />
+                      <button
+                        type="button"
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                        onClick={() => setShowPassword(current => !current)}
+                        className="absolute right-1 top-1 inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForm(previous => ({ ...previous, password: generateTemporaryPassword() }))
+                        setShowPassword(true)
+                      }}
+                      className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      <KeyRound size={15} /> Generate
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-xs text-slate-400">New or reset credentials require a password change at the next sign-in.</p>
                 </div>
               </div>
 
@@ -586,12 +698,15 @@ export default function PmacManagementPageClient({
                 <div className="grid gap-2 md:grid-cols-2">
                   {PMAC_SPECIALTIES.map((specialty) => {
                     const checked = form.specialties.includes(specialty)
+                    const requiredByExecutiveTitle = !!form.executiveTitle
+                      && PMAC_EXECUTIVE_BRANCH_SPECIALTY[form.executiveTitle] === specialty
 
                     return (
-                      <label key={specialty} className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                      <label key={specialty} className={clsx('flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700', requiredByExecutiveTitle && 'bg-slate-50')}>
                         <input
                           type="checkbox"
                           checked={checked}
+                          disabled={requiredByExecutiveTitle}
                           onChange={() => setForm(previous => ({
                             ...previous,
                             specialties: checked
@@ -600,7 +715,7 @@ export default function PmacManagementPageClient({
                           }))}
                           className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-200"
                         />
-                        <span>{PMAC_SPECIALTY_LABELS[specialty]}</span>
+                        <span>{PMAC_SPECIALTY_LABELS[specialty]}{requiredByExecutiveTitle ? ' (required)' : ''}</span>
                       </label>
                     )
                   })}
