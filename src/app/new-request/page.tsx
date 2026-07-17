@@ -655,7 +655,8 @@ ${isDirector ? 'Director' : 'Secretary'}, ${form.school || '[School/Department]'
               </div>
             )}
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
+            {!isDirector && (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Intake Quality Check</p>
@@ -695,7 +696,8 @@ ${isDirector ? 'Director' : 'Secretary'}, ${form.school || '[School/Department]'
                   ))}
                 </div>
               ) : null}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -833,7 +835,8 @@ ${isDirector ? 'Director' : 'Secretary'}, ${form.school || '[School/Department]'
           <div className="space-y-6">
             <h2 className="font-display text-2xl text-slate-800 font-bold">Review Request</h2>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
+            {!isDirector && (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Submission Quality</p>
@@ -860,7 +863,8 @@ ${isDirector ? 'Director' : 'Secretary'}, ${form.school || '[School/Department]'
                   ))}
                 </div>
               ) : null}
-            </div>
+              </div>
+            )}
 
             {isDirector && (
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5 space-y-3">
