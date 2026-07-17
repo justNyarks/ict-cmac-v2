@@ -44,7 +44,6 @@ export default function RequestsPage() {
   const [slaReferenceTime] = useState(() => Date.now())
   const showLegacyLetter = false
   const selectedServiceLabel = selected?.serviceType || 'Unassigned'
-  const isPrivilegedUser = !!session?.user && ['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes(session.user.role)
   const receiptLetterSource =
     selected?.letterContent ||
     `Formal request for ${selectedServiceLabel} coverage for "${selected?.eventTitle || 'the event'}".`
@@ -56,6 +55,8 @@ export default function RequestsPage() {
       : receiptLetterSource.length > 900
         ? 'text-[8.6px] leading-[1.5]'
         : 'text-[9.2px] leading-[1.6]'
+  const isCoordinator = session?.user.role === 'CMAC_COORDINATOR'
+  const isDirector = session?.user.role === 'ICT_DIRECTOR'
   const latestFeedbackAt = selected?.logs
     .find((log) => log.action === 'REVISION_REQUESTED' || log.action === 'REJECTED')?.createdAt
   const canResubmitSelected = selected?.status === 'WITHDRAWN' || (
@@ -89,7 +90,12 @@ export default function RequestsPage() {
   }, [fetchRequests])
 
   useEffect(() => {
-    if (selected && session?.user && ['CMAC_COORDINATOR', 'ICT_DIRECTOR'].includes(session.user.role)) {
+    const shouldCheckSchedule = selected && (
+      (isCoordinator && selected.status === 'PENDING')
+      || (isDirector && selected.status === 'COORDINATOR_APPROVED')
+    )
+
+    if (shouldCheckSchedule) {
       checkConflict(
         selected.eventDate.toISOString().slice(0, 10),
         selected.startTime ?? undefined,
@@ -111,7 +117,7 @@ export default function RequestsPage() {
       setSameDayEvents([])
       setConflictError('')
     }
-  }, [selected, session])
+  }, [isCoordinator, isDirector, selected])
 
   const filtered = useMemo(() => {
     const now = new Date()
@@ -274,7 +280,7 @@ export default function RequestsPage() {
         {/* Filter bar */}
         <div className="flex items-center gap-2 flex-wrap">
           <Filter size={15} className="text-slate-400" />
-          {FILTERS.map(f => (
+          {FILTERS.filter(status => !isCoordinator || ['ALL', 'PENDING', 'COORDINATOR_APPROVED', 'REVISION_REQUESTED'].includes(status)).map(f => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -285,7 +291,7 @@ export default function RequestsPage() {
                   : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-200'
               )}
             >
-              {f === 'ALL' ? 'All Requests' : getStatusLabel(f)}
+              {f === 'ALL' ? 'All Requests' : isCoordinator && f === 'COORDINATOR_APPROVED' ? 'Reviewed' : getStatusLabel(f)}
             </button>
           ))}
           <input
@@ -306,14 +312,16 @@ export default function RequestsPage() {
             <option value="PMAC">PMAC</option>
             <option value="UNASSIGNED">Unassigned</option>
           </select>
-          <select value={dateFilter} onChange={(event) => setDateFilter(event.target.value as typeof dateFilter)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-            <option value="ALL">All dates</option>
-            <option value="TODAY">Today</option>
-            <option value="NEXT7">Next 7 days</option>
-            <option value="THIS_MONTH">This month</option>
-          </select>
+          {!isCoordinator && (
+            <select value={dateFilter} onChange={(event) => setDateFilter(event.target.value as typeof dateFilter)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+              <option value="ALL">All dates</option>
+              <option value="TODAY">Today</option>
+              <option value="NEXT7">Next 7 days</option>
+              <option value="THIS_MONTH">This month</option>
+            </select>
+          )}
           <div className="ml-auto flex items-center gap-3">
-            {isPrivilegedUser && (
+            {isDirector && (
               <button
                 onClick={handleDownloadPastEvents}
                 disabled={isDownloadingPastEvents}
@@ -331,15 +339,15 @@ export default function RequestsPage() {
         {/* Table */}
         <div className="card border border-emerald-100/50 shadow-xl shadow-emerald-900/5">
           <div className="overflow-x-auto rounded-[inherit]">
-          <table className="w-full min-w-[880px] table-fixed text-sm">
+          <table className={clsx('w-full table-fixed text-sm', isCoordinator ? 'min-w-[720px]' : 'min-w-[880px]')}>
             <thead className="select-none">
               <tr className="border-b border-emerald-50 bg-emerald-50/20">
                 {[
                   { label: 'Event & School', width: 'w-[26%]' },
                   { label: 'Service Type', width: 'w-[17%]' },
-                  { label: 'Request Date', width: 'w-[16%]' },
-                  { label: 'Status', width: 'w-[19%]' },
-                  { label: 'SLA', width: 'w-[13%]' },
+                  { label: 'Submitted', width: isCoordinator ? 'w-[18%]' : 'w-[16%]' },
+                  { label: 'Status', width: isCoordinator ? 'w-[24%]' : 'w-[19%]' },
+                  ...(!isCoordinator ? [{ label: 'SLA', width: 'w-[13%]' }] : []),
                   { label: 'Actions', width: 'w-[9%]' },
                 ].map((header) => (
                   <th
@@ -376,14 +384,16 @@ export default function RequestsPage() {
                       {getStatusLabel(req.status)}
                     </span>
                   </td>
-                  <td className="px-4 py-5 xl:px-6">
-                    <span className={clsx(
-                      'text-[10px] font-black uppercase tracking-widest',
-                      getSlaLabel(req, slaReferenceTime).includes('Needs') || getSlaLabel(req, slaReferenceTime).includes('Upcoming') ? 'text-amber-600' : getSlaLabel(req, slaReferenceTime) === 'Closed' ? 'text-red-500' : 'text-emerald-600'
-                    )}>
-                      {getSlaLabel(req, slaReferenceTime)}
-                    </span>
-                  </td>
+                  {!isCoordinator && (
+                    <td className="px-4 py-5 xl:px-6">
+                      <span className={clsx(
+                        'text-[10px] font-black uppercase tracking-widest',
+                        getSlaLabel(req, slaReferenceTime).includes('Needs') || getSlaLabel(req, slaReferenceTime).includes('Upcoming') ? 'text-amber-600' : getSlaLabel(req, slaReferenceTime) === 'Closed' ? 'text-red-500' : 'text-emerald-600'
+                      )}>
+                        {getSlaLabel(req, slaReferenceTime)}
+                      </span>
+                    </td>
+                  )}
                   <td className="px-4 py-5 text-right xl:px-6">
                     <div className="flex items-center justify-end gap-2">
                       {req.status === 'DIRECTOR_APPROVED' && (
@@ -437,7 +447,10 @@ export default function RequestsPage() {
           <Portal>
           <div className="fixed inset-0 bg-[#022c22]/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-6 animate-fade-in print:hidden" onClick={() => setSelected(null)}>
             <div 
-              className="bg-white rounded-[2rem] shadow-2xl max-w-5xl w-full max-h-[85vh] flex overflow-hidden relative" 
+              className={clsx(
+                'bg-white rounded-[2rem] shadow-2xl w-full max-h-[85vh] flex overflow-hidden relative',
+                isCoordinator && selected.status !== 'PENDING' ? 'max-w-3xl' : 'max-w-5xl'
+              )}
               onClick={e => e.stopPropagation()}
             >
               
@@ -476,29 +489,53 @@ export default function RequestsPage() {
                     ))}
                   </div>
 
-                  {/* Technical Requirements Checklist */}
-                  <div className="grid grid-cols-1 gap-6">
-                    <div className="space-y-3">
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Technical Requirements</p>
-                      <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-4">
-                        {[
-                          { label: 'Same Day Edit (Video)', value: selected.needsSameDayEdit },
-                          { label: 'Same-Day Photo Delivery', value: selected.needsSameDayPhoto },
-                        ].map(item => (
-                          <div key={item.label} className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-600">{item.label}</span>
-                            {item.value ? (
-                              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] font-black rounded uppercase tracking-tighter">Required</span>
-                            ) : (
-                              <span className="px-2 py-0.5 bg-slate-200 text-slate-400 text-[10px] font-black rounded uppercase tracking-tighter">Not Needed</span>
-                            )}
-                          </div>
-                        ))}
+                  {/* Technical requirements matter to routing only when requested. */}
+                  {isCoordinator ? (
+                    selected.needsSameDayEdit || selected.needsSameDayPhoto ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="mr-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Special Requirements</p>
+                        {selected.needsSameDayEdit ? <span className="status-badge border-amber-200 bg-amber-50 text-amber-700">Same-day video edit</span> : null}
+                        {selected.needsSameDayPhoto ? <span className="status-badge border-amber-200 bg-amber-50 text-amber-700">Same-day photo delivery</span> : null}
+                      </div>
+                    ) : null
+                  ) : (
+                    <div className="grid grid-cols-1 gap-6">
+                      <div className="space-y-3">
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Technical Requirements</p>
+                        <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-4">
+                          {[
+                            { label: 'Same Day Edit (Video)', value: selected.needsSameDayEdit },
+                            { label: 'Same-Day Photo Delivery', value: selected.needsSameDayPhoto },
+                          ].map(item => (
+                            <div key={item.label} className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-slate-600">{item.label}</span>
+                              <span className={clsx(
+                                'px-2 py-0.5 text-[10px] font-black rounded uppercase tracking-tighter',
+                                item.value ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-400'
+                              )}>
+                                {item.value ? 'Required' : 'Not Needed'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
-                  {(selected.letterContent || selected.letterUrl) && (
+                  {(selected.letterContent || selected.letterUrl) && (isCoordinator ? (
+                    <details className="rounded-xl border border-slate-200 bg-slate-50">
+                      <summary className="cursor-pointer list-none px-4 py-3 text-sm font-bold text-slate-700">
+                        Review request letter
+                      </summary>
+                      <div className="border-t border-slate-200 p-4">
+                        {selected.letterContent ? (
+                          <pre className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700">{selected.letterContent}</pre>
+                        ) : (
+                          <a href={selected.letterUrl || '#'} target="_blank" rel="noreferrer" className="text-sm font-bold text-blue-700 hover:underline">Open attached letter</a>
+                        )}
+                      </div>
+                    </details>
+                  ) : (
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
                         <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Official Request Letter</p>
@@ -526,10 +563,11 @@ export default function RequestsPage() {
                         </div>
                       )}
                     </div>
-                  )}
+                  ))}
 
                   {/* Approval trail */}
-                  <div className="space-y-4 pt-4">
+                  {!isCoordinator && (
+                    <div className="space-y-4 pt-4">
                     <p className="font-black text-[var(--text-dark)] text-[10px] uppercase tracking-widest">Workflow Timeline</p>
                     <div className="space-y-6 relative ml-2">
                       <div className="absolute left-1 top-2 bottom-2 w-0.5 bg-emerald-100"></div>
@@ -578,7 +616,8 @@ export default function RequestsPage() {
                         </div>
                       </div>
                     </div>
-                  </div>
+                    </div>
+                  )}
 
                   {/* Action area */}
                   {((selected.status === 'PENDING' && session?.user.role === 'CMAC_COORDINATOR') ||
@@ -633,7 +672,7 @@ export default function RequestsPage() {
                       <div className="flex gap-4">
                         <button
                           onClick={() => handleApprove(selected.id)}
-                          disabled={!!conflictError}
+                          disabled={!!conflictError || conflicts.length > 0}
                           className="flex-1 flex items-center justify-center gap-2 bg-[#064e3b] hover:bg-[#065f46] text-white rounded-2xl py-4 text-sm font-black shadow-lg shadow-emerald-900/20 transition-all"
                         >
                           <CheckCircle size={18} /> Approve Request
@@ -721,7 +760,7 @@ export default function RequestsPage() {
                   )}
 
                   {/* Closed-request archive action */}
-                  {isPrivilegedUser && ['WITHDRAWN', 'CANCELLED', 'REJECTED'].includes(selected.status) && (
+                  {isDirector && ['WITHDRAWN', 'CANCELLED', 'REJECTED'].includes(selected.status) && (
                     <div className="pt-6 border-t border-slate-100 space-y-3">
                       <textarea
                         rows={2}
@@ -752,7 +791,7 @@ export default function RequestsPage() {
 
 
               {/* Conflict Side Panel (Integrated) */}
-              {isPrivilegedUser && (
+              {((isCoordinator && selected.status === 'PENDING') || (isDirector && selected.status === 'COORDINATOR_APPROVED')) && (
                 <div className="w-72 bg-slate-50/80 flex flex-col shrink-0 border-l border-slate-100 animate-slide-in-right">
                   <div className="p-8 bg-slate-900 text-white">
                     <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">Scheduling Check</p>
@@ -776,7 +815,7 @@ export default function RequestsPage() {
                         ))}
                         <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl">
                           <p className="text-[10px] font-bold text-amber-700 leading-relaxed">
-                            Tip: You can still approve, but consider technical staff availability for simultaneous events.
+                            Resolve the venue overlap or return the request for correction before approval.
                           </p>
                         </div>
                       </>
