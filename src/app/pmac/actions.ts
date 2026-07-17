@@ -1,4 +1,4 @@
-export { getPmacEvents, getPmacStaffingOverview, getPmacEventWorkspace, getPmacCalendarEvents, createPmacEvent, updatePmacEvent, submitPmacEvent, approvePmacEvent, rejectPmacEvent, markPmacEventCompleted, savePmacEventWrapUp } from './eventActions'
+export { getPmacEvents, getCoordinatorPmacEventDetail, getPmacStaffingOverview, getPmacEventWorkspace, getPmacCalendarEvents, createPmacEvent, updatePmacEvent, submitPmacEvent, approvePmacEvent, rejectPmacEvent, markPmacEventCompleted, savePmacEventWrapUp } from './eventActions'
 export { getPmacAssignmentsBoard, getPmacAttendanceBoard, savePmacAssignments, respondToPmacAssignment, savePmacAttendance } from './assignmentActions'
 export { getPmacPolls, getPmacPollWorkspace, createPmacPoll, updatePmacPoll, openPmacPoll, closePmacPoll, archivePmacPoll, castPmacVote } from './pollActions'
 export { getPmacProjects, getPmacProjectCalendarItems, savePmacProject, updatePmacProjectStatus, checkPmacProjectForClosure, submitPmacProjectOutput, attachPmacProjectLink, assignPmacProjectMembers, savePmacProjectMilestone, updatePmacProjectMilestoneStatus } from './projectActions'

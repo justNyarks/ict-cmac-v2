@@ -31,6 +31,57 @@ export async function getPmacEvents() {
   return events
 }
 
+export async function getCoordinatorPmacEventDetail(eventId: string) {
+  noStore()
+
+  const session = await getViewerSession()
+  if (!session || !isCoordinatorRole(session.user.role)) {
+    return null
+  }
+
+  const sanitizedId = sanitizeSingleLineText(eventId, {
+    fieldName: 'Event ID',
+    maxLength: 191,
+    required: true,
+  })
+
+  return prisma.pmacEvent.findUnique({
+    where: { id: sanitizedId },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      venue: true,
+      startDateTime: true,
+      endDateTime: true,
+      status: true,
+      sourceType: true,
+      sourceRequestId: true,
+      sourceSchool: true,
+      sourceDocumentationType: true,
+      sourceCampusType: true,
+      submittedAt: true,
+      approvedAt: true,
+      rejectedAt: true,
+      completedAt: true,
+      approvalRemarks: true,
+      createdBy: {
+        select: {
+          name: true,
+          email: true,
+          role: true,
+        },
+      },
+      approvedBy: {
+        select: {
+          name: true,
+          role: true,
+        },
+      },
+    },
+  })
+}
+
 export async function getPmacStaffingOverview() {
   noStore()
 
