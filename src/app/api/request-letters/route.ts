@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { prisma } from '@/lib/prisma'
+import {
+  MalwareDetectedError,
+  MalwareScannerUnavailableError,
+  scanUploadedFile,
+} from '@/lib/malwareScan'
 import { validateRequestLetterFile } from '@/lib/requestLetterUpload'
 import { assertActionAccess, assertSameOriginMutation } from '@/lib/security'
 import { sanitizeSingleLineText } from '@/lib/sanitization'
+
+export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,6 +22,7 @@ export async function POST(request: NextRequest) {
 
     const bytes = Buffer.from(await file.arrayBuffer())
     validateRequestLetterFile(file, bytes)
+    await scanUploadedFile(bytes)
     const fileName = sanitizeSingleLineText(file.name, {
       fieldName: 'File name',
       maxLength: 191,
@@ -49,11 +57,15 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to upload the request letter.'
-    const status = message === 'Invalid request origin' || message === 'Unauthorized'
-      ? 403
-      : message === 'Not authenticated'
-        ? 401
-        : 400
+    const status = error instanceof MalwareDetectedError
+      ? 422
+      : error instanceof MalwareScannerUnavailableError
+        ? 503
+        : message === 'Invalid request origin' || message === 'Unauthorized'
+          ? 403
+          : message === 'Not authenticated'
+            ? 401
+            : 400
     return NextResponse.json({ error: message }, { status })
   }
 }

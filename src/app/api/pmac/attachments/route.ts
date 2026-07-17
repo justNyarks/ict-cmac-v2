@@ -4,10 +4,17 @@ import path from 'path'
 
 import { NextRequest, NextResponse } from 'next/server'
 
+import {
+  MalwareDetectedError,
+  MalwareScannerUnavailableError,
+  scanUploadedFile,
+} from '@/lib/malwareScan'
 import { recordPmacActivity } from '@/lib/pmacActivity'
 import { prisma } from '@/lib/prisma'
 import { assertActionAccess, assertSameOriginMutation } from '@/lib/security'
 import { sanitizeMultilineText, sanitizeSingleLineText } from '@/lib/sanitization'
+
+export const runtime = 'nodejs'
 
 const UPLOAD_ROOT = path.join(process.cwd(), 'public', 'uploads', 'pmac')
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
@@ -194,6 +201,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'The uploaded file contents do not match the declared file type.' }, { status: 400 })
     }
 
+    await scanUploadedFile(bytes)
     await mkdir(directory, { recursive: true })
     await writeFile(absolutePath, bytes)
 
@@ -241,15 +249,19 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to upload PMAC attachment.'
     const status =
-      message === 'Invalid request origin'
-        ? 403
-        : message === 'Not authenticated'
-        ? 401
-        : message === 'Unauthorized'
-          ? 403
-          : message === 'Zero trust verification required'
-            ? 428
-            : 500
+      error instanceof MalwareDetectedError
+        ? 422
+        : error instanceof MalwareScannerUnavailableError
+          ? 503
+          : message === 'Invalid request origin'
+            ? 403
+            : message === 'Not authenticated'
+              ? 401
+              : message === 'Unauthorized'
+                ? 403
+                : message === 'Zero trust verification required'
+                  ? 428
+                  : 500
 
     return NextResponse.json({ error: message }, { status })
   }

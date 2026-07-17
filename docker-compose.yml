@@ -16,6 +16,15 @@ services:
       timeout: 5s
       retries: 20
 
+  clamav:
+    image: clamav/clamav:1.4
+    container_name: ict-cmac-clamav
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3310:3310"
+    volumes:
+      - ict-cmac-clamav-data:/var/lib/clamav
+
   app:
     build:
       context: .
@@ -25,15 +34,21 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      clamav:
+        condition: service_healthy
     env_file:
       - .env
     ports:
       - "3000:3000"
     environment:
       DATABASE_URL: mysql://root:root@db:3306/ict_cmac
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: 3310
+      CLAMAV_TIMEOUT_MS: 30000
       SERVER_ACTION_ALLOWED_ORIGINS: ${SERVER_ACTION_ALLOWED_ORIGINS:-}
       PRISMA_SKIP_DB_PUSH: ${PRISMA_SKIP_DB_PUSH:-0}
       PRISMA_RUN_SEED: ${PRISMA_RUN_SEED:-0}
 
 volumes:
   ict-cmac-mysql-data:
+  ict-cmac-clamav-data:

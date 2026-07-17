@@ -29,6 +29,7 @@ A Next.js App Router application for managing CMAC and PMAC documentation reques
 - Node.js 18+
 - npm
 - MySQL database
+- ClamAV scanner for file uploads
 
 ### Install
 
@@ -45,16 +46,19 @@ DATABASE_URL="mysql://root@127.0.0.1:3306/ict_cmac"
 NEXTAUTH_SECRET="replace-me"
 NEXTAUTH_URL="http://localhost:3000"
 SERVER_ACTION_ALLOWED_ORIGINS="localhost:3000,127.0.0.1:3000"
+CLAMAV_HOST="127.0.0.1"
+CLAMAV_PORT="3310"
+CLAMAV_TIMEOUT_MS="30000"
 ```
 
 If you are using XAMPP's default local MySQL, `root` usually has no password, which matches the example above.
 
 ### Database
 
-If you do not already have MySQL running locally, start the bundled container first:
+If you do not already have MySQL and ClamAV running locally, start the bundled containers first:
 
 ```bash
-docker compose up -d db
+docker compose up -d db clamav
 ```
 
 ```bash
@@ -108,10 +112,17 @@ PRISMA_RUN_SEED=0
 ```
 
 By default `docker compose` starts a local MySQL service named `db`, and the app container points Prisma at that service automatically.
+It also starts the official ClamAV service and waits for its virus definitions and daemon health check before starting the app. Uploads fail closed when ClamAV is missing, unavailable, times out, or returns an invalid response; rejected files are never persisted.
 The container also runs `prisma db push` before starting Next.js so the schema stays in sync with the configured database.
 The container keeps the same runtime contract as the non-Docker app: `DATABASE_URL`, `NEXTAUTH_SECRET`, and `NEXTAUTH_URL` must be provided. `docker compose` loads them from `.env`, and the entrypoint fails fast if any required value is missing.
 
 Vercel uses the build command in `vercel.json` to apply additive Prisma schema updates before creating the Next.js build. Ensure `DATABASE_URL` is configured for every Vercel environment that can deploy this application.
+
+### Malware scanner deployment
+
+The upload routes use ClamAV's `INSTREAM` protocol. Configure `CLAMAV_HOST`, with optional `CLAMAV_PORT` and `CLAMAV_TIMEOUT_MS`, in every environment that accepts uploads. For a scanner behind a TLS proxy, set `CLAMAV_TLS=true` and optionally `CLAMAV_SERVER_NAME` for certificate verification.
+
+Raw ClamAV TCP traffic is unauthenticated and unencrypted. Keep port `3310` on a private network; the bundled Docker configuration exposes it only on `127.0.0.1`. Serverless deployments such as Vercel need a private or TLS-protected scanner endpoint and must never expose `clamd` directly to the public internet.
 
 ## Main Routes
 
