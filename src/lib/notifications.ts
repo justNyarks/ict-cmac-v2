@@ -12,7 +12,7 @@ import {
   isPmacStaffingManagerRole,
 } from '@/lib/pmac'
 import { buildPmacActivityNotificationWhere, PMAC_PROJECT_NOTIFICATION_ACTIONS } from '@/lib/pmacNotificationPolicy'
-import { hasPmacV4Delegates, prisma } from '@/lib/prisma'
+import { prisma } from '@/lib/prisma'
 import { isCoreWorkflowRole, isPmacSystemRole } from '@/lib/roles'
 import type { AppNotification } from '@/types/notifications'
 
@@ -421,9 +421,6 @@ function getPmacProjectNotificationWhere(user: SessionUser): Prisma.PmacProjectW
 }
 
 async function getPmacNotificationFeed(user: SessionUser) {
-  if (!hasPmacV4Delegates()) {
-    return []
-  }
 
   const now = new Date()
   const soon = new Date(now.getTime() + (1000 * 60 * 60 * 48))

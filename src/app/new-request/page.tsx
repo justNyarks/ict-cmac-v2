@@ -1,4 +1,5 @@
 'use client'
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from '@/lib/uploadLimits'
 import { useState, useEffect } from 'react'
 import type { CampusType, School, ServiceType, DocumentationType } from '@/types'
 import { CheckCircle2, Upload, ChevronRight } from 'lucide-react'
@@ -328,6 +329,9 @@ ${isDirector ? 'Director' : 'Secretary'}, ${form.school || '[School/Department]'
     
     try {
       if (submissionMethod === 'upload' && form.letterFile) {
+        if (form.letterFile.size > MAX_UPLOAD_BYTES) {
+          throw new Error(`Request letter must be ${MAX_UPLOAD_LABEL} or smaller.`)
+        }
         const uploadForm = new FormData()
         uploadForm.set('file', form.letterFile)
         const uploadResponse = await fetch('/api/request-letters', {

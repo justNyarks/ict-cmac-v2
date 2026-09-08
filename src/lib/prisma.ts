@@ -1,11 +1,12 @@
 import { Prisma, PrismaClient } from '@prisma/client'
+import { assertPreviewDatabaseIsolation } from '@/lib/deploymentPolicy'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
   prismaSchemaSignature: string | undefined
 }
 
-const REQUIRED_V4_DELEGATES = ['pmacActivityLog', 'pmacAttachment', 'pmacProject', 'pmacProjectMilestone', 'pmacProjectLink', 'pmacProjectAssignment'] as const
+const REQUIRED_DELEGATES = ['pmacActivityLog', 'pmacAttachment', 'pmacAttachmentContent', 'pmacProject', 'pmacProjectMilestone', 'pmacProjectLink', 'pmacProjectAssignment'] as const
 const USER_SECURITY_FIELDS = ['mustChangePassword', 'passwordUpdatedAt'] as const
 const REQUIRED_MODEL_FIELDS = {
   PmacMember: ['clubRole', 'status', 'executiveTitle', 'department', 'course', 'specialties'],
@@ -16,6 +17,7 @@ const REQUIRED_MODEL_FIELDS = {
   PmacProjectLink: ['projectId', 'type', 'label', 'url', 'addedById'],
   PmacActivityLog: ['projectId'],
   User: USER_SECURITY_FIELDS,
+  PmacAttachmentContent: ['attachmentId', 'data'],
 } as const
 
 function hasRequiredDelegates(client: PrismaClient | undefined) {
@@ -23,14 +25,24 @@ function hasRequiredDelegates(client: PrismaClient | undefined) {
     return false
   }
 
-  return REQUIRED_V4_DELEGATES.every((delegate) => {
+  return REQUIRED_DELEGATES.every((delegate) => {
     const candidate = (client as unknown as Record<string, unknown>)[delegate] as { findMany?: unknown } | undefined
     return typeof candidate?.findMany === 'function'
   })
 }
 
 function createPrismaClient() {
-  return new PrismaClient()
+  if (!Object.entries(REQUIRED_MODEL_FIELDS).every(([model, fields]) => hasModelFields(model, fields))) {
+    throw new Error('Generated Prisma client is outdated. Run prisma generate and apply the reviewed database migrations.')
+  }
+  const client = new PrismaClient()
+  // Check on every query, not at build/import time. Read actions can reconcile
+  // statuses, so blocking only explicit writes would not isolate previews.
+  client.$use(async (params, next) => {
+    assertPreviewDatabaseIsolation()
+    return next(params)
+  })
+  return client
 }
 
 function hasModelFields(modelName: string, fields: readonly string[]) {
@@ -56,14 +68,6 @@ export const prisma = hasRequiredDelegates(globalForPrisma.prisma)
   && globalForPrisma.prismaSchemaSignature === PRISMA_SCHEMA_SIGNATURE
   ? globalForPrisma.prisma!
   : createPrismaClient()
-
-export function hasPmacV4Delegates() {
-  return hasRequiredDelegates(prisma)
-}
-
-export function hasUserSecurityFields() {
-  return hasModelFields('User', USER_SECURITY_FIELDS)
-}
 
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma

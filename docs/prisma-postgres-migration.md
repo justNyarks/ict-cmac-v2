@@ -1,5 +1,10 @@
 # MySQL to Prisma Postgres
 
+**Optional historical transfer guide.** The owner subsequently chose a fresh
+PostgreSQL database. Do not run this import as part of normal setup. Follow
+[fresh PostgreSQL setup](fresh-postgres-setup.md) instead. Existing MySQL data
+and transfer tooling are preserved, not automatically imported or deleted.
+
 This branch changes the database engine from MySQL to PostgreSQL while retaining Prisma ORM 5. It does not upgrade to a different Prisma major, delete MySQL records, or automatically copy production data during build/startup.
 
 ## Changes and rationale
@@ -66,4 +71,5 @@ Limits: 10,000 rows per model, 256 MB serialized snapshot, and two-minute transa
 3. Configure new Vercel deployments with PostgreSQL URLs and the existing `NEXTAUTH_SECRET`, then redeploy the reviewed branch. Old deployments do not inherit changed environment variables. Do not point a MySQL-version deployment at PostgreSQL.
 4. After acceptance, switch traffic. Keep the MySQL backup and original uploads. If rollback is necessary after PostgreSQL has accepted new writes, reconcile those writes first; simply switching the URL back can lose them.
 
-The real hosted transfer remains pending until rotated credentials, a verified backup, an empty destination, and the maintenance window are available. No actual user records have been moved by preparing this branch.
+No hosted transfer is planned for the fresh-database rollout. Running a later
+transfer requires a separate explicit decision and the safeguards above.

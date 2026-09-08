@@ -1,4 +1,4 @@
-import { hasUserSecurityFields, prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/prisma"
 import { sanitizeEmailAddress, sanitizePasswordInput } from "@/lib/sanitization"
 import bcrypt from "bcryptjs"
 import { type NextAuthOptions } from "next-auth"
@@ -42,7 +42,7 @@ export const authOptions: NextAuthOptions = {
             school: true,
             isActive: true,
             pmacMemberId: true,
-            ...(hasUserSecurityFields() ? { mustChangePassword: true } : {}),
+            mustChangePassword: true,
           }
         })
 
@@ -64,7 +64,7 @@ export const authOptions: NextAuthOptions = {
           school: user.school,
           isActive: user.isActive,
           pmacMemberId: user.pmacMemberId,
-          mustChangePassword: hasUserSecurityFields() ? user.mustChangePassword : false,
+          mustChangePassword: user.mustChangePassword,
         }
       }
     })
@@ -93,7 +93,7 @@ export const authOptions: NextAuthOptions = {
             school: true,
             isActive: true,
             pmacMemberId: true,
-            ...(hasUserSecurityFields() ? { mustChangePassword: true } : {}),
+            mustChangePassword: true,
           }
         })
         if (fresh) {
@@ -104,7 +104,7 @@ export const authOptions: NextAuthOptions = {
           token.school = fresh.school
           token.isActive = fresh.isActive
           token.pmacMemberId = fresh.pmacMemberId
-          token.mustChangePassword = hasUserSecurityFields() ? fresh.mustChangePassword : false
+          token.mustChangePassword = fresh.mustChangePassword
         }
       }
       return token

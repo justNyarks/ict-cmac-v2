@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
-import { PMAC_UPLOAD_ROOT, resolvePmacAttachmentPath } from '@/lib/pmacAttachmentStorage'
-import { mkdir, unlink, writeFile } from 'fs/promises'
+import { resolvePmacAttachmentPath } from '@/lib/pmacAttachmentStorage'
+import { unlink } from 'fs/promises'
 import path from 'path'
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -15,11 +15,11 @@ import { PMAC_POLL_MANAGER_ROLES } from '@/lib/pmac'
 import { prisma } from '@/lib/prisma'
 import { assertActionAccess, assertSameOriginMutation } from '@/lib/security'
 import { sanitizeMultilineText, sanitizeSingleLineText } from '@/lib/sanitization'
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from '@/lib/uploadLimits'
 
 export const runtime = 'nodejs'
 
-const UPLOAD_ROOT = PMAC_UPLOAD_ROOT
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
+const MAX_FILE_SIZE_BYTES = MAX_UPLOAD_BYTES
 const ALLOWED_UPLOAD_TYPES = {
   'application/pdf': {
     storedExtension: '.pdf',
@@ -145,11 +145,9 @@ async function removeStoredFile(filePath: string) {
 }
 
 export async function POST(request: NextRequest) {
-  let pendingFile: string | null = null
   try {
     assertSameOriginMutation(request)
-    const session = await assertActionAccess([...PMAC_POLL_MANAGER_ROLES], {
-    })
+    const session = await assertActionAccess([...PMAC_POLL_MANAGER_ROLES])
     const formData = await request.formData()
 
     const targetType = sanitizeSingleLineText(String(formData.get('targetType') ?? ''), {
@@ -173,7 +171,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      return NextResponse.json({ error: 'Attachment must be 5 MB or smaller.' }, { status: 400 })
+      return NextResponse.json({ error: `Attachment must be ${MAX_UPLOAD_LABEL} or smaller.` }, { status: 400 })
     }
 
     const allowedUploadType = getAllowedUploadType(file.type)
@@ -196,9 +194,7 @@ export async function POST(request: NextRequest) {
     const monthFolder = new Date().toISOString().slice(0, 7)
     const extension = allowedUploadType.storedExtension
     const storedName = `${randomUUID()}${extension}`
-    const directory = path.join(UPLOAD_ROOT, monthFolder)
-    // These files are created at runtime and are not deployment build inputs.
-    const absolutePath = path.join(/* turbopackIgnore: true */ directory, storedName)
+    // Stable logical path for old links; new bytes are stored in PostgreSQL.
     const filePath = `/private/uploads/pmac/${monthFolder}/${storedName}`
     const bytes = Buffer.from(await file.arrayBuffer())
 
@@ -207,9 +203,6 @@ export async function POST(request: NextRequest) {
     }
 
     await scanUploadedFile(bytes)
-    await mkdir(directory, { recursive: true })
-    await writeFile(absolutePath, bytes)
-    pendingFile = filePath
 
     const attachment = await prisma.$transaction(async (tx) => {
       const createdAttachment = await tx.pmacAttachment.create({
@@ -222,6 +215,7 @@ export async function POST(request: NextRequest) {
           mimeType: file.type,
           sizeBytes: file.size,
           description: description || null,
+          content: { create: { data: bytes } },
         },
         include: {
           uploadedBy: {
@@ -251,10 +245,8 @@ export async function POST(request: NextRequest) {
       return createdAttachment
     })
 
-    pendingFile = null
     return NextResponse.json({ attachment })
   } catch (error) {
-    if (pendingFile) await removeStoredFile(pendingFile)
     const message = error instanceof Error ? error.message : 'Unable to upload PMAC attachment.'
     const status =
       error instanceof MalwareDetectedError
@@ -297,6 +289,7 @@ export async function DELETE(request: NextRequest) {
         eventId: true,
         pollId: true,
         memberId: true,
+        content: { select: { attachmentId: true } },
       },
     })
 
@@ -335,7 +328,7 @@ export async function DELETE(request: NextRequest) {
       })
     })
 
-    await removeStoredFile(attachment.filePath)
+    if (!attachment.content) await removeStoredFile(attachment.filePath)
     return NextResponse.json({ success: true })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to remove PMAC attachment.'

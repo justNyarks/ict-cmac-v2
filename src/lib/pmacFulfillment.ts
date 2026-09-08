@@ -1,6 +1,7 @@
 import type { PmacFulfillmentStatus, Prisma, Role } from '@prisma/client'
 
 import { getRecommendedAssignmentRoles } from '@/lib/pmac'
+import { getCoverageReadiness } from '@/lib/pmacReadiness'
 import { getPmacDeliveryLink } from '@/lib/pmacDeliveryEvidence'
 import type { DocumentationType, PmacEventDutyRole } from '@/types'
 
@@ -83,16 +84,7 @@ export async function syncRequestFulfillmentFromPmacEvent(
   } else if (event.status === 'COMPLETED') {
     nextStatus = 'EVENT_COMPLETED'
   } else {
-    const confirmedRoles = new Set(
-      event.assignments
-        .filter((assignment) => assignment.availabilityResponse === 'YES')
-        .map((assignment) => assignment.assignmentRole),
-    )
-    const requiredRoles = getRecommendedAssignmentRoles(event.sourceDocumentationType)
-    const hasPendingResponses = event.assignments.some((assignment) => assignment.availabilityResponse === 'PENDING')
-    const isReady = event.assignments.length > 0
-      && !hasPendingResponses
-      && requiredRoles.every((role) => confirmedRoles.has(role))
+    const { isReady } = getCoverageReadiness(event.sourceDocumentationType, event.assignments)
 
     if (isReady) nextStatus = 'READY'
     else if (event.assignments.length > 0) nextStatus = 'STAFFING'

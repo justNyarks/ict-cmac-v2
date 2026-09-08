@@ -1,6 +1,9 @@
 # Deployment readiness
 
-**Database direction updated:** the user selected Prisma Postgres and requested retention of existing MySQL records. See [the PostgreSQL migration and cutover guide](prisma-postgres-migration.md). The MySQL references below describe the earlier verification baseline, not the new deployment configuration.
+**Current direction:** fresh Prisma Postgres, without importing MySQL records.
+PRs #15 and #16 are merged. Use [fresh PostgreSQL setup](fresh-postgres-setup.md)
+and [the current review checklist](system-review-cleanup.md).
+The dated checklist below is historical and does not describe current deployment status.
 
 ## Checklist (7 September 2026)
 

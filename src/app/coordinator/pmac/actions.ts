@@ -9,7 +9,7 @@ import { recordPmacActivity } from '@/lib/pmacActivity'
 import { formatCourseOrDepartment, isPmacDepartment, normalizePmacMemberName } from '@/lib/pmacMembers'
 import { isPmacMemberStatus, normalizePmacPhone, parsePmacJoinedDate } from '@/lib/pmacMemberValidation'
 import { getPmacActiveMemberWorkInclude, getPmacMemberTransitionProblem, toPmacMemberActiveWork } from '@/lib/pmacMemberTransitions'
-import { hasUserSecurityFields, prisma } from '@/lib/prisma'
+import { prisma } from '@/lib/prisma'
 import { getDefaultClubRoleForSystemRole, PMAC_CLUB_ROLES, PMAC_SYSTEM_ROLES } from '@/lib/roles'
 import { assertActionAccess } from '@/lib/security'
 import { sanitizeEmailAddress, sanitizePasswordInput, sanitizeSingleLineText } from '@/lib/sanitization'
@@ -139,7 +139,7 @@ export async function getPmacMembers() {
           email: true,
           role: true,
           isActive: true,
-          ...(hasUserSecurityFields() ? { mustChangePassword: true } : {}),
+          mustChangePassword: true,
         },
       },
       specialties: {
@@ -227,7 +227,7 @@ export async function getPmacMemberDirectory(input: PmacMemberDirectoryQuery = {
           email: true,
           role: true,
           isActive: true,
-          ...(hasUserSecurityFields() ? { mustChangePassword: true } : {}),
+          mustChangePassword: true,
         },
       },
       specialties: { select: { specialty: true }, orderBy: { specialty: 'asc' } },
@@ -402,7 +402,6 @@ export async function savePmacMember(payload: PmacMemberPayload) {
     })
     if (transitionProblem) return { success: false, error: transitionProblem }
 
-    const supportsUserSecurityFields = hasUserSecurityFields()
     const hashedPassword = password ? await bcrypt.hash(password, 10) : null
 
     await prisma.$transaction(async (tx) => {
@@ -467,12 +466,8 @@ export async function savePmacMember(payload: PmacMemberPayload) {
             ...(hashedPassword
               ? {
                   password: hashedPassword,
-                  ...(supportsUserSecurityFields
-                    ? {
-                        mustChangePassword: true,
-                        passwordUpdatedAt: new Date(),
-                      }
-                    : {}),
+                  mustChangePassword: true,
+                  passwordUpdatedAt: new Date(),
                 }
               : {}),
           },
@@ -487,12 +482,8 @@ export async function savePmacMember(payload: PmacMemberPayload) {
             school: null,
             isActive: payload.status === 'ACTIVE',
             pmacMemberId: member.id,
-            ...(supportsUserSecurityFields
-              ? {
-                  mustChangePassword: true,
-                  passwordUpdatedAt: new Date(),
-                }
-              : {}),
+            mustChangePassword: true,
+            passwordUpdatedAt: new Date(),
           },
         })
       }

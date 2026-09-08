@@ -1,4 +1,4 @@
-import { hasPmacV4Delegates, hasUserSecurityFields, prisma } from '@/lib/prisma'
+import { prisma } from '@/lib/prisma'
 import { unstable_cache } from 'next/cache'
 import {
   calculatePmacReadinessScore,
@@ -98,9 +98,7 @@ function hasStatus<T extends string>(statuses: readonly T[], status: string | un
 }
 
 export async function buildPmacReportFilterOptions(): Promise<PmacReportFilterOptions> {
-  if (!hasPmacV4Delegates()) {
-    return { events: [], projects: [] }
-  }
+
 
   const [events, projects] = await Promise.all([
     prisma.pmacEvent.findMany({
@@ -199,7 +197,7 @@ export async function buildPmacReportCounts(filters: PmacReportFilters = {}): Pr
   const [members, events, projects, polls, activity, attendance, performance, staffingEvents, staffingMembers] = await Promise.all([
     prisma.pmacMember.count({ where: getFilteredMemberWhere(filters) }),
     prisma.pmacEvent.count({ where: getFilteredEventWhere(filters) }),
-    hasPmacV4Delegates() ? prisma.pmacProject.count({ where: getFilteredProjectWhere(filters) }) : Promise.resolve(0),
+    prisma.pmacProject.count({ where: getFilteredProjectWhere(filters) }),
     prisma.pmacPoll.count({
       where: {
         ...(hasStatus(PMAC_POLL_STATUSES, filters.status) ? { status: filters.status } : {}),
@@ -207,7 +205,7 @@ export async function buildPmacReportCounts(filters: PmacReportFilters = {}): Pr
         ...(subject?.type === 'EVENT' ? { linkedEventId: subject.id } : {}),
       },
     }),
-    hasPmacV4Delegates() ? prisma.pmacActivityLog.count({ where: activityWhere }) : Promise.resolve(0),
+    prisma.pmacActivityLog.count({ where: activityWhere }),
     prisma.pmacAttendance.count({ where: getFilteredAttendanceWhere(filters) }),
     prisma.pmacMember.count({ where: getFilteredMemberWhere(filters, true) }),
     prisma.pmacEvent.count({ where: staffingEventWhere }),
@@ -263,8 +261,7 @@ export async function buildPmacReportAnalytics(filters: PmacReportFilters = {}):
         },
       },
     }),
-    hasPmacV4Delegates()
-      ? prisma.pmacProject.groupBy({
+    prisma.pmacProject.groupBy({
           by: ['branch', 'status'],
           where: {
             AND: [
@@ -273,10 +270,8 @@ export async function buildPmacReportAnalytics(filters: PmacReportFilters = {}):
             ],
           },
           _count: { _all: true },
-        })
-      : Promise.resolve([]),
-    hasPmacV4Delegates()
-      ? prisma.pmacProject.findMany({
+        }),
+    prisma.pmacProject.findMany({
           where: {
             AND: [
               projectWhere,
@@ -286,10 +281,8 @@ export async function buildPmacReportAnalytics(filters: PmacReportFilters = {}):
           orderBy: { targetDate: 'asc' },
           take: 20,
           select: { id: true, title: true, targetDate: true },
-        })
-      : Promise.resolve([]),
-    hasPmacV4Delegates()
-      ? prisma.pmacProjectMilestone.findMany({
+        }),
+    prisma.pmacProjectMilestone.findMany({
           where: {
             status: { not: 'DONE' },
             dueDate: { lt: now },
@@ -310,8 +303,7 @@ export async function buildPmacReportAnalytics(filters: PmacReportFilters = {}):
             dueDate: true,
             project: { select: { title: true } },
           },
-        })
-      : Promise.resolve([]),
+        }),
     prisma.pmacMember.findMany({
       where: memberWhere,
       orderBy: { fullName: 'asc' },
@@ -454,7 +446,7 @@ export async function buildPmacMembersCsv(filters: PmacReportFilters = {}) {
           email: true,
           role: true,
           isActive: true,
-          ...(hasUserSecurityFields() ? { mustChangePassword: true } : {}),
+            mustChangePassword: true,
         },
       },
       specialties: {
@@ -498,11 +490,7 @@ export async function buildPmacMembersCsv(filters: PmacReportFilters = {}) {
 }
 
 export async function buildPmacEventsCsv(filters: PmacReportFilters = {}) {
-  if (!hasPmacV4Delegates()) {
-    return joinCsv([
-      ['Title', 'Status', 'Venue', 'Starts At', 'Ends At', 'Created By', 'Creator Email', 'Approved By', 'Assignments', 'Attendance Records', 'Attachments'],
-    ])
-  }
+
 
   const dateRange = getPmacReportDateRange(filters)
   const subject = getPmacReportSubject(filters)
@@ -562,11 +550,7 @@ export async function buildPmacEventsCsv(filters: PmacReportFilters = {}) {
 }
 
 export async function buildPmacProjectsCsv(filters: PmacReportFilters = {}) {
-  if (!hasPmacV4Delegates()) {
-    return joinCsv([
-      ['Title', 'Branch', 'Status', 'Starts At', 'Target Date', 'Head', 'Team', 'Milestones Done', 'Milestones Total', 'Output Submitted', 'Links', 'Launched By', 'Created At'],
-    ])
-  }
+
 
   const dateRange = getPmacReportDateRange(filters)
   const subject = getPmacReportSubject(filters)
@@ -767,11 +751,7 @@ export async function buildPmacStaffingCsv(filters: PmacReportFilters = {}) {
 }
 
 export async function buildPmacPollsCsv(filters: PmacReportFilters = {}) {
-  if (!hasPmacV4Delegates()) {
-    return joinCsv([
-      ['Title', 'Type', 'Status', 'Results Visibility', 'Opens At', 'Closes At', 'Created By', 'Creator Email', 'Linked Event', 'Votes Cast', 'Attachments'],
-    ])
-  }
+
 
   const dateRange = getPmacReportDateRange(filters)
   const subject = getPmacReportSubject(filters)
@@ -931,11 +911,7 @@ export async function buildPmacPerformanceCsv(filters: PmacReportFilters = {}) {
 }
 
 export async function buildPmacAttendanceCsv(filters: PmacReportFilters = {}) {
-  if (!hasPmacV4Delegates()) {
-    return joinCsv([
-      ['Event', 'Event Date', 'Member', 'Department', 'Course', 'Assigned Duties', 'Attendance Status', 'Notes', 'Recorded By', 'Recorded At'],
-    ])
-  }
+
 
   const dateRange = getPmacReportDateRange(filters)
   const subject = getPmacReportSubject(filters)
@@ -1040,9 +1016,7 @@ export async function* streamPmacActivityCsv(filters: PmacReportFilters = {}) {
   yield `${buildReportMetadataCsv('activity', filters)}\n`
   yield `${joinCsv([['Timestamp', 'Entity Type', 'Entity ID', 'Action', 'Actor Name', 'Actor Role', 'Summary', 'Details', 'Changes', 'Archived At']])}\n`
 
-  if (!hasPmacV4Delegates()) {
-    return
-  }
+
 
   const dateRange = getPmacReportDateRange(filters)
   const subject = getPmacReportSubject(filters)
@@ -1113,7 +1087,7 @@ async function* streamPmacMembersCsv(filters: PmacReportFilters) {
           email: true,
           role: true,
           isActive: true,
-          ...(hasUserSecurityFields() ? { mustChangePassword: true } : {}),
+            mustChangePassword: true,
         },
       },
       specialties: { select: { specialty: true }, orderBy: { specialty: 'asc' } },
@@ -1147,7 +1121,7 @@ async function* streamPmacEventsCsv(filters: PmacReportFilters) {
     'Starts At', 'Ends At', 'Created By', 'Creator Email', 'Approved By', 'Assignments', 'Attendance Records', 'Attachments',
   ]
   yield* startPmacCsvStream('events', filters, header)
-  if (!hasPmacV4Delegates()) return
+
 
   const where = getFilteredEventWhere(filters)
   for await (const events of paginateExportRows((cursor) => prisma.pmacEvent.findMany({
@@ -1187,7 +1161,7 @@ async function* streamPmacProjectsCsv(filters: PmacReportFilters) {
     'Title', 'Branch', 'Status', 'Starts At', 'Target Date', 'Head', 'Team', 'Milestones Done', 'Milestones Total',
     'Milestone Details', 'Output Submitted', 'Output Summary', 'Links', 'Launched By', 'Launcher Email', 'Created At',
   ])
-  if (!hasPmacV4Delegates()) return
+
 
   const where = getFilteredProjectWhere(filters)
   for await (const projects of paginateExportRows((cursor) => prisma.pmacProject.findMany({
@@ -1232,7 +1206,6 @@ async function* streamPmacPollsCsv(filters: PmacReportFilters) {
     'Title', 'Type', 'Status', 'Results Visibility', 'Opens At', 'Closes At', 'Created By', 'Creator Email',
     'Linked Event', 'Votes Cast', 'Attachments',
   ])
-  if (!hasPmacV4Delegates()) return
 
   const dateRange = getPmacReportDateRange(filters)
   const subject = getPmacReportSubject(filters)
@@ -1274,7 +1247,6 @@ async function* streamPmacAttendanceCsv(filters: PmacReportFilters) {
     'Event', 'Event Date', 'Member', 'Department', 'Course', 'Assigned Duties', 'Attendance Status', 'Notes',
     'Recorded By', 'Recorded At',
   ])
-  if (!hasPmacV4Delegates()) return
 
   const where = getFilteredAttendanceWhere(filters)
   for await (const attendance of paginateExportRows((cursor) => prisma.pmacAttendance.findMany({

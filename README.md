@@ -2,6 +2,10 @@
 
 A Next.js App Router application for managing CMAC and PMAC documentation requests across school units.
 
+For the active Vercel deployment, use [fresh PostgreSQL setup](docs/fresh-postgres-setup.md).
+The owner chose a new database, not an import of MySQL records.
+See [the latest fixes and remaining setup](docs/system-review-cleanup.md).
+
 ## Highlights
 
 - Role-based access for `SECRETARY`, `CMAC_COORDINATOR`, and `ICT_DIRECTOR`
@@ -83,7 +87,11 @@ Open `http://localhost:3000`.
 
 ### PMAC file storage and workflow review
 
-PMAC uploads now live in `private/uploads/pmac`, outside the public web root. Back up this directory alongside the database. Docker Compose persists new uploads in the `ict-cmac-pmac-uploads` volume. Upload files are excluded from Git and Docker build context.
+New PMAC uploads are scanned and stored in PostgreSQL, with a 4 MB file limit.
+Apply the reviewed attachment-content migration before deploying this version.
+Back up the database and verify restoration. Legacy `private/uploads/pmac` files
+still require their original disk/volume backup; they are not automatically imported.
+Upload files remain excluded from Git and Docker build context.
 
 Existing `/uploads/pmac/...` links are handled by the Next.js proxy and an authenticated, record-scoped download route; historical files are not moved or deleted. Do not configure a reverse proxy/CDN to serve that directory directly, bypassing Next.js. Preserve existing `public/uploads/pmac` files when deploying an upgrade, and include them in backups until migrated separately.
 

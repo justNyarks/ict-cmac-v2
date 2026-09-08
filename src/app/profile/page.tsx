@@ -44,6 +44,8 @@ export default function ProfilePage() {
       } else {
         showToast('error', res.error || 'Failed to update profile.')
       }
+    } catch {
+      showToast('error', 'Unable to save your profile. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -121,7 +123,7 @@ export default function ProfilePage() {
           <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
             <Lock size={16} className="text-emerald-500" />
             <h3 className="font-black text-[10px] text-slate-500 uppercase tracking-widest">Change Password</h3>
-            <span className="text-[9px] text-slate-400 font-bold ml-1">(leave blank to keep current)</span>
+            {!user?.mustChangePassword && <span className="text-[9px] text-slate-400 font-bold ml-1">(leave blank to keep current)</span>}
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Current Password</label>

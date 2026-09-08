@@ -4,15 +4,6 @@ export const ZERO_TRUST_COOKIE_NAME = 'ict_cmac_zero_trust'
 export const ZERO_TRUST_PATH = '/zero-trust'
 export const ZERO_TRUST_TTL_SECONDS = 15 * 60
 
-const ZERO_TRUST_PROTECTED_PREFIXES = [
-  '/admin',
-  '/analytics',
-  '/logs',
-  '/requests',
-  '/coordinator/pmac',
-  '/pmac/members',
-  '/pmac/reports',
-] as const
 export const SENSITIVE_ACTION_ROLES: Role[] = [
   'CMAC_COORDINATOR',
   'ICT_DIRECTOR',
@@ -113,14 +104,6 @@ export function sanitizeNextPath(input?: string | string[] | null, fallback = '/
 export function getZeroTrustRedirectPath(nextPath: string) {
   const safeNextPath = sanitizeNextPath(nextPath)
   return `${ZERO_TRUST_PATH}?next=${encodeURIComponent(safeNextPath)}`
-}
-
-export function requiresZeroTrustForPath(pathname: string) {
-  return ZERO_TRUST_PROTECTED_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(`${prefix}/`))
-}
-
-export function shouldEnforceZeroTrust(role: string | null | undefined, pathname: string) {
-  return isPrivilegedRole(role) && requiresZeroTrustForPath(pathname)
 }
 
 export async function createZeroTrustToken(payload: ZeroTrustPayload) {

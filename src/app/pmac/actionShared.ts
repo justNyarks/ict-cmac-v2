@@ -1,6 +1,8 @@
 import type { Prisma } from '@prisma/client'
+import { isPollOpenForVoting } from '@/lib/pmacVotingWindow'
+export { isPollOpenForVoting } from '@/lib/pmacVotingWindow'
 import { canClosePmacPoll, getDutyRolesForSpecialties, PMAC_EXECUTIVE_TITLE_LABELS, getRecommendedAssignmentRoles, isPmacAssignmentResponderRole, isPmacAttendanceManagerRole, isPmacCreatorRole, isPmacEventManagerRole, isPmacPollManagerRole, isPmacPollMonitorRole, isPmacPollVoterRole, isPmacStaffingManagerRole, PMAC_ATTENDANCE_STATUSES, PMAC_EVENT_DUTY_ROLES, PMAC_EVENT_DUTY_ROLE_LABELS, PMAC_OPERATIONAL_ROLES, PMAC_OVERSIGHT_ROLES, PMAC_POLL_RESULTS_VISIBILITY, PMAC_POLL_TYPES, PMAC_POLL_VOTER_ROLES, PMAC_PROJECT_MILESTONE_STATUSES, PMAC_PROJECT_STATUSES, PMAC_VOTE_CHOICES } from '@/lib/pmac'
-import { hasPmacV4Delegates, prisma } from '@/lib/prisma'
+import { prisma } from '@/lib/prisma'
 import { assertActionAccess, getAuthenticatedSession } from '@/lib/security'
 import { sanitizeMultilineText, sanitizeSingleLineText } from '@/lib/sanitization'
 import type { DocumentationType, PmacClubRole, PmacExecutiveTitle, PmacProjectLinkType, PmacProjectMilestoneStatus, PmacProjectStatus, PmacSpecialty, Role } from '@/types'
@@ -438,25 +440,6 @@ export function ensurePollPayload(payload: PmacPollPayload) {
     linkedEventId: linkedEventId || null,
     resultsVisibility: payload.resultsVisibility,
   }
-}
-
-export function isPollOpenForVoting(
-  poll: Pick<Prisma.PmacPollUncheckedCreateInput, 'status' | 'opensAt' | 'closesAt'>,
-  now = new Date()
-) {
-  if (poll.status !== 'OPEN') {
-    return false
-  }
-
-  if (poll.opensAt && poll.opensAt > now) {
-    return false
-  }
-
-  if (poll.closesAt && poll.closesAt < now) {
-    return false
-  }
-
-  return true
 }
 
 export function isPollClosedForResults(

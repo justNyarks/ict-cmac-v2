@@ -490,11 +490,19 @@ model PmacAttachment {
   description  String?     @db.Text
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+  content      PmacAttachmentContent?
 
   @@index([eventId, createdAt])
   @@index([pollId, createdAt])
   @@index([memberId, createdAt])
   @@index([uploadedById, createdAt])
+}
+
+// Keep bytes separate so list, notification and workspace queries only load metadata.
+model PmacAttachmentContent {
+  attachmentId String         @id
+  attachment   PmacAttachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+  data         Bytes          @db.ByteA
 }
 
 model PmacActivityLog {

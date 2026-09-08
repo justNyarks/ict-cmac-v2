@@ -1,6 +1,6 @@
 import type { Role } from '@/types'
 import { authOptions } from '@/lib/auth'
-import { hasUserSecurityFields, prisma } from '@/lib/prisma'
+import { prisma } from '@/lib/prisma'
 import {
   ZERO_TRUST_COOKIE_NAME,
   ZERO_TRUST_TTL_SECONDS,
@@ -89,7 +89,7 @@ async function resolveCurrentSession(session: Session | null): Promise<AuthSessi
     school: true,
     isActive: true,
     pmacMemberId: true,
-    ...(hasUserSecurityFields() ? { mustChangePassword: true } : {}),
+    mustChangePassword: true,
   }
 
   let freshUser = session.user.id
@@ -117,21 +117,27 @@ async function resolveCurrentSession(session: Session | null): Promise<AuthSessi
   session.user.school = freshUser.school
   session.user.isActive = freshUser.isActive
   session.user.pmacMemberId = freshUser.pmacMemberId
-  session.user.mustChangePassword = hasUserSecurityFields() ? freshUser.mustChangePassword : false
+  session.user.mustChangePassword = freshUser.mustChangePassword
 
   return session
 }
 
 // JWTs establish identity, not continuing account/role authorization.
-export async function getAuthenticatedSession(): Promise<AuthSession | null> {
-  return resolveCurrentSession(await getServerSession(authOptions))
+export async function getAuthenticatedSession(options: { allowPasswordChange?: boolean } = {}): Promise<AuthSession | null> {
+  const session = await resolveCurrentSession(await getServerSession(authOptions))
+  if (session?.user.mustChangePassword && !options.allowPasswordChange) return null
+  return session
 }
 
 export async function requireAuthenticatedSession(): Promise<AuthSession> {
-  const session = await getAuthenticatedSession()
+  const session = await getAuthenticatedSession({ allowPasswordChange: true })
 
   if (!session?.user) {
     redirect('/auth/signin')
+  }
+
+  if (session.user.mustChangePassword) {
+    redirect('/profile')
   }
 
   return session
@@ -175,6 +181,10 @@ export async function assertActionAccess(allowedRoles: readonly Role[], options:
 
   if (!session?.user) {
     throw new Error('Authentication required. Please sign out and sign back in.')
+  }
+
+  if (session.user.mustChangePassword) {
+    throw new Error('Password update required. Open My Profile and replace your temporary password before continuing.')
   }
 
   if (!allowedRoles.includes(session.user.role)) {

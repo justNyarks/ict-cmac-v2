@@ -17,68 +17,25 @@ import {
   Vote,
 } from 'lucide-react'
 import clsx from 'clsx'
-import { getHomePathForRole, getRoleLabel, isPmacSystemRole } from '@/lib/roles'
+import { getRoleLabel } from '@/lib/roles'
+import { getActiveNavigationHref, getNavigationItems, type NavigationItem } from '@/lib/navigation'
 
 import { useSession, signOut } from 'next-auth/react'
 import { LogOut } from 'lucide-react'
+
+const ICONS = {
+  dashboard: LayoutDashboard, events: ClipboardList, projects: FolderKanban, polls: Vote,
+  calendar: CalendarDays, members: Settings, assignments: Briefcase, activity: History,
+  reports: BarChart3, attendance: CheckCircle, newRequest: FilePlus2, profile: User,
+} satisfies Record<NavigationItem['icon'], typeof User>
 
 export default function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
   const user = session?.user
   const role = user?.role
-  const homeHref = getHomePathForRole(role)
-
-  const navItems = [
-    { href: homeHref, label: 'Dashboard', icon: LayoutDashboard },
-    ...(isPmacSystemRole(role)
-      ? [
-          { href: '/pmac/events', label: 'PMAC Events', icon: ClipboardList },
-          ...(role === 'PMAC_DIRECTOR' || role === 'PMAC_SECRETARY' || role === 'PMAC_EXECUTIVE'
-            ? [{ href: '/pmac/projects', label: 'Branch Projects', icon: FolderKanban }]
-            : []),
-          { href: '/pmac/polls', label: 'PMAC Polls', icon: Vote },
-          { href: '/pmac/calendar', label: 'PMAC Calendar', icon: CalendarDays },
-          ...(role === 'PMAC_DIRECTOR' || role === 'PMAC_SECRETARY'
-            ? [{ href: '/pmac/members', label: 'Members', icon: Settings }]
-            : []),
-          { href: '/pmac/assignments', label: 'Assignments', icon: Briefcase },
-          { href: '/pmac/activity', label: 'Activity', icon: History },
-          ...(role === 'PMAC_DIRECTOR' || role === 'PMAC_ASSISTANT_DIRECTOR' || role === 'PMAC_SECRETARY'
-            ? [{ href: '/pmac/reports', label: 'Reports', icon: BarChart3 }]
-            : []),
-          ...(role === 'PMAC_SECRETARY'
-            ? [{ href: '/pmac/attendance', label: 'Attendance', icon: CheckCircle }]
-            : []),
-        ]
-      : [
-          { href: '/requests', label: 'Requests', icon: ClipboardList },
-          { href: '/new-request', label: 'New Request', icon: FilePlus2 },
-          { href: '/calendar', label: 'Calendar', icon: CalendarDays },
-          { href: '/analytics', label: 'Analytics', icon: BarChart3 },
-          { href: '/logs', label: 'CMAC Request Audit', icon: History },
-          { href: '/admin', label: 'Admin', icon: Settings },
-        ]),
-    ...(role === 'CMAC_COORDINATOR'
-      ? [
-          { href: '/coordinator/pmac', label: 'PMAC Directory', icon: Settings },
-          { href: '/coordinator/pmac/officers', label: 'Officer Assignments', icon: Briefcase },
-          { href: '/coordinator/pmac/events', label: 'PMAC Events', icon: ClipboardList },
-          { href: '/pmac/projects', label: 'Branch Projects', icon: FolderKanban },
-          { href: '/coordinator/pmac/polls', label: 'PMAC Polls', icon: Vote },
-          { href: '/coordinator/pmac/activity', label: 'PMAC Operations Audit', icon: History },
-          { href: '/coordinator/pmac/reports', label: 'PMAC Reports', icon: BarChart3 },
-        ]
-      : []),
-    { href: '/profile', label: 'My Profile', icon: User },
-  ]
-  const filteredNavItems = navItems.filter(item => {
-    if (item.href === '/new-request') return role === 'SECRETARY' || role === 'ICT_DIRECTOR'
-    if (item.href === '/admin') return role === 'ICT_DIRECTOR'
-    if (item.href === '/analytics') return role === 'CMAC_COORDINATOR' || role === 'ICT_DIRECTOR'
-    if (item.href === '/logs') return role === 'CMAC_COORDINATOR'
-    return true
-  })
+  const filteredNavItems = getNavigationItems(role)
+  const activeHref = getActiveNavigationHref(pathname, filteredNavItems)
 
   return (
     <aside className="app-sidebar w-64 flex-shrink-0 bg-[var(--sidebar)] flex flex-col h-full border-r border-emerald-900/20 dark:border-white/[0.08] print:hidden">
@@ -99,8 +56,9 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-5 space-y-1">
-        {filteredNavItems.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || (href !== '/' && pathname.startsWith(href))
+        {filteredNavItems.map(({ href, label, icon }) => {
+          const active = href === activeHref
+          const Icon = ICONS[icon]
           return (
             <Link
               key={href}
