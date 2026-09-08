@@ -3,17 +3,21 @@
 import { getAuthenticatedSession } from '@/lib/security'
 
 import type { Prisma } from "@prisma/client"
-import { hasUserSecurityFields, prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import { sanitizePasswordInput, sanitizeSingleLineText } from "@/lib/sanitization"
 
 export async function updateProfile(data: { name: string; currentPassword?: string; newPassword?: string }) {
-  const session = await getAuthenticatedSession()
+  // This is the only account mutation available before replacing a temporary password.
+  const session = await getAuthenticatedSession({ allowPasswordChange: true })
   if (!session?.user) return { success: false, error: 'Not authenticated' }
 
   const userId = session.user.id
   const user = await prisma.user.findUnique({ where: { id: userId } })
   if (!user) return { success: false, error: 'User not found' }
+  if (user.mustChangePassword && !data.newPassword) {
+    return { success: false, error: 'Set a new password before continuing.' }
+  }
 
   const updateData: Prisma.UserUpdateInput = {}
 
@@ -56,11 +60,12 @@ export async function updateProfile(data: { name: string; currentPassword?: stri
 
     const valid = await bcrypt.compare(currentPassword, user.password)
     if (!valid) return { success: false, error: 'Current password is incorrect.' }
-    updateData.password = await bcrypt.hash(newPassword, 10)
-    if (hasUserSecurityFields()) {
-      updateData.mustChangePassword = false
-      updateData.passwordUpdatedAt = new Date()
+    if (await bcrypt.compare(newPassword, user.password)) {
+      return { success: false, error: 'Choose a password different from your current password.' }
     }
+    updateData.password = await bcrypt.hash(newPassword, 10)
+    updateData.mustChangePassword = false
+    updateData.passwordUpdatedAt = new Date()
   }
 
   await prisma.user.update({ where: { id: userId }, data: updateData })

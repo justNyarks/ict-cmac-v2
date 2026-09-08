@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ events: vi.fn(), members: vi.fn() }))
 vi.mock('@/lib/prisma', () => ({
-  hasPmacV4Delegates: () => false,
-  prisma: { pmacAttendance: { groupBy: async () => [] }, pmacEvent: { findMany: mocks.events }, pmacMember: { findMany: mocks.members } },
+  prisma: {
+    pmacAttendance: { groupBy: async () => [] },
+    pmacEvent: { findMany: mocks.events }, pmacMember: { findMany: mocks.members },
+    pmacProject: { groupBy: async () => [], findMany: async () => [] },
+    pmacProjectMilestone: { findMany: async () => [] },
+  },
 }))
 import { buildPmacReportAnalytics } from './pmacReports'
 

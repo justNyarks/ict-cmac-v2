@@ -2,6 +2,9 @@ import { prisma } from '@/lib/prisma'
 import { isPmacAssignmentResponderRole, isPmacEventManagerRole, isPmacPollManagerRole, PMAC_EXECUTIVE_TITLE_LABELS, PMAC_PROJECT_STATUS_LABELS } from '@/lib/pmac'
 import { getPmacProjectWhere } from '@/lib/pmacProjects'
 import { getRoleLabel } from '@/lib/roles'
+import { getNavigationItems } from '@/lib/navigation'
+import { getCoverageReadiness } from '@/lib/pmacReadiness'
+import { getOpenVotingWhere } from '@/lib/pmacVotingWindow'
 import type { Role } from '@/types'
 import PmacDashboardPlaceholder from '@/components/pmac/PmacDashboardPlaceholder'
 import { requireRoleAccess } from '@/lib/security'
@@ -13,37 +16,14 @@ type PmacRolePageProps = {
 }
 
 function getPmacRoleLinks(role: Role) {
-  const links = [
-    { href: '/pmac/events', label: 'Events' },
-    { href: '/pmac/polls', label: 'Polls' },
-    { href: '/pmac/calendar', label: 'Calendar' },
-    { href: '/pmac/assignments', label: 'Assignments' },
-  ]
-
+  const links = getNavigationItems(role)
+    .filter(item => item.icon !== 'dashboard' && item.icon !== 'profile')
+    .map(({ href, label }) => ({ href, label }))
   if (role === 'PMAC_DIRECTOR' || role === 'PMAC_ASSISTANT_DIRECTOR') {
     links.unshift({ href: '/pmac/events/new', label: 'Create Event' })
   }
-
   if (isPmacPollManagerRole(role)) {
     links.unshift({ href: '/pmac/polls/new', label: 'Create Poll' })
-  }
-
-  if (role === 'PMAC_SECRETARY') {
-    links.push({ href: '/pmac/attendance', label: 'Attendance' })
-  }
-
-  if (role === 'PMAC_DIRECTOR' || role === 'PMAC_SECRETARY' || role === 'PMAC_EXECUTIVE' || role === 'PMAC_MEMBER') {
-    links.push({ href: '/pmac/projects', label: 'Projects' })
-  }
-
-  if (role === 'PMAC_DIRECTOR' || role === 'PMAC_SECRETARY') {
-    links.push({ href: '/pmac/members', label: 'Members' })
-  }
-
-  links.push({ href: '/pmac/activity', label: 'Activity History' })
-
-  if (role === 'PMAC_DIRECTOR' || role === 'PMAC_ASSISTANT_DIRECTOR' || role === 'PMAC_SECRETARY') {
-    links.push({ href: '/pmac/reports', label: 'Reports' })
   }
 
   return links
@@ -70,7 +50,7 @@ function getPmacDashboardStats(params: {
 
   if (params.role === 'PMAC_DIRECTOR' || params.role === 'PMAC_ASSISTANT_DIRECTOR' || params.role === 'PMAC_SECRETARY') {
     stats.push({
-      label: 'Duty Assignment',
+      label: 'Needs Staffing',
       value: params.importedNeedsStaffing,
     })
   }
@@ -118,18 +98,21 @@ export default async function PmacRolePage({ allowedRole, nextPath, accessSummar
         }
 
   const projectWhere = await getPmacProjectWhere(session.user)
-  const [eventCount, importedNeedsStaffing, projectCount, activeProjectCount, openPollCount, pendingResponses, upcomingEvents, branchProjects, openPolls] = await Promise.all([
+  const openVotingWhere = getOpenVotingWhere(now)
+  const [eventCount, staffingEvents, projectCount, activeProjectCount, openPollCount, pendingResponses, upcomingEvents, branchProjects, openPolls] = await Promise.all([
     prisma.pmacEvent.count({
       where: eventWhere,
     }),
-    prisma.pmacEvent.count({
+    prisma.pmacEvent.findMany({
       where: {
         ...eventWhere,
         sourceType: 'CMAC_REQUEST',
         status: 'APPROVED',
-        assignments: {
-          none: {},
-        },
+        endDateTime: { gte: now },
+      },
+      select: {
+        sourceDocumentationType: true,
+        assignments: { select: { assignmentRole: true, availabilityResponse: true } },
       },
     }),
     prisma.pmacProject.count({
@@ -142,21 +125,21 @@ export default async function PmacRolePage({ allowedRole, nextPath, accessSummar
       },
     }),
     prisma.pmacPoll.count({
-      where: {
-        status: 'OPEN',
-      },
+      where: openVotingWhere,
     }),
     session.user.pmacMemberId && isPmacAssignmentResponderRole(session.user.role)
       ? prisma.pmacEventAssignment.count({
           where: {
             memberId: session.user.pmacMemberId,
             availabilityResponse: 'PENDING',
+            event: { status: 'APPROVED', endDateTime: { gte: now } },
           },
         })
       : Promise.resolve(0),
     prisma.pmacEvent.findMany({
       where: {
         ...eventWhere,
+        status: 'APPROVED',
         startDateTime: {
           gte: now,
         },
@@ -195,9 +178,7 @@ export default async function PmacRolePage({ allowedRole, nextPath, accessSummar
       take: 3,
     }),
     prisma.pmacPoll.findMany({
-      where: {
-        status: 'OPEN',
-      },
+      where: openVotingWhere,
       select: {
         id: true,
         title: true,
@@ -219,7 +200,7 @@ export default async function PmacRolePage({ allowedRole, nextPath, accessSummar
       stats={getPmacDashboardStats({
         role: session.user.role,
         eventCount,
-        importedNeedsStaffing,
+        importedNeedsStaffing: staffingEvents.filter(event => !getCoverageReadiness(event.sourceDocumentationType, event.assignments).isReady).length,
         projectCount,
         activeProjectCount,
         openPollCount,
@@ -246,7 +227,7 @@ export default async function PmacRolePage({ allowedRole, nextPath, accessSummar
           day: 'numeric',
           year: 'numeric',
         })}`,
-        href: '/pmac/projects',
+        href: `/pmac/projects?projectId=${encodeURIComponent(project.id)}`,
         badge: PMAC_PROJECT_STATUS_LABELS[project.status],
       }))}
       openPolls={openPolls.map((poll) => ({

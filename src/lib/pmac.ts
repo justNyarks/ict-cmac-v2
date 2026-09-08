@@ -162,7 +162,7 @@ export const PMAC_ATTENDANCE_LABELS: Record<PmacAttendanceStatus, string> = {
 export const PMAC_POLL_TYPE_LABELS: Record<PmacPollType, string> = {
   GENERAL: 'General Poll',
   EVENT: 'Event Poll',
-  SCHEDULE_PREFERENCE: 'Schedule Preference',
+  SCHEDULE_PREFERENCE: 'Schedule Agreement',
   OFFICER_DECISION: 'Officer Decision',
 }
 

@@ -88,9 +88,13 @@ export default function PmacPollForm({
         setError('')
 
         startTransition(async () => {
-          const result = await onSubmit(values)
-          if (!result.success) {
-            setError(result.error || 'Something went wrong while saving the PMAC poll.')
+          try {
+            const result = await onSubmit(values)
+            if (!result.success) {
+              setError(result.error || 'Something went wrong while saving the PMAC poll.')
+            }
+          } catch {
+            setError('Unable to save the poll. Your answers are still here; please try again.')
           }
         })
       }}
@@ -134,6 +138,9 @@ export default function PmacPollForm({
               </option>
             ))}
           </select>
+          {values.type === 'SCHEDULE_PREFERENCE' && (
+            <p className="mt-2 text-xs text-slate-500">Propose one schedule in the description. Members answer Yes, No, or Abstain.</p>
+          )}
         </div>
 
         <div>

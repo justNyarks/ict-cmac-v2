@@ -28,6 +28,8 @@ function formatDateTime(value: string | Date | null | undefined) {
 export default function PmacPollsPageClient({ role }: { role: string }) {
   const [polls, setPolls] = useState<PollListItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [retry, setRetry] = useState(0)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [typeFilter, setTypeFilter] = useState('ALL')
@@ -36,10 +38,15 @@ export default function PmacPollsPageClient({ role }: { role: string }) {
     let cancelled = false
 
     async function loadPolls() {
-      const result = await getPmacPolls()
-      if (!cancelled) {
-        setPolls(result)
-        setLoading(false)
+      setLoading(true)
+      setError('')
+      try {
+        const result = await getPmacPolls()
+        if (!cancelled) setPolls(result)
+      } catch {
+        if (!cancelled) setError('Unable to load polls. Please try again.')
+      } finally {
+        if (!cancelled) setLoading(false)
       }
     }
 
@@ -48,7 +55,7 @@ export default function PmacPollsPageClient({ role }: { role: string }) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [retry])
 
   const filteredPolls = useMemo(
     () => filterPmacPolls(polls, query, statusFilter, typeFilter),
@@ -57,6 +64,13 @@ export default function PmacPollsPageClient({ role }: { role: string }) {
 
   if (loading) {
     return <div className="p-10 text-center text-slate-400">Loading PMAC polls...</div>
+  }
+
+  if (error) {
+    return <div className="card p-8 text-center space-y-3" role="alert">
+      <p>{error}</p>
+      <button type="button" className="btn-primary" onClick={() => setRetry(value => value + 1)}>Retry</button>
+    </div>
   }
 
   return (

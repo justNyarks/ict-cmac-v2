@@ -1,5 +1,5 @@
 import { calculatePmacReadinessScore, getRecommendedAssignmentRoles } from '@/lib/pmac'
-import { hasPmacV4Delegates, prisma } from '@/lib/prisma'
+import { prisma } from '@/lib/prisma'
 
 export type PmacReportSummary = {
   members: number
@@ -83,9 +83,9 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
       },
     }),
     prisma.pmacPoll.count(),
-    hasPmacV4Delegates() ? prisma.pmacAttachment.count() : Promise.resolve(0),
-    hasPmacV4Delegates() ? prisma.pmacActivityLog.count() : Promise.resolve(0),
-    hasPmacV4Delegates() ? prisma.pmacActivityLog.count({ where: { archivedAt: { not: null } } }) : Promise.resolve(0),
+    prisma.pmacAttachment.count(),
+    prisma.pmacActivityLog.count(),
+    prisma.pmacActivityLog.count({ where: { archivedAt: { not: null } } }),
     prisma.pmacAttendance.count(),
     prisma.pmacAttendance.count({
       where: {
@@ -205,18 +205,16 @@ export async function buildPmacReportSummary(): Promise<PmacReportSummary> {
         ],
       },
     }),
-    hasPmacV4Delegates() ? prisma.pmacProject.count() : Promise.resolve(0),
-    hasPmacV4Delegates() ? prisma.pmacProject.count({ where: { status: 'ACTIVE' } }) : Promise.resolve(0),
-    hasPmacV4Delegates() ? prisma.pmacProject.count({ where: { status: 'ON_HOLD' } }) : Promise.resolve(0),
-    hasPmacV4Delegates() ? prisma.pmacProject.count({ where: { status: 'COMPLETED' } }) : Promise.resolve(0),
-    hasPmacV4Delegates()
-      ? prisma.pmacProject.count({
-          where: {
-            status: { in: ['PLANNED', 'ACTIVE', 'ON_HOLD'] },
-            targetDate: { lt: now },
-          },
-        })
-      : Promise.resolve(0),
+    prisma.pmacProject.count(),
+    prisma.pmacProject.count({ where: { status: 'ACTIVE' } }),
+    prisma.pmacProject.count({ where: { status: 'ON_HOLD' } }),
+    prisma.pmacProject.count({ where: { status: 'COMPLETED' } }),
+    prisma.pmacProject.count({
+      where: {
+        status: { in: ['PLANNED', 'ACTIVE', 'ON_HOLD'] },
+        targetDate: { lt: now },
+      },
+    }),
   ])
 
   const understaffedUpcoming = upcomingEvents.filter((event) => {

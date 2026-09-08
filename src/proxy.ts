@@ -11,6 +11,12 @@ export default withAuth(
     const role = typeof token?.role === "string" ? token.role : null;
     const homePath = getHomePathForRole(role);
 
+    // UX shortcut only: server reads/actions also check the current database flag.
+    // Always leave profile and auth endpoints available for recovery/sign-out.
+    if (token?.mustChangePassword && path !== "/profile" && !path.startsWith("/api/auth")) {
+      return NextResponse.redirect(new URL("/profile", req.url));
+    }
+
     // Preserve old links without allowing public storage to bypass record access.
     if (path.startsWith('/uploads/pmac/')) {
       const download = new URL('/api/pmac/attachments/download', req.url);

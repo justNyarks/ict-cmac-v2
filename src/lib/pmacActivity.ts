@@ -6,7 +6,7 @@ import {
   sanitizePmacActivityChanges,
   type PmacActivityChangeSet,
 } from '@/lib/pmacActivityAudit'
-import { hasPmacV4Delegates, prisma } from '@/lib/prisma'
+import { prisma } from '@/lib/prisma'
 import { buildPmacProjectWhere } from '@/lib/pmacProjects'
 import { getRoleLabel } from '@/lib/roles'
 
@@ -276,20 +276,6 @@ export async function archiveExpiredPmacActivity(now = new Date()) {
 }
 
 export async function getPmacActivityFeed(user: SessionUser, options: PmacActivityFeedOptions = {}) {
-  if (!hasPmacV4Delegates()) {
-    return {
-      entries: [],
-      actions: [],
-      actors: [],
-      subjects: [],
-      pagination: {
-        page: 1,
-        pageSize: 25,
-        total: 0,
-        totalPages: 1,
-      },
-    }
-  }
 
   await archiveExpiredPmacActivity()
 
