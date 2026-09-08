@@ -23,10 +23,10 @@ describe('MySQL to PostgreSQL transfer safeguards', () => {
     expect(MIGRATION_MODELS.indexOf('serviceRequest')).toBeLessThan(MIGRATION_MODELS.indexOf('pmacEvent'))
     expect(MIGRATION_MODELS.indexOf('pmacPoll')).toBeLessThan(MIGRATION_MODELS.indexOf('pmacVote'))
   })
-  it('covers every current schema model and keeps PostgreSQL native types', () => {
+  it('covers every legacy model and identifies PostgreSQL-only storage separately', () => {
     const schema = readFileSync('prisma/schema.prisma', 'utf8')
     const models = [...schema.matchAll(/^model (\w+) \{/gm)].map((match) => match[1][0].toLowerCase() + match[1].slice(1))
-    expect([...MIGRATION_MODELS].sort()).toEqual(models.sort())
+    expect([...MIGRATION_MODELS, 'pmacAttachmentContent'].sort()).toEqual(models.sort())
     expect(schema).toContain('provider = "postgresql"')
     expect(schema).toContain('@db.ByteA')
     expect(schema).not.toContain('@db.LongBlob')

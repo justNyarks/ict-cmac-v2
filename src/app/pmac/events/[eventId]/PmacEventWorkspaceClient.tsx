@@ -1,4 +1,5 @@
 'use client'
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from '@/lib/uploadLimits'
 
 import { runReverifiedAction } from '@/lib/reverificationClient'
 
@@ -280,6 +281,11 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
       return
     }
 
+    if (attachmentFile.size > MAX_UPLOAD_BYTES) {
+      showToast('error', `Attachment must be ${MAX_UPLOAD_LABEL} or smaller.`)
+      return
+    }
+
     setAttachmentBusy(true)
 
     try {
@@ -304,6 +310,8 @@ export default function PmacEventWorkspaceClient({ eventId }: { eventId: string 
       setAttachmentDescription('')
       showToast('success', 'Attachment uploaded.')
       await refreshWorkspace()
+    } catch {
+      showToast('error', 'Unable to upload the attachment. Please try again.')
     } finally {
       setAttachmentBusy(false)
     }

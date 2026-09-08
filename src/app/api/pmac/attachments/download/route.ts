@@ -28,7 +28,11 @@ export async function GET(request: NextRequest) {
   }
   if (!allowed) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
   try {
-    const bytes = await readFile(resolvePmacAttachmentPath(attachment.filePath))
+    // Read bytes only after parent authorization. Legacy disk files remain supported.
+    const content = await prisma.pmacAttachmentContent.findUnique({
+      where: { attachmentId: attachment.id }, select: { data: true },
+    })
+    const bytes = content?.data ?? await readFile(resolvePmacAttachmentPath(attachment.filePath))
     return new NextResponse(new Uint8Array(bytes), { headers: {
       'Content-Type': attachment.mimeType,
       'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(attachment.fileName)}`,

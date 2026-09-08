@@ -154,6 +154,19 @@ async function main() {
     const blockedEdit = milestoneRace.find((result) => result.status === 'rejected')
     assert(blockedEdit?.status === 'rejected' && /Complete every project milestone|cannot be edited/.test(blockedEdit.reason.message))
     console.log('PASS: milestone edit versus project closure cannot leave an incomplete milestone on a closed project.')
+
+    const attachment = await db.pmacAttachment.create({ data: {
+      eventId, uploadedById: userId, fileName: 'test.pdf', storedName: prefix + '.pdf',
+      filePath: '/private/uploads/pmac/2000-01/' + prefix + '.pdf',
+      mimeType: 'application/pdf', sizeBytes: 4,
+      content: { create: { data: Buffer.from([0, 255, 13, 10]) } },
+    } })
+    // Normal metadata queries must not include binary content.
+    assert.equal('content' in attachment, false)
+    assert.deepEqual((await db.pmacAttachmentContent.findUniqueOrThrow({ where: { attachmentId: attachment.id } })).data, Buffer.from([0, 255, 13, 10]))
+    await db.pmacAttachment.delete({ where: { id: attachment.id } })
+    assert.equal(await db.pmacAttachmentContent.count({ where: { attachmentId: attachment.id } }), 0)
+    console.log('PASS: database attachment bytes round-trip and cascade on deletion.')
   } finally {
     try {
       if (created) {

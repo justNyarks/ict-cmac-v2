@@ -1,6 +1,7 @@
 import path from 'path'
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } from '@/lib/uploadLimits'
 
-export const MAX_REQUEST_LETTER_BYTES = 5 * 1024 * 1024
+export const MAX_REQUEST_LETTER_BYTES = MAX_UPLOAD_BYTES
 
 export const REQUEST_LETTER_TYPES = {
   'application/pdf': ['.pdf'],
@@ -17,7 +18,7 @@ function hasPrefix(bytes: Buffer, signature: readonly number[]) {
 export function validateRequestLetterFile(file: { name: string; type: string; size: number }, bytes: Buffer) {
   if (!file.name.trim()) throw new Error('Request letter file name is missing.')
   if (file.size <= 0) throw new Error('Request letter file is empty.')
-  if (file.size > MAX_REQUEST_LETTER_BYTES) throw new Error('Request letter must be 5 MB or smaller.')
+  if (file.size > MAX_REQUEST_LETTER_BYTES) throw new Error(`Request letter must be ${MAX_UPLOAD_LABEL} or smaller.`)
 
   const extensions = REQUEST_LETTER_TYPES[file.type as RequestLetterMimeType]
   if (!extensions) throw new Error('Request letters must be PDF, DOC, or DOCX files.')

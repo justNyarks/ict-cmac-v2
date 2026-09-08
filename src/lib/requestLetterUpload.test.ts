@@ -19,6 +19,6 @@ describe('request letter uploads', () => {
     expect(() => validateRequestLetterFile(
       { name: 'request.pdf', type: 'application/pdf', size: MAX_REQUEST_LETTER_BYTES + 1 },
       Buffer.from('%PDF')
-    )).toThrow(/5 MB/i)
+    )).toThrow(/4 MB/i)
   })
 })
