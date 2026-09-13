@@ -19,7 +19,7 @@
     "backfill:pmac-handoffs": "tsx scripts/backfillPmacHandoffs.ts"
   },
   "dependencies": {
-    "@prisma/client": "^5.12.1",
+    "@prisma/client": "^7.10.0",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
